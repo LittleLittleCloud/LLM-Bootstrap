@@ -1,0 +1,115 @@
+{
+  "experiment_id": "m5pro-qwen36-pi-example",
+  "status": "draft-not-run",
+  "description": "Planning template; values sourced from prior workload evidence, not a new experiment.",
+  "skills_revision": null,
+  "contract_frozen_at": null,
+  "hardware": {
+    "platform": "Apple M5 Pro",
+    "gpu_cores": 20,
+    "memory_gib": 48,
+    "os_version": null,
+    "toolchain": null,
+    "power": "AC / High Power",
+    "gpu_memory_limit": "system default; measure and record before running",
+    "exclusive_gpu": true
+  },
+  "target_model": {
+    "repository": "mlx-community/Qwen3.6-35B-A3B-8bit",
+    "revision": "e06a74e6236a60c8367e1a3214e83d8b61b637b0",
+    "file_hash_manifest": null,
+    "tokenizer_hash": null,
+    "chat_template_hash": null,
+    "weights": "affine8/group64",
+    "activation_precision": null,
+    "kv_precision": "fp32",
+    "recurrent_state_precision": "fp32",
+    "speculative_decoding": false
+  },
+  "builder": {
+    "model": null,
+    "provider": null,
+    "revision_or_exposed_identifier": null,
+    "initial_inference_location": null,
+    "sampling_settings": null,
+    "network_and_source_access": null
+  },
+  "development_harness": {
+    "name": "Pi",
+    "version": "1.4.0",
+    "revision_or_package_hash": null,
+    "skill_loading_method": null
+  },
+  "evaluation": {
+    "agent_harness": {
+      "name": "Pi",
+      "version": "1.4.0"
+    },
+    "driver_repository": "https://github.com/LittleLittleCloud/Infer.NET",
+    "driver_revision": "ce151663b4182bcb8371c9d0160fa20b9f8b1274",
+    "driver_path": "scripts/benchmark-pi-humaneval.py",
+    "driver_sha256": "594f60571fabc5d05d7aa849cfd25ad668a3ee8fed7c5f278b6a7ea47b9d9c22",
+    "dataset_revision": "b9453e8f1865df0a0057a1383767caa400acfbcf",
+    "dataset_sha256": "b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef",
+    "task_ids": [
+      "HumanEval/156",
+      "HumanEval/94",
+      "HumanEval/72",
+      "HumanEval/80",
+      "HumanEval/149",
+      "HumanEval/2",
+      "HumanEval/35",
+      "HumanEval/32",
+      "HumanEval/146",
+      "HumanEval/137",
+      "HumanEval/97",
+      "HumanEval/154",
+      "HumanEval/6",
+      "HumanEval/161",
+      "HumanEval/115",
+      "HumanEval/131",
+      "HumanEval/162",
+      "HumanEval/50",
+      "HumanEval/47",
+      "HumanEval/148"
+    ],
+    "seed": 0,
+    "context_window": 32768,
+    "max_output_tokens_per_request": 4096,
+    "timeout_seconds_per_task": 300,
+    "request_concurrency": 1,
+    "cache_policy": "No prefix reuse; clear request state and verify cache counters",
+    "sampling_settings": null,
+    "warmup_plan": null,
+    "formal_repetitions": null,
+    "numerical_oracle_and_tolerances": null,
+    "application_assertion_evaluator": "Pinned official HumanEval assertions in restricted containers; freeze evaluator/image hashes before use"
+  },
+  "implementation": {
+    "starting_scaffold": null,
+    "language_and_backend": null,
+    "allowed_libraries": null,
+    "baseline_source_inspection_allowed": null,
+    "existing_engine_backend_allowed": false
+  },
+  "baselines": {
+    "selection_date": null,
+    "selection_method": null,
+    "engines_and_revisions": [],
+    "comparison_track": "matched-configuration"
+  },
+  "goal": {
+    "primary_metric": null,
+    "performance_thresholds": null,
+    "quality_gate": "20/20 official task assertions plus separately defined numerical/state checks",
+    "resource_limits": null,
+    "self_hosting_in_scope": false
+  },
+  "budget": {
+    "wall_clock_hours": null,
+    "builder_tokens": null,
+    "api_cost_limit": null,
+    "hardware_hours": null,
+    "stopping_rule": null
+  }
+}

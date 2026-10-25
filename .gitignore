@@ -1,0 +1,6 @@
+artifacts/
+.env
+.env.*
+*.local.json
+__pycache__/
+.DS_Store
