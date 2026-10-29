@@ -1,5 +1,6 @@
 artifacts/
 experiments/*/evidence/
+*.evidence
 .env
 .env.*
 *.local.json
