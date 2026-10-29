@@ -2,7 +2,7 @@
 """Check an LLM inference engine endpoint for OpenAI chat, OpenAI Responses, and Anthropic Messages conformance.
 
 Standard library only (Python 3.9+). Each check sends a few tiny requests and validates structure and
-protocol invariants, not model quality. See docs/evaluation-protocol.md.
+protocol invariants, not model quality. See the evaluation protocol in the experiment skill.
 """
 import argparse
 import datetime

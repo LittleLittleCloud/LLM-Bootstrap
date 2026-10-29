@@ -89,7 +89,7 @@
     {
       "role": "driver",
       "path": "scripts/conformance.py",
-      "sha256": "18e95ad4444fe700e15fdc50e9e5e4a50376d180b3901b8b7a89305250fbc810"
+      "sha256": "851461f5c216b18b5a796c6b57128772203aaf9c0dfac23b2a7c40b6c74fa587"
     },
     {
       "role": "driver",

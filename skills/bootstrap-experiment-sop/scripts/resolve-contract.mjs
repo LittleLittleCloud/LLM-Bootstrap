@@ -1,7 +1,7 @@
 // Resolves a DerivedExperimentContract against its base. Dependency-free; nothing runs this automatically.
-// Usage: node schema/resolve-contract.mjs path/to/contract.json
+// Usage: node scripts/resolve-contract.mjs path/to/contract.json
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,7 +43,7 @@ export function resolveContractFile(path) {
   return resolveContract(derived, resolveContractFile(basePath));
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   if (!process.argv[2]) throw new Error('usage: node resolve-contract.mjs <contract.json>');
   process.stdout.write(`${JSON.stringify(resolveContractFile(process.argv[2]), null, 2)}\n`);
 }

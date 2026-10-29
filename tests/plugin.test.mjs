@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -8,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const schema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 const skills = ['bootstrap-experiment-sop'];
-const resources = ['README.md', 'AGENTS.md', 'docs', 'evaluations', 'experiments', 'schema', 'skills'];
+const resources = ['README.md', 'AGENTS.md', 'docs', 'evaluations', 'skills'];
 const read = (base, path) => readFileSync(join(base, path), 'utf8');
 const json = (base, path) => JSON.parse(read(base, path));
 
@@ -66,7 +67,7 @@ function checkResources(base) {
     assert.match(frontmatter[1], new RegExp(`^name: ${name}$`, 'm'));
     const description = frontmatter[1].match(/^description: (.+)$/m)?.[1];
     assert.ok(description && description.length <= 1024, `Missing/invalid description: ${name}`);
-    assert.ok(content.includes('../../docs/experiment-protocol.md'));
+    assert.ok(content.includes('references/experiment-protocol.md'));
     assert.match(content, /relative to this SKILL\.md file/);
     assert.match(content, /read-only/);
     assert.match(content, /codex\//);
@@ -105,6 +106,33 @@ test('the complete plugin remains readable after relocation, independently of th
     }
     checkManifests(installed);
     checkResources(installed);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+test('every link inside the skill stays inside the skill folder', () => {
+  const skill = join(root, 'skills', 'bootstrap-experiment-sop');
+  const inside = files(skill).filter(path => path.endsWith('.md'));
+  assert.ok(inside.length > 5);
+  for (const path of inside) {
+    for (const [, target] of readFileSync(path, 'utf8').matchAll(/\[[^\]\n]+\]\(([^)\s]+)\)/g)) {
+      if (/^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('#')) continue;
+      const resolved = realpathSync(resolve(dirname(path), decodeURIComponent(target.split('#')[0])));
+      const rel = relative(realpathSync(skill), resolved);
+      assert.ok(rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel), `${relative(root, path)} links outside the skill: ${target}`);
+    }
+  }
+});
+
+test('the skill works when its folder is copied on its own', () => {
+  const temp = mkdtempSync(join(tmpdir(), 'llm-bootstrap-skill-'));
+  try {
+    const copy = join(temp, 'bootstrap-experiment-sop');
+    cpSync(join(root, 'skills', 'bootstrap-experiment-sop'), copy, { recursive: true });
+    const run = spawnSync('node', [join(copy, 'scripts', 'check-experiment.mjs'), join(root, 'tests', 'fixtures', 'draft-contract.json')], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    assert.match(run.stdout, /status: draft-not-run/);
+    assert.match(run.stdout, /schema: (valid ExperimentContract|not checked)/);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

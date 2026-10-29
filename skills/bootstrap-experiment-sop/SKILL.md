@@ -5,9 +5,9 @@ description: Run an LLM Bootstrap experiment end to end, either a new experiment
 
 # Experiment SOP
 
-Read [the experiment protocol](../../docs/experiment-protocol.md) and [the evaluation protocol](../../docs/evaluation-protocol.md). This skill sequences the experiment and enforces the gates between stages. The stage work is in [the planning reference](references/plan.md), [the build reference](references/build.md), and [the evaluation reference](references/evaluate.md); do not relax their rules here.
+Read [the experiment protocol](references/experiment-protocol.md) and [the evaluation protocol](references/evaluation-protocol.md). This skill sequences the experiment and enforces the gates between stages. The stage work is in [the planning reference](references/plan.md), [the build reference](references/build.md), and [the evaluation reference](references/evaluate.md); do not relax their rules here.
 
-Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: create contracts, engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
+Resolve bundled links relative to this SKILL.md file, not the current working directory. The skill root is the directory that holds this file, and everything the skill needs is inside it except the evaluations (see Evaluations below). Treat the installed plugin as read-only: create contracts, engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
 
 Use English for project writing, preserving literal inputs, identifiers, commands, hashes, and raw evidence. Use codex/ feature branches and pull requests for project changes; merge only with explicit user authorization. Do not publish weights, credentials, private prompts, or unreviewed agent transcripts; record hashes and access limitations instead. Keep planned targets, prior external evidence, and measurements from these skills distinct.
 
@@ -36,17 +36,27 @@ Keep implementation and results in separate changes. Publishing results does not
 
 ## Workspace layout
 
-In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `report.md` (a copy of [the report template](../../experiments/TEMPLATE.md)), `runs/<run-id>/run.json` with the evaluation result documents it references beside it, and `evidence/` for local-only raw evidence that is never committed. The layout is defined in [the experiment protocol](../../docs/experiment-protocol.md), so records can be submitted unchanged. Write the contract against `ExperimentContract` in [the protocol schema](../../schema/experiment-protocol.openapi.json); unresolved fields stay null until it is frozen.
+In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `report.md` (a copy of [the report template](assets/report-template.md)), `runs/<run-id>/run.json` with the evaluation result documents it references beside it, and `evidence/` for local-only raw evidence that is never committed. The layout is defined in [the experiment protocol](references/experiment-protocol.md), so records can be submitted unchanged. Write the contract against `ExperimentContract` in [the protocol schema](assets/schema/experiment-protocol.openapi.json); unresolved fields stay null until it is frozen.
+
+## Evaluations
+
+Evaluations are not bundled with this skill. They are defined only by the LLM Bootstrap repository, `https://github.com/LittleLittleCloud/LLM-Bootstrap`, under `evaluations/<evaluation-id>/`. Take them from the latest commit of its `main` branch:
+
+1. Resolve that commit when planning: `git ls-remote https://github.com/LittleLittleCloud/LLM-Bootstrap.git refs/heads/main`.
+2. Read the definitions and scripts at exactly that commit, for example in a scratch clone checked out at it, outside the project workspace and outside any installed plugin. Choose a `released` definition.
+3. Record that full commit as the contract's evaluation `revision` and the definition file's sha256. Later stages use the recorded revision, never a newer `main`.
+
+Do not use an evaluation copy that shipped with an installed plugin, was cached earlier, or has local changes. See [the evaluation protocol](references/evaluation-protocol.md).
 
 ## Check a contract
 
-Run the check command from the plugin root. It needs Node.js 22 or newer and no packages:
+Run the skill's check script. It needs Node.js 22 or newer and no packages:
 
 ```sh
-node <plugin-root>/schema/check-experiment.mjs experiments/<experiment-id>/contract.json
+node <skill-root>/scripts/check-experiment.mjs experiments/<experiment-id>/contract.json
 ```
 
-It follows `extends` links and verifies each base against its pinned hash, lists exactly which fields a derived contract changes, reports unresolved (null) fields, and fails a frozen contract that has any. When the plugin repository's dev dependencies are installed it also validates the result against `ExperimentContract` in [the protocol schema](../../schema/experiment-protocol.openapi.json); otherwise it says the schema was not checked, and you must say so rather than call the contract valid. A clean check shows structure only; it does not show that the plan is sound or that anything was measured.
+It follows `extends` links and verifies each base against its pinned hash, lists exactly which fields a derived contract changes, reports unresolved (null) fields, and fails a frozen contract that has any. When Ajv can be resolved (it is a dev dependency of the plugin repository, so it is absent from an installed copy) it also validates the result against `ExperimentContract` in [the protocol schema](assets/schema/experiment-protocol.openapi.json); otherwise it says the schema was not checked, and you must say so rather than call the contract valid. A clean check shows structure only; it does not show that the plan is sound or that anything was measured.
 
 ## Record the treatment
 

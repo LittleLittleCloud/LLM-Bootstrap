@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const example = join(root, 'tests', 'fixtures', 'draft-contract.json');
-const cli = join(root, 'schema', 'check-experiment.mjs');
+const cli = join(root, 'skills', 'bootstrap-experiment-sop', 'scripts', 'check-experiment.mjs');
 const check = path => {
   const run = spawnSync('node', [cli, path], { encoding: 'utf8' });
   return { status: run.status, text: run.stdout + run.stderr };

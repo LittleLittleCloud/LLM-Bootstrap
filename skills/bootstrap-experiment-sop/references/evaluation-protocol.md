@@ -1,12 +1,22 @@
 # Evaluation protocol
 
-This protocol defines how engines are evaluated. It is separate from the [experiment protocol](experiment-protocol.md), which defines what an experiment fixes and claims. Its structure is formalized in the [evaluation schema](../schema/evaluation-protocol.openapi.json), which checks shape only. This prose and the skills remain authoritative.
+This protocol defines how engines are evaluated. It is separate from the [experiment protocol](experiment-protocol.md), which defines what an experiment fixes and claims. Its structure is formalized in the [evaluation schema](../assets/schema/evaluation-protocol.openapi.json), which checks shape only. This prose and the skills remain authoritative.
 
 ## Repository-owned evaluation
 
-Evaluations are defined by this repository, not by individual experiments. An evaluation's definition, its driver and assertion-evaluator scripts, and its numerical-check code live under `evaluations/<evaluation-id>/` and change only through reviewed pull requests to this repository. An experiment selects an evaluation by id, repository revision, and definition hash. It does not carry, replace, or patch evaluation code.
+Evaluations are defined by the LLM Bootstrap repository (`https://github.com/LittleLittleCloud/LLM-Bootstrap`), not by individual experiments. An evaluation's definition, its driver and assertion-evaluator scripts, and its numerical-check code live under `evaluations/<evaluation-id>/` in that repository and change only through reviewed pull requests to it. An experiment selects an evaluation by id, repository revision, and definition hash. It does not carry, replace, or patch evaluation code.
 
 The builder LLM does not write or edit evaluation definitions, scripts, dataset pins, or scoring during an experiment, so it cannot shape how its own engine is judged. A needed change is made in this repository outside any experiment and produces a new revision, which is a different evaluation. Earlier results stay tied to the revision they used.
+
+## Obtaining an evaluation
+
+Evaluations are not bundled with the skill; the repository above is the only source. Take them from the latest commit of its `main` branch:
+
+1. When planning, resolve that commit: `git ls-remote https://github.com/LittleLittleCloud/LLM-Bootstrap.git refs/heads/main`.
+2. Read the definitions and scripts at exactly that commit, for example in a scratch clone checked out at it, outside the project workspace and outside any installed plugin. Choose a `released` definition.
+3. Record the full commit as the contract's evaluation `revision` and the definition file's sha256. Later stages use the recorded revision, never a newer `main`.
+
+Do not use an evaluation copy that shipped with an installed plugin, was cached earlier, or has local changes.
 
 Run an evaluation from the pinned repository revision. Check every script against its recorded hash before use, and never run from a modified checkout. The pinned scripts emit the result documents (see Results below); do not edit them by hand.
 
@@ -23,16 +33,16 @@ A definition is a `draft` or `released`. A released definition has every field r
 
 The experiment contract keeps only what depends on the experiment: the evaluation reference, the warm-up plan, formal repetitions, and the numerical oracle and tolerances. Tolerances depend on the target model and declared precision, so they are chosen before candidate results are inspected. The code that applies them is still repository-owned.
 
-Evaluations in this repository:
+Evaluations in the repository at the time of writing (the commit you resolved is authoritative):
 
 | Evaluation | Status | Result document | Purpose |
 | --- | --- | --- | --- |
-| [engine-api-conformance](../evaluations/engine-api-conformance/evaluation.json) | released | `ConformanceResult` | Cheap structural checks of an endpoint's OpenAI chat, OpenAI Responses, and Anthropic Messages behavior. |
-| [humaneval-20-pi](../evaluations/humaneval-20-pi/evaluation.json) | draft, no scripts | `EvaluationResult` | Planned 20-task coding workload from the prior Infer.NET measurements. |
+| `engine-api-conformance` | released | `ConformanceResult` | Cheap structural checks of an endpoint's OpenAI chat, OpenAI Responses, and Anthropic Messages behavior. |
+| `humaneval-20-pi` | draft, no scripts | `EvaluationResult` | Planned 20-task coding workload from the prior Infer.NET measurements. |
 
 The driver behind the prior Infer.NET measurements is external to this repository. It measures Pi coding-agent wall time and records `correctness_evaluated: false`, so it does not satisfy this protocol. Those measurements are prior evidence only.
 
-When a script changes, update its hash in the definition (for example with `shasum -a 256`). The repository tests fail until the hashes match.
+When a script changes (a maintainer task in the repository), update its hash in the definition (for example with `shasum -a 256`). The repository tests fail until the hashes match.
 
 ## Endpoint conformance
 
@@ -46,7 +56,7 @@ When a script changes, update its hash in the definition (for example with `shas
 
 Each check is `required` or `advisory`. Only required checks decide conformance. Advisory checks record common behavior the APIs do not mandate, such as identical output for repeated temperature 0 requests. An unsupported optional feature is a `skip`, not a pass. Checks share responses where they can, so a run takes about 70 small requests.
 
-The driver checks every script against its hash before importing any of them, then repeats its negative control: a reference engine that must pass every check, and each of a set of injected faults, which must each be caught. An endpoint is reported conformant only for a complete run with a verified negative control.
+The driver checks every script against its hash before importing any of them, then repeats its negative control: a reference engine that must pass every check, and each of a set of injected faults, which must each be caught. An endpoint is reported conformant only for a complete run with a verified negative control. Run the driver from a checkout of the repository at the recorded revision.
 
 ```sh
 python3 evaluations/engine-api-conformance/scripts/conformance.py \

@@ -1,7 +1,7 @@
 // Resolves a contract (following extends links), lists what a derived contract changes, and checks the result.
-// Usage: node schema/check-experiment.mjs path/to/contract.json
+// Usage: node scripts/check-experiment.mjs path/to/contract.json
 // Exit 0: no problems. Exit 1: problems found. Exit 2: usage, unreadable input, or a base that cannot be resolved.
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveContractFile } from './resolve-contract.mjs';
@@ -47,7 +47,7 @@ async function schemaErrors(contract) {
   } catch {
     return null;
   }
-  const spec = JSON.parse(readFileSync(resolve(here, 'experiment-protocol.openapi.json'), 'utf8'));
+  const spec = JSON.parse(readFileSync(resolve(here, '../assets/schema/experiment-protocol.openapi.json'), 'utf8'));
   const defs = JSON.parse(JSON.stringify(spec.components.schemas).replaceAll('#/components/schemas/', () => '#/$defs/'));
   const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false, strictRequired: false });
   addFormats(ajv);
@@ -88,7 +88,7 @@ export async function checkExperiment(path) {
   return { out, problems };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   if (!process.argv[2]) {
     console.error('usage: node check-experiment.mjs <contract.json>');
     process.exit(2);
