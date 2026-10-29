@@ -11,9 +11,9 @@ Status: Draft / Running / Completed / Interrupted. Acceptance: Unverified / Pass
 - Hardware, OS, driver, compiler, power and memory limits:
 - Target model/revision; weight/tokenizer hashes; all precisions:
 - Builder model/provider/identifier, initial inference location, and tool access:
-- Development harness and evaluation driver versions/hashes:
-- Dataset revision/hash, exact task IDs/seed, cache, context/output limits, timeouts:
-- Correctness oracle/tolerances and application evaluator:
+- Development harness version/hash:
+- Evaluation reference (id, repository revision, definition hash), warm-up, and formal repetitions:
+- Numerical oracle/tolerances:
 - Baseline engines/revisions, selection date/method, and comparison tracks:
 - Primary metric, numerical targets, quality/resource gates:
 - Budget and stopping rule:

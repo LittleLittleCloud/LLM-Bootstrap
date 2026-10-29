@@ -43,49 +43,14 @@
     "revision_or_package_hash": null
   },
   "evaluation": {
-    "agent_harness": {
-      "name": "Pi",
-      "version": "1.4.0"
+    "definition": {
+      "evaluation_id": "humaneval-20-pi",
+      "revision": null,
+      "sha256": null
     },
-    "driver_repository": "https://github.com/LittleLittleCloud/Infer.NET",
-    "driver_revision": "ce151663b4182bcb8371c9d0160fa20b9f8b1274",
-    "driver_path": "scripts/benchmark-pi-humaneval.py",
-    "driver_sha256": "594f60571fabc5d05d7aa849cfd25ad668a3ee8fed7c5f278b6a7ea47b9d9c22",
-    "dataset_revision": "b9453e8f1865df0a0057a1383767caa400acfbcf",
-    "dataset_sha256": "b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef",
-    "task_ids": [
-      "HumanEval/156",
-      "HumanEval/94",
-      "HumanEval/72",
-      "HumanEval/80",
-      "HumanEval/149",
-      "HumanEval/2",
-      "HumanEval/35",
-      "HumanEval/32",
-      "HumanEval/146",
-      "HumanEval/137",
-      "HumanEval/97",
-      "HumanEval/154",
-      "HumanEval/6",
-      "HumanEval/161",
-      "HumanEval/115",
-      "HumanEval/131",
-      "HumanEval/162",
-      "HumanEval/50",
-      "HumanEval/47",
-      "HumanEval/148"
-    ],
-    "seed": 0,
-    "context_window": 32768,
-    "max_output_tokens_per_request": 4096,
-    "timeout_seconds_per_task": 300,
-    "request_concurrency": 1,
-    "cache_policy": "No prefix reuse; clear request state and verify cache counters",
-    "sampling_settings": null,
     "warmup_plan": null,
     "formal_repetitions": null,
-    "numerical_oracle_and_tolerances": null,
-    "application_assertion_evaluator": "Pinned official HumanEval assertions in restricted containers; freeze evaluator/image hashes before use"
+    "numerical_oracle_and_tolerances": null
   },
   "implementation": {
     "starting_scaffold": null,
