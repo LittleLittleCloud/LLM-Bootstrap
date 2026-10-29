@@ -40,7 +40,7 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [schema/resolve-contract.mjs](schema/resolve-contract.mjs) | Dependency-free resolver that merges a derived contract onto its pinned base. |
 | [experiments/m5pro-qwen36-pi/example.json](experiments/m5pro-qwen36-pi/example.json) | Unrun starting configuration based on the motivating workload. |
 | [experiments/TEMPLATE.md](experiments/TEMPLATE.md) | Experiment plan and result record. |
-| [results/infernet-prior-evidence.md](results/infernet-prior-evidence.md) | Sourced prior results and their limits. |
+| [docs/prior-evidence.md](docs/prior-evidence.md) | Sourced prior results and their limits. |
 | [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
 
 The plugin contains agent instructions and experiment templates, not executable hooks or MCP servers. This repository does not yet ship an inference engine, an automated experiment runner, or a validated SOTA result. Installing the plugin does not run an experiment or authorize machine changes.
@@ -86,7 +86,7 @@ Both records use M5 Pro / 48 GiB, `mlx-community/Qwen3.6-35B-A3B-8bit` at revisi
 
 **These rows are not a controlled engine speedup comparison.** Infer.NET used FP32 KV/state and no speculative decoding; Splash used Q8 KV, FP32 recurrent state, and a DFlash2 draft model. Work generated different request token totals, timing boundaries differ, and Splash required a raised GPU memory limit. Both recorded whole-machine swap-out. Splash first failed to start under the default budget; that failure is retained in the source record.
 
-See [prior evidence](results/infernet-prior-evidence.md) for versions, metric definitions, resource observations, and public evidence links. HumanEval task correctness is not cross-backend numerical equivalence or long-context acceptance. **No experiment under the LLM Bootstrap protocol has been completed yet; platform SOTA and self-hosting remain unverified.**
+See [prior evidence](docs/prior-evidence.md) for versions, metric definitions, resource observations, and public evidence links. HumanEval task correctness is not cross-backend numerical equivalence or long-context acceptance. **No experiment under the LLM Bootstrap protocol has been completed yet; platform SOTA and self-hosting remain unverified.**
 
 ## What counts as success?
 

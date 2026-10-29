@@ -36,7 +36,7 @@ Keep implementation and results in separate changes. Publishing results does not
 
 ## Workspace layout
 
-In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `record.md` (a copy of [the record template](../../experiments/TEMPLATE.md)), and `evidence/` for hashed evidence. Copy [the M5 Pro example](../../experiments/m5pro-qwen36-pi/example.json) when starting a new contract. The example is an unrun draft.
+In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `record.md` (a copy of [the record template](../../experiments/TEMPLATE.md)), `runs/<run-id>/run.json` with the evaluation result documents it references beside it, and `evidence/` for local-only raw evidence that is never committed. The layout is defined in [the experiment protocol](../../docs/experiment-protocol.md), so records can be submitted unchanged. Copy [the M5 Pro example](../../experiments/m5pro-qwen36-pi/example.json) when starting a new contract. The example is an unrun draft.
 
 ## Check a contract
 
