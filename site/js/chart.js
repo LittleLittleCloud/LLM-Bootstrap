@@ -34,7 +34,7 @@ function niceTicks(max, count = 5) {
 
 const month = ms => new Date(ms).toLocaleDateString('en', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-// series: [{ label, color, shape, points: [{ t, value, run }] }]; frontier: [{ t, value }]. Failed runs draw hollow.
+// series: [{ label, color, shape, points: [{ t, value, run }] }]; frontier: [{ t, value }]. Runs that did not pass the gate draw hollow.
 export function lineChart({ series, frontier = [], connect = true, format, formatPoint = format, describe, onSelect, width = 920, height = 380 }) {
   const margin = { left: 58, right: 18, top: 14, bottom: 34 };
   const points = [...series.flatMap(item => item.points), ...frontier];
@@ -72,11 +72,11 @@ export function lineChart({ series, frontier = [], connect = true, format, forma
   }
   for (const item of series) {
     for (const point of item.points) {
-      const failed = point.run.quality_gate !== 'passed';
+      const notPassed = point.run.quality_gate !== 'passed';
       const node = marker(item.shape, x(point.t), y(point.value), 4.2, {
-        class: 'pt', fill: failed ? 'var(--surface)' : item.color, stroke: item.color, 'stroke-width': failed ? 1.8 : 1,
+        class: 'pt', fill: notPassed ? 'var(--surface)' : item.color, stroke: item.color, 'stroke-width': notPassed ? 1.8 : 1,
       });
-      node.append(el('title', {}, `${point.run.run_id} · ${point.run.date}\n${item.label}\n${formatPoint(point.value)}${failed ? '\nfailed the quality gate' : ''}`));
+      node.append(el('title', {}, `${point.run.entry_id} · ${point.run.date}\n${item.label}\n${formatPoint(point.value)}${notPassed ? '\ndid not pass the quality gate' : ''}`));
       node.addEventListener('click', () => onSelect(point.run));
       root.append(node);
     }

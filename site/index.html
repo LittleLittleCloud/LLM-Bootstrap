@@ -27,7 +27,7 @@
         <label class="field">From <input id="from" type="date"></label>
         <label class="field">To <input id="to" type="date"></label>
       </div>
-      <label class="check"><input id="failed" type="checkbox"> Include runs that failed the quality gate</label>
+      <label class="check"><input id="failed" type="checkbox"> Include runs that did not pass the quality gate</label>
       <label class="check"><input id="selfhosted" type="checkbox"> Self-hosted runs only</label>
       <div id="facets"></div>
     </aside>
@@ -62,7 +62,7 @@
   </div>
 
   <footer class="foot">
-    <p>Runs that failed the quality gate are never ranked. A rank is a controlled comparison only when hardware, target model, evaluation, and comparison track match. Matched comparisons and best-permitted-system comparisons are different tracks.</p>
+    <p>Only entries that passed a verified quality gate and reconciled their request counts are ranked. A rank is a controlled comparison only when hardware, target model, weights, evaluation, comparison track, and timing basis match. Matched comparisons and best-permitted-system comparisons are different tracks.</p>
   </footer>
 
   <dialog id="detail" aria-labelledby="detail-title"></dialog>

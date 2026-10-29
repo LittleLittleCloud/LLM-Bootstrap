@@ -5,8 +5,8 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveContractFile } from './resolve-contract.mjs';
+import { errorsOf, loadValidators } from './validators.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const show = value => {
   const text = JSON.stringify(value);
@@ -37,23 +37,11 @@ export function changesFrom(base, effective) {
   return lines;
 }
 
-// The validators are dev dependencies of this repository; an installed plugin has none, so the check is optional.
 async function schemaErrors(contract) {
-  let Ajv2020;
-  let addFormats;
-  try {
-    ({ default: Ajv2020 } = await import('ajv/dist/2020.js'));
-    ({ default: addFormats } = await import('ajv-formats'));
-  } catch {
-    return null;
-  }
-  const spec = JSON.parse(readFileSync(resolve(here, '../assets/schema/experiment-protocol.openapi.json'), 'utf8'));
-  const defs = JSON.parse(JSON.stringify(spec.components.schemas).replaceAll('#/components/schemas/', () => '#/$defs/'));
-  const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false, strictRequired: false });
-  addFormats(ajv);
-  ajv.addSchema({ $id: 'https://llm-bootstrap.invalid/experiment-protocol', $defs: defs });
-  const validate = ajv.compile({ $ref: 'https://llm-bootstrap.invalid/experiment-protocol#/$defs/ExperimentContract' });
-  return validate(contract) ? [] : validate.errors.map(e => `${e.instancePath || '/'} ${e.message}`);
+  const validators = await loadValidators();
+  if (!validators) return null;
+  const validate = validators.experiment.ExperimentContract;
+  return validate(contract) ? [] : errorsOf(validate);
 }
 
 export async function checkExperiment(path) {
