@@ -6,7 +6,7 @@ An experiment fixes hardware, target model, builder LLM, agent harness, workload
 
 The builder LLM writes the engine. The target model runs inside it. Their identities may differ, but self-hosting requires the builder's inference to actually move onto the generated engine. Record where initial builder inference runs and who controls routing. Improving an engine while continuing to use an unrelated hosted builder is engine construction, not demonstrated self-hosting.
 
-The example JSON is a planning aid. Its structure, and that of run records, is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.yaml), which checks shape and required declarations only. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and evaluation driver.
+The example JSON is a planning aid. Its structure, and that of run records, is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.json), which checks shape and required declarations only. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and evaluation driver.
 
 ## Freeze before tuning
 

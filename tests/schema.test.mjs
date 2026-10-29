@@ -5,10 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { Validator } from '@seriousme/openapi-schema-validator';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { parse } from 'yaml';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const spec = parse(readFileSync(`${root}schema/experiment-protocol.openapi.yaml`, 'utf8'));
+const spec = JSON.parse(readFileSync(`${root}schema/experiment-protocol.openapi.json`, 'utf8'));
 const example = JSON.parse(readFileSync(`${root}experiments/m5pro-qwen36-pi/example.json`, 'utf8'));
 
 // Component refs become $defs refs so each Schema Object compiles under strict JSON Schema 2020-12.
