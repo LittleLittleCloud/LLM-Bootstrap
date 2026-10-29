@@ -1,0 +1,53 @@
+---
+name: bootstrap-experiment-sop
+description: Run an LLM Bootstrap experiment end to end, either a new experiment or an improvement derived from an existing one. Sequences bootstrap-plan, bootstrap-build, and bootstrap-evaluate with explicit gates, the contract check command, and the experiment record.
+---
+
+# Experiment SOP
+
+Read [the experiment protocol](../../docs/experiment-protocol.md) and [the evaluation protocol](../../docs/evaluation-protocol.md). This skill sequences the experiment and enforces the gates between stages; the stage work stays in bootstrap-plan, bootstrap-build, and bootstrap-evaluate. Do not restate or relax their rules here.
+
+Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: create contracts, engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
+
+Use English for project writing, preserving literal inputs, identifiers, commands, hashes, and raw evidence. Use codex/ feature branches and pull requests for project changes; merge only with explicit user authorization. Do not publish weights, credentials, private prompts, or unreviewed agent transcripts; record hashes and access limitations instead. Keep planned targets, prior external evidence, and measurements from these skills distinct.
+
+A revision always means a full 40-character Git commit SHA, never a branch or tag name. It applies to the skill repository, the evaluation, baseline engines, and the engine under test.
+
+## Choose the mode
+
+Ask the user which mode applies before doing anything else.
+
+- **New experiment:** a new hardware, target model, or goal. Follow [the new experiment steps](references/new-experiment.md).
+- **Derived experiment:** an improvement of an existing experiment that keeps its target model and changes other things. Follow [the derived experiment steps](references/derived-experiment.md). If the user wants a different target model, that is a new experiment, not a derived one.
+
+## Stages and gates
+
+Each gate must hold before the next stage starts. If it does not, stop and say which condition is missing; do not substitute your own value for a missing one.
+
+| Stage | Work | Gate to leave the stage |
+| --- | --- | --- |
+| 1. Define | Mode-specific steps; use bootstrap-plan for contract content. | The check command reports no problems, the status is `frozen`, and no field is unresolved. |
+| 2. Freeze | Commit the contract on a codex/ branch and record its commit. | The contract commit exists before any engine work. Amendments are new revisions with a reason. |
+| 3. Build | bootstrap-build in a separate engine workspace. | The engine runs and passes the contract's numerical checks. |
+| 4. Evaluate | bootstrap-evaluate with the pinned evaluation, conformance gate first. | The conformance gate passes before any performance measurement. |
+| 5. Report | Fill the record and a run record; open a separate results PR. | Every acceptance criterion is marked passed, failed, or open. |
+
+Keep implementation and results in separate changes. Publishing results does not imply acceptance and does not authorize a merge. Costly runs and operating-system changes need the user's authorization even when the contract names them in scope.
+
+## Workspace layout
+
+In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `record.md` (a copy of [the record template](../../experiments/TEMPLATE.md)), and `evidence/` for hashed evidence. Copy [the M5 Pro example](../../experiments/m5pro-qwen36-pi/example.json) when starting a new contract. The example is an unrun draft.
+
+## Check a contract
+
+Run the check command from the plugin root. It needs Node.js 22 or newer and no packages:
+
+```sh
+node <plugin-root>/schema/check-experiment.mjs experiments/<experiment-id>/contract.json
+```
+
+It follows `extends` links and verifies each base against its pinned hash, lists exactly which fields a derived contract changes, reports unresolved (null) fields, and fails a frozen contract that has any. When the plugin repository's dev dependencies are installed it also validates the result against `ExperimentContract` in [the protocol schema](../../schema/experiment-protocol.openapi.json); otherwise it says the schema was not checked, and you must say so rather than call the contract valid. A clean check shows structure only; it does not show that the plan is sound or that anything was measured.
+
+## Record the treatment
+
+Before freezing, record the skill repository's full commit and the hashes of the exact instructions given to the builder. Read the commit from the installed plugin when it is discoverable; otherwise ask the user. A later skill revision is a different treatment.
