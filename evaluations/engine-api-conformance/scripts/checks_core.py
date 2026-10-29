@@ -13,6 +13,9 @@ STOP = 'Write the numbers 1 2 3 4 5 6 7 8 9 10 separated by spaces.'
 WEATHER_ASK = 'What is the weather in Paris? Use the get_weather tool.'
 TIME_ASK = 'What time is it in UTC? Use the get_time tool.'
 JSON_ASK = 'Reply with a JSON object that has the key ok set to true.'
+ECHO = 'Reply with exactly: '
+UTF8_ASK = ECHO + '\u4f60\u597d\uff0c\u4e16\u754c \U0001f30d caf\u00e9'
+THINK_ASK = 'What is 17 times 23? Think step by step, then give the number.'
 
 WEATHER_SCHEMA = {
     'type': 'object',
@@ -154,6 +157,11 @@ def named_events(response):
     return out
 
 
+def no_think_tags(text, where):
+    for tag in ('<think>', '</think>'):
+        expect(tag not in text, '%s contains %s; reasoning should be separated from the answer' % (where, tag))
+
+
 def in_order(names, expected, where):
     position = -1
     for wanted in expected:
@@ -164,11 +172,12 @@ def in_order(names, expected, where):
 
 
 class Context:
-    def __init__(self, origin, model, api_key=None, timeout=60.0):
+    def __init__(self, origin, model, api_key=None, timeout=60.0, context_window=None):
         self.origin = origin
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self.context_window = context_window
         self.cache = {}
         self.log = {}
         self.touched = []
@@ -177,26 +186,66 @@ class Context:
         self.completion_tokens = 0
         self.tokens_seen = False
 
-    def request(self, key, method, path, payload=None, stream=False):
+    def _headers(self, path):
+        headers = {}
+        if self.api_key:
+            headers['Authorization'] = 'Bearer ' + self.api_key
+            headers['x-api-key'] = self.api_key
+        if path == '/v1/messages':
+            headers['anthropic-version'] = '2023-06-01'
+        return headers
+
+    def _guard(self, payload):
+        for limit in ('max_tokens', 'max_output_tokens'):
+            if isinstance(payload, dict) and payload.get(limit, 0) > MAX_OUTPUT_TOKENS:
+                raise AssertionError('%s exceeds the evaluation limit' % limit)
+
+    def _store(self, key, method, path, payload, response):
+        self.requests += 1
+        self.cache[key] = response
+        self.log[key] = self._entry(method, path, payload, response)
+        self._count_tokens(response)
+
+    def request(self, key, method, path, payload=None, stream=False, raw=None):
         """Send a request once per key; checks that share a key share the response."""
         if key not in self.cache:
-            for limit in ('max_tokens', 'max_output_tokens'):
-                if payload and payload.get(limit, 0) > MAX_OUTPUT_TOKENS:
-                    raise AssertionError('%s exceeds the evaluation limit' % limit)
-            headers = {}
-            if self.api_key:
-                headers['Authorization'] = 'Bearer ' + self.api_key
-                headers['x-api-key'] = self.api_key
-            if path == '/v1/messages':
-                headers['anthropic-version'] = '2023-06-01'
-            self.requests += 1
-            response = client.send(self.origin, method, path, payload, headers, self.timeout, stream)
-            self.cache[key] = response
-            self.log[key] = self._entry(method, path, payload, response)
-            self._count_tokens(response)
+            self._guard(payload)
+            response = client.send(self.origin, method, path, payload, self._headers(path), self.timeout, stream, raw)
+            self._store(key, method, path, payload if raw is None else raw.decode('utf-8', 'replace'), response)
         if key not in self.touched:
             self.touched.append(key)
         return self.cache[key]
+
+    def request_many(self, items):
+        """Send several requests at the same time. Each item is a dict with key, method, path, payload, and stream."""
+        from concurrent.futures import ThreadPoolExecutor
+        pending = [item for item in items if item['key'] not in self.cache]
+        for item in pending:
+            self._guard(item['payload'])
+
+        def send(item):
+            return client.send(self.origin, item['method'], item['path'], item['payload'], self._headers(item['path']),
+                               self.timeout, item.get('stream', False))
+
+        with ThreadPoolExecutor(max_workers=max(1, len(pending))) as pool:
+            responses = list(pool.map(send, pending))
+        for item, response in zip(pending, responses):
+            self._store(item['key'], item['method'], item['path'], item['payload'], response)
+        for item in items:
+            if item['key'] not in self.touched:
+                self.touched.append(item['key'])
+        return [self.cache[item['key']] for item in items]
+
+    def abort_stream(self, key, path, payload, events=2):
+        """Open a stream, read a few events, then disconnect. Never cached."""
+        self._guard(payload)
+        self.requests += 1
+        status, seen = client.abort_stream(self.origin, path, payload, self._headers(path), self.timeout, events)
+        self.log[key] = {'request': {'method': 'POST', 'path': path, 'payload': payload},
+                         'status': status, 'response': 'disconnected after %d events' % seen}
+        if key not in self.touched:
+            self.touched.append(key)
+        return status, seen
 
     def _entry(self, method, path, payload, response):
         if response.events is not None:

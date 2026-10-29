@@ -1,7 +1,7 @@
 {
   "evaluation_id": "engine-api-conformance",
   "status": "released",
-  "description": "Cheap endpoint conformance checks for OpenAI Chat Completions (non-streaming, streaming, and tool calling), OpenAI Responses, and Anthropic Messages. They validate response structure and protocol invariants with tiny requests (temperature 0, at most 64 output tokens), not model quality. Run reasoning models with thinking disabled. Required checks decide conformance; advisory checks record common behavior that the APIs do not mandate. Before every run the driver repeats its negative control: a reference engine that must pass every check, and each injected fault, which must be caught.",
+  "description": "Cheap endpoint conformance checks for OpenAI Chat Completions (non-streaming, streaming, and tool calling), OpenAI Responses, and Anthropic Messages. They also probe UTF-8 integrity in streams, reasoning separation, malformed requests, concurrent requests, client disconnects, prefix-cache consistency, and context overflow (the overflow checks need the served context window from --context-window and are skipped without it). They validate response structure and protocol invariants with tiny requests (temperature 0, at most 64 output tokens), not model quality. Run reasoning models with thinking disabled. Required checks decide conformance; advisory checks record common behavior that the APIs do not mandate. Before every run the driver repeats its negative control: a reference engine that must pass every check, and each injected fault, which must be caught.",
   "result_schema": "ConformanceResult",
   "harness": {
     "not_applicable": true,
@@ -52,16 +52,36 @@
     "anthropic.stream.matches_nonstream",
     "anthropic.tools.forced_call",
     "anthropic.tools.result_roundtrip",
-    "anthropic.tools.stream"
+    "anthropic.tools.stream",
+    "chat.stream.utf8",
+    "responses.stream.utf8",
+    "anthropic.stream.utf8",
+    "chat.reasoning.no_tag_leak",
+    "chat.reasoning.stream_no_tag_leak",
+    "responses.reasoning.items",
+    "anthropic.reasoning.no_tag_leak",
+    "chat.robust.invalid_json",
+    "responses.robust.invalid_json",
+    "anthropic.robust.invalid_json",
+    "chat.robust.empty_messages",
+    "chat.robust.invalid_role",
+    "chat.robust.max_tokens_one",
+    "chat.robust.special_tokens",
+    "chat.concurrent.isolation",
+    "chat.concurrent.streams",
+    "chat.cancel.recovery",
+    "chat.prefix_cache.consistency",
+    "chat.context.overflow_rejected",
+    "chat.context.recovers"
   ],
   "seed": 0,
   "limits": {
     "context_window": 2048,
     "max_output_tokens_per_request": 64,
     "timeout_seconds_per_task": 60,
-    "request_concurrency": 1
+    "request_concurrency": 4
   },
-  "cache_policy": "Not controlled; no check depends on prefix-cache behavior.",
+  "cache_policy": "Not controlled; one check sends a shared-prefix prompt set to probe cache consistency but does not depend on cache hits.",
   "sampling_settings": {
     "temperature": 0
   },
@@ -69,17 +89,17 @@
     {
       "role": "driver",
       "path": "scripts/conformance.py",
-      "sha256": "988e477d41b3d459f1fd9e8b101dd975a4f8ce0a26c6bc291f2218f860cb440a"
+      "sha256": "18e95ad4444fe700e15fdc50e9e5e4a50376d180b3901b8b7a89305250fbc810"
     },
     {
       "role": "driver",
       "path": "scripts/client.py",
-      "sha256": "2520475fd14fbd0c2f7806abfbe738d1b25fcf6f749cd8145e5d728e310ea2b3"
+      "sha256": "3bbeddc562ca569dda7af44ded852e603fddf14979a87e4c7167dba3697796ce"
     },
     {
       "role": "driver",
       "path": "scripts/checks_core.py",
-      "sha256": "3756548b450390f8ab5531751f911b93b559efb7ea101fb62ad42e5d49b93cb2"
+      "sha256": "e0f5a7ebad1831055d4d0e0cb4d8d7b6c97b095de34edccb632e777eb1e23735"
     },
     {
       "role": "driver",
@@ -98,8 +118,18 @@
     },
     {
       "role": "driver",
+      "path": "scripts/checks_robustness.py",
+      "sha256": "38ced4f2cfa3f09d2f73ce4bbe23cc1a93c6d56d2c76b256ff9657c945611a0f"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/checks_engine.py",
+      "sha256": "496dfdc88f46f31eea4c1594e221f59d89c48870c76b9a4ea819f2c2068b778d"
+    },
+    {
+      "role": "driver",
       "path": "scripts/fake_engine.py",
-      "sha256": "2787aec4721d3f053168f12d2368f48dc27dd707bc14f47889fa327e697d2169"
+      "sha256": "9ec4bbadbac11b53bfe01786884d83707ea195ff851fc1109f96aada3ca6edc0"
     }
   ]
 }

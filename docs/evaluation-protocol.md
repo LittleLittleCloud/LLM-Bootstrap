@@ -41,14 +41,16 @@ When a script changes, update its hash in the definition (for example with `shas
 - **OpenAI chat completions:** the model list; non-streaming schema, `max_tokens`, stop strings, roles, and JSON mode; streaming framing, chunk shape, final usage chunk, and finish reason; tool calling with forced, selected, disabled, and automatic choice, tool-result round trips, and streamed tool-call fragments; and the error format.
 - **OpenAI Responses:** the response object, `max_output_tokens`, input items, the named stream events in order with deltas that add up, function calling in both modes, and the error format.
 - **Anthropic Messages:** the message object, `max_tokens`, stop sequences, system prompt and multi-turn input, the stream events in order, `tool_use` blocks and `tool_result` round trips, and the error format.
+- **Text integrity and robustness (all three APIs):** non-ASCII text that survives streaming without split multi-byte characters, reasoning kept out of the answer text (`<think>` tags, reasoning fields, thinking blocks, reasoning items), malformed JSON bodies, empty `messages`, an unknown role, `max_tokens` of 1, and control-token strings in user text that must stay plain text.
+- **Engine behavior (chat):** four simultaneous requests and streams that must not mix their answers, clients that disconnect in the middle of streams, output that must not change after requests that share the prompt prefix, and a prompt about twice the context window that must be rejected with a 4xx error and must not break the next request. The overflow checks need `--context-window` and are skipped without it.
 
-Each check is `required` or `advisory`. Only required checks decide conformance. Advisory checks record common behavior the APIs do not mandate, such as identical output for repeated temperature 0 requests. An unsupported optional feature is a `skip`, not a pass. Checks share responses where they can, so a run takes about 40 small requests.
+Each check is `required` or `advisory`. Only required checks decide conformance. Advisory checks record common behavior the APIs do not mandate, such as identical output for repeated temperature 0 requests. An unsupported optional feature is a `skip`, not a pass. Checks share responses where they can, so a run takes about 70 small requests.
 
 The driver checks every script against its hash before importing any of them, then repeats its negative control: a reference engine that must pass every check, and each of a set of injected faults, which must each be caught. An endpoint is reported conformant only for a complete run with a verified negative control.
 
 ```sh
 python3 evaluations/engine-api-conformance/scripts/conformance.py \
-  --endpoint http://127.0.0.1:8080 --model MODEL --engine-name NAME \
+  --endpoint http://127.0.0.1:8080 --model MODEL --engine-name NAME --context-window 4096 \
   --evaluation-revision FULL_COMMIT_SHA --output results/conformance.json
 ```
 

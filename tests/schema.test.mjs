@@ -466,15 +466,15 @@ const driver = (...args) => python(join(conformanceDir, 'scripts', 'conformance.
 const fileHash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 // Runs the real driver entry point against the reference engine, optionally with an injected fault.
-function runAgainstReference(dir, fault) {
-  const output = join(dir, `result-${fault ?? 'clean'}.json`);
+function runAgainstReference(dir, fault, window = true) {
+  const output = join(dir, `result-${fault ?? 'clean'}${window ? '' : '-nowindow'}.json`);
   const code = [
     'import sys',
     `sys.path.insert(0, ${JSON.stringify(join(conformanceDir, 'scripts'))})`,
     'import conformance',
     'from fake_engine import FakeEngine',
     `with FakeEngine(faults=[${fault ? JSON.stringify(fault) : ''}]) as engine:`,
-    `    sys.argv = ['conformance.py', '--endpoint', engine.origin, '--model', engine.model, '--engine-name', 'fake', '--output', ${JSON.stringify(output)}, '--evaluation-revision', ${JSON.stringify(commit('9'))}]`,
+    `    sys.argv = ['conformance.py', '--endpoint', engine.origin, '--model', engine.model, '--engine-name', 'fake', ${window ? "'--context-window', str(engine.context_window), " : ''}'--output', ${JSON.stringify(output)}, '--evaluation-revision', ${JSON.stringify(commit('9'))}]`,
     '    code = conformance.main()',
     'raise SystemExit(code)',
   ].join('\n');
@@ -515,6 +515,18 @@ test('the conformance negative control passes and emits a valid, conformant resu
       r.complete = false;
       r.negative_control.verified = false;
     }));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('without a context window the overflow checks are skipped and the run stays valid', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-conformance-'));
+  try {
+    const run = runAgainstReference(dir, undefined, false);
+    acceptsEvaluation('ConformanceResult', run.result);
+    const skipped = run.result.checks.filter(c => c.outcome === 'skip').map(c => c.check_id).sort();
+    assert.deepEqual(skipped, ['chat.context.overflow_rejected', 'chat.context.recovers']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -5,6 +5,7 @@ self-test can prove the checks detect it (the evaluation's negative control). It
 """
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # Fault name -> checks that must fail when the fault is injected.
@@ -30,7 +31,29 @@ FAULTS = {
     'anthropic_stream_no_message_stop': ['anthropic.stream.events'],
     'anthropic_tool_input_string': ['anthropic.tools.forced_call'],
     'anthropic_error_format': ['anthropic.error.missing_max_tokens'],
+    'chat_utf8_split': ['chat.stream.utf8'],
+    'responses_utf8_split': ['responses.stream.utf8'],
+    'anthropic_utf8_split': ['anthropic.stream.utf8'],
+    'chat_think_leak': ['chat.reasoning.no_tag_leak', 'chat.reasoning.stream_no_tag_leak'],
+    'anthropic_think_leak': ['anthropic.reasoning.no_tag_leak'],
+    'responses_reasoning_malformed': ['responses.reasoning.items'],
+    'chat_invalid_json_500': ['chat.robust.invalid_json'],
+    'responses_invalid_json_500': ['responses.robust.invalid_json'],
+    'anthropic_invalid_json_500': ['anthropic.robust.invalid_json'],
+    'chat_accepts_empty_messages': ['chat.robust.empty_messages'],
+    'chat_accepts_invalid_role': ['chat.robust.invalid_role'],
+    'chat_max_tokens_one_ignored': ['chat.robust.max_tokens_one'],
+    'chat_special_token_injection': ['chat.robust.special_tokens'],
+    'chat_concurrent_mixup': ['chat.concurrent.isolation', 'chat.concurrent.streams'],
+    'chat_wedged_after_cancel': ['chat.cancel.recovery'],
+    'chat_state_leak': ['chat.prefix_cache.consistency'],
+    'chat_context_truncates': ['chat.context.overflow_rejected'],
+    'chat_context_crash': ['chat.context.overflow_rejected', 'chat.context.recovers'],
 }
+
+SPECIAL_TOKENS = {'<|im_end|>', '<|endoftext|>', '</s>', '<|eot_id|>', '<|end|>'}
+ECHO_MARK = 'Reply with exactly:'
+CONTEXT_WINDOW = 1000
 
 TOOL_ARGUMENTS = {'get_weather': {'city': 'Paris'}, 'get_time': {'timezone': 'UTC'}}
 CREATED = 1700000000
@@ -66,6 +89,12 @@ def decide_tool(tools, choice, prompt, has_result):
 def generate(prompt, max_tokens, stops, want_json, ignore_max=False, ignore_stop=False):
     if want_json:
         full = '{"ok": true}'
+    elif ECHO_MARK in prompt:
+        full = prompt.rsplit(ECHO_MARK, 1)[1].strip()
+    elif 'Think step by step' in prompt:
+        full = '391'
+    elif 'Question:' in prompt:
+        full = 'Answer %d' % (sum(map(ord, prompt.rsplit('Question:', 1)[1])) % 997)
     elif 'numbers from 1 to 200' in prompt:
         full = ' '.join(str(n) for n in range(1, 201))
     elif 'numbers 1 2 3 4 5' in prompt:
@@ -108,6 +137,26 @@ def read_prompt(body):
     return ' '.join(parts), has_result
 
 
+def prompt_tokens(text, parse_special=False):
+    total = 0
+    for word in text.split():
+        total += 1 if parse_special and word in SPECIAL_TOKENS else max(1, -(-len(word) // 3))
+    return max(1, total)
+
+
+def text_parts(tokens, split_bytes=False):
+    """Streamed text pieces. With split_bytes, a multi-byte character is cut in the middle (and so lost)."""
+    parts = [word if index == 0 else ' ' + word for index, word in enumerate(tokens)]
+    if not split_bytes:
+        return parts
+    out = []
+    for part in parts:
+        data = part.encode('utf-8')
+        cut = max(1, len(data) // 2)
+        out += [data[:cut].decode('utf-8', errors='replace'), data[cut:].decode('utf-8', errors='replace')]
+    return out
+
+
 def pieces(text, count=3):
     size = max(1, -(-len(text) // count))
     return [text[i:i + size] for i in range(0, len(text), size)]
@@ -115,6 +164,7 @@ def pieces(text, count=3):
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.0'
+    slow = False
 
     def log_message(self, *args):
         pass
@@ -138,6 +188,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def emit(self, data, event=None):
+        if self.slow:
+            time.sleep(0.01)
         head = 'event: %s\n' % event if event else ''
         payload = data if isinstance(data, str) else json.dumps(data)
         self.wfile.write(('%sdata: %s\n\n' % (head, payload)).encode('utf-8'))
@@ -158,10 +210,20 @@ class Handler(BaseHTTPRequestHandler):
             body = None
         route = {'/v1/chat/completions': self.handle_chat, '/v1/responses': self.handle_responses,
                  '/v1/messages': self.handle_messages}.get(self.path)
-        if route is None or not isinstance(body, dict):
-            self.reply(404, {'error': {'message': 'not found', 'type': 'invalid_request_error'}})
-        else:
-            route(body)
+        name = {'/v1/chat/completions': 'chat', '/v1/responses': 'responses', '/v1/messages': 'anthropic'}.get(self.path)
+        try:
+            if route is None:
+                self.reply(404, {'error': {'message': 'not found', 'type': 'invalid_request_error'}})
+            elif not isinstance(body, dict):
+                if '%s_invalid_json_500' % name in self.engine.faults:
+                    self.reply(500, b'internal error', 'text/plain')
+                else:
+                    self.fail('anthropic' if name == 'anthropic' else 'openai', 400, 'The request body is not valid JSON.')
+            else:
+                route(body)
+        except ConnectionError:
+            if 'chat_wedged_after_cancel' in self.engine.faults and name == 'chat':
+                self.engine.dead = True
 
     def fail(self, style, status, message):
         faults = self.engine.faults
@@ -176,39 +238,67 @@ class Handler(BaseHTTPRequestHandler):
 
     # --- OpenAI Chat Completions ---
     def handle_chat(self, body):
-        faults = self.engine.faults
-        if body.get('model') != self.engine.model:
+        faults, engine = self.engine.faults, self.engine
+        if engine.dead:
+            return self.reply(503, b'engine unavailable', 'text/plain')
+        if body.get('model') != engine.model:
             return self.fail('openai', 404, 'The model does not exist.')
         if 'messages' not in body:
             return self.fail('chat', 400, 'messages is required')
+        messages = body['messages']
+        if not isinstance(messages, list) or (not messages and 'chat_accepts_empty_messages' not in faults):
+            return self.fail('openai', 400, 'messages must be a non-empty array')
+        roles = ('system', 'user', 'assistant', 'tool', 'developer')
+        if 'chat_accepts_invalid_role' not in faults and any(
+                not isinstance(m, dict) or m.get('role') not in roles for m in messages):
+            return self.fail('openai', 400, 'messages contain an invalid role')
         prompt, has_result = read_prompt(body)
+        size = prompt_tokens(prompt, 'chat_special_token_injection' in faults)
+        if size > CONTEXT_WINDOW and 'chat_context_truncates' not in faults:
+            if 'chat_context_crash' in faults:
+                engine.dead = True
+                return self.reply(500, b'internal error', 'text/plain')
+            return self.fail('openai', 400, 'This model maximum context length is exceeded.')
         want_json = (body.get('response_format') or {}).get('type') == 'json_object'
+        ignore_max = 'chat_ignores_max_tokens' in faults or (
+            'chat_max_tokens_one_ignored' in faults and body.get('max_tokens') == 1)
         tokens, finish, _ = generate(
-            prompt, body.get('max_tokens', 64), body.get('stop'), want_json,
-            'chat_ignores_max_tokens' in faults, 'chat_ignores_stop' in faults)
+            prompt, body.get('max_tokens', 64), body.get('stop'), want_json, ignore_max, 'chat_ignores_stop' in faults)
+        if ECHO_MARK in prompt and 'chat_concurrent_mixup' in faults:
+            previous, engine.last_echo = engine.last_echo, tokens
+            tokens = previous or tokens
+        if 'chat_state_leak' in faults and 'Question:' in prompt:
+            seen, engine.cache[prompt[:60]] = engine.cache.get(prompt[:60]), (prompt, tokens)
+            tokens = seen[1] if seen and seen[0] != prompt else tokens
+        reasoning = 'Multiply 17 by 23.' if 'Think step by step' in prompt else None
+        if reasoning and 'chat_think_leak' in faults:
+            tokens, reasoning = ['<think>Multiply 17 by 23.</think>' + ' '.join(tokens)], None
         call = decide_tool(body.get('tools'), body.get('tool_choice'), prompt, has_result)
         arguments = json.dumps(call[1]) if call else ''
         if 'chat_tool_bad_arguments' in faults:
             arguments = arguments[:-4]
         count = 8 if call else len(tokens)
-        usage = {'prompt_tokens': max(1, len(prompt.split())), 'completion_tokens': count}
+        usage = {'prompt_tokens': size, 'completion_tokens': count}
         usage['total_tokens'] = usage['prompt_tokens'] + count + (1 if 'chat_usage_mismatch' in faults else 0)
         if call:
             finish = 'stop' if 'chat_tool_finish_stop' in faults else 'tool_calls'
         if body.get('stream'):
-            return self.chat_stream(body, tokens, finish, call, arguments, usage)
+            return self.chat_stream(body, tokens, finish, call, arguments, usage, reasoning)
         if call:
             message = {'role': 'assistant', 'content': None, 'tool_calls': [{
                 'id': 'call_fake1', 'type': 'function', 'function': {'name': call[0], 'arguments': arguments}}]}
         else:
             message = {'role': 'assistant', 'content': '' if 'chat_empty_content' in faults else ' '.join(tokens)}
+            if reasoning:
+                message['reasoning_content'] = reasoning
         self.reply(200, {
             'id': 'chatcmpl-fake1', 'object': 'text_completion' if 'chat_wrong_object' in faults else 'chat.completion',
             'created': CREATED, 'model': self.engine.model,
             'choices': [{'index': 0, 'message': message, 'finish_reason': finish}], 'usage': usage})
 
-    def chat_stream(self, body, tokens, finish, call, arguments, usage):
+    def chat_stream(self, body, tokens, finish, call, arguments, usage, reasoning=None):
         faults = self.engine.faults
+        self.slow = 'numbers from 1 to 200' in json.dumps(body)
 
         def chunk(delta, reason=None, **extra):
             data = {'id': 'chatcmpl-fake1', 'object': 'chat.completion.chunk', 'created': CREATED, 'model': self.engine.model,
@@ -225,8 +315,10 @@ class Handler(BaseHTTPRequestHandler):
                 chunk({'tool_calls': [{'index': 0, 'function': {'arguments': part}}]})
         else:
             chunk(dict(role, content=''))
-            for index, word in enumerate(tokens):
-                chunk({'content': word if index == 0 else ' ' + word})
+            if reasoning:
+                chunk({'reasoning_content': reasoning})
+            for part in text_parts(tokens, 'chat_utf8_split' in faults):
+                chunk({'content': part})
         chunk({}, finish)
         if (body.get('stream_options') or {}).get('include_usage') and 'chat_stream_no_usage' not in faults:
             data = {'id': 'chatcmpl-fake1', 'object': 'chat.completion.chunk', 'created': CREATED,
@@ -251,6 +343,11 @@ class Handler(BaseHTTPRequestHandler):
         count = 8 if call else len(tokens)
         usage = {'input_tokens': max(1, len(prompt.split())), 'output_tokens': count}
         usage['total_tokens'] = usage['input_tokens'] + count
+        thinking = []
+        if 'Think step by step' in prompt and body.get('reasoning') and not call:
+            thinking = [{'type': 'reasoning', 'id': 'rs_fake1', 'summary': []}]
+            if 'responses_reasoning_malformed' in faults:
+                thinking[0].pop('summary')
         status = 'incomplete' if finish == 'length' and not call else 'completed'
         incomplete = {'reason': 'max_output_tokens'} if status == 'incomplete' else None
         message = {'type': 'message', 'id': 'msg_fake1', 'status': 'completed', 'role': 'assistant',
@@ -266,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
                     'model': self.engine.model, 'output': output, 'usage': usage}
 
         if not body.get('stream'):
-            return self.reply(200, response(status, [item if call else message]))
+            return self.reply(200, response(status, [item] if call else thinking + [message]))
         sequence = [0]
 
         def send(kind, **data):
@@ -291,9 +388,8 @@ class Handler(BaseHTTPRequestHandler):
         done = text + '!' if 'responses_delta_mismatch' in faults else text
         if 'responses_event_order' in faults:
             send('response.output_text.done', item_id='msg_fake1', output_index=0, content_index=0, text=done)
-        for index, word in enumerate(tokens):
-            send('response.output_text.delta', item_id='msg_fake1', output_index=0, content_index=0,
-                 delta=word if index == 0 else ' ' + word)
+        for delta in text_parts(tokens, 'responses_utf8_split' in faults):
+            send('response.output_text.delta', item_id='msg_fake1', output_index=0, content_index=0, delta=delta)
         if 'responses_event_order' not in faults:
             send('response.output_text.done', item_id='msg_fake1', output_index=0, content_index=0, text=done)
         send('response.content_part.done', item_id='msg_fake1', output_index=0, content_index=0, part=dict(part, text=text))
@@ -325,6 +421,12 @@ class Handler(BaseHTTPRequestHandler):
                 content = [{'type': 'tool_use', 'id': 'toolu_fake1', 'name': call[0], 'input': shown}]
             else:
                 content = [{'type': 'text', 'text': ' '.join(tokens)}]
+                if 'Think step by step' in prompt:
+                    thought = [{'type': 'thinking', 'thinking': 'Multiply 17 by 23.', 'signature': 'fake-signature'}]
+                    if 'anthropic_think_leak' in faults:
+                        content[0]['text'] = '<think>Multiply 17 by 23.</think>' + content[0]['text']
+                    else:
+                        content = thought + content
             return self.reply(200, dict(message, content=content, stop_reason=reason,
                                         stop_sequence=matched if reason == 'stop_sequence' else None, usage=usage))
         self.start_stream()
@@ -335,7 +437,7 @@ class Handler(BaseHTTPRequestHandler):
             deltas = [{'type': 'input_json_delta', 'partial_json': part} for part in pieces(json.dumps(call[1]))]
         else:
             block = {'type': 'text', 'text': ''}
-            deltas = [{'type': 'text_delta', 'text': word if i == 0 else ' ' + word} for i, word in enumerate(tokens)]
+            deltas = [{'type': 'text_delta', 'text': part} for part in text_parts(tokens, 'anthropic_utf8_split' in faults)]
         self.emit({'type': 'content_block_start', 'index': 0, 'content_block': block}, 'content_block_start')
         self.emit({'type': 'ping'}, 'ping')
         for delta in deltas:
@@ -349,9 +451,13 @@ class Handler(BaseHTTPRequestHandler):
 
 class FakeEngine:
     model = 'fake-model'
+    context_window = CONTEXT_WINDOW
 
     def __init__(self, faults=()):
         self.faults = set(faults)
+        self.dead = False
+        self.last_echo = None
+        self.cache = {}
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         self.server.engine = self
         self.server.daemon_threads = True

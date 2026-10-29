@@ -43,6 +43,8 @@ sys.path.insert(0, str(HERE))
 import checks_chat  # noqa: E402,F401  (importing registers the checks)
 import checks_responses  # noqa: E402,F401
 import checks_anthropic  # noqa: E402,F401
+import checks_robustness  # noqa: E402,F401
+import checks_engine  # noqa: E402,F401
 from checks_core import APIS, MAX_OUTPUT_TOKENS, REGISTRY, Context, Fail, Skip  # noqa: E402
 
 NOT_OBTAINED = 'Not obtained'
@@ -95,7 +97,7 @@ def self_test():
 
     def run(faults):
         with FakeEngine(faults=faults) as engine:
-            return run_checks(Context(engine.origin, engine.model, None, 10), APIS)[0]
+            return run_checks(Context(engine.origin, engine.model, None, 10, engine.context_window), APIS)[0]
 
     problems = []
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -164,6 +166,7 @@ def parse_args():
     parser.add_argument('--apis', default=','.join(APIS), help='Comma-separated subset of ' + ', '.join(APIS))
     parser.add_argument('--only', help='Comma-separated check ids (debugging; the result is marked incomplete)')
     parser.add_argument('--timeout', type=float, default=60.0, help='Seconds per request')
+    parser.add_argument('--context-window', type=int, help='Served context window in tokens; enables the overflow checks')
     parser.add_argument('--evaluation-revision', help='Full commit of this repository that holds the pinned definition')
     parser.add_argument('--runtime-revision', help='Engine commit, if known')
     parser.add_argument('--artifact', action='append', help='NAME=SHA256 of a deployed engine artifact (repeatable)')
@@ -186,7 +189,7 @@ def main():
             print('  ' + problem)
         if args.emit_result and ok:
             with FakeEngine() as engine:
-                ctx = Context(engine.origin, engine.model, None, 10)
+                ctx = Context(engine.origin, engine.model, None, 10, engine.context_window)
                 started = now()
                 results, _ = run_checks(ctx, APIS)
             args.engine_name = 'fake-reference-engine'
@@ -204,7 +207,9 @@ def main():
         raise SystemExit('Unknown API in --apis.')
     origin, scheme, host_class = validate_origin(args.endpoint)
     key = args.api_key_file.read_text().strip() if args.api_key_file else None
-    ctx = Context(origin, args.model, key, args.timeout)
+    if args.context_window is not None and args.context_window < 1:
+        raise SystemExit('--context-window must be a positive integer.')
+    ctx = Context(origin, args.model, key, args.timeout, args.context_window)
     started = now()
     results, evidence = run_checks(ctx, apis, set(args.only.split(',')) if args.only else None)
     evidence_ref = None
