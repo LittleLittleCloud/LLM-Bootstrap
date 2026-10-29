@@ -15,7 +15,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check both plugin formats and bundled resources
-        run: node --test tests/plugin.test.mjs
+          cache: npm
+      - name: Install locked repository-check dependencies
+        run: npm ci
+      - name: Check plugin formats, bundled resources, and protocol schemas
+        run: npm test
       - name: Check whitespace
         run: git diff --check
