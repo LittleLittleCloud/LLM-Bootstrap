@@ -38,6 +38,7 @@ Evaluations in the repository at the time of writing (the commit you resolved is
 | Evaluation | Status | Result document | Purpose |
 | --- | --- | --- | --- |
 | `engine-api-conformance` | released | `ConformanceResult` | Cheap structural checks of an endpoint's OpenAI chat, OpenAI Responses, and Anthropic Messages behavior. |
+| `engine-throughput` | released | `EvaluationResult` | Fixed-length prefill and decode throughput of a streaming chat endpoint, with a unique-prompt cache policy and client timing. |
 | `humaneval-20-pi` | draft, no scripts | `EvaluationResult` | Planned 20-task coding workload from the prior Infer.NET measurements. |
 
 The driver behind the prior Infer.NET measurements is external to this repository. It measures Pi coding-agent wall time and records `correctness_evaluated: false`, so it does not satisfy this protocol. Those measurements are prior evidence only.
@@ -65,6 +66,31 @@ python3 evaluations/engine-api-conformance/scripts/conformance.py \
 ```
 
 It needs Python 3.9 or newer and no packages. The endpoint must be a credential-free origin, and plain http is allowed only on loopback. Pass a key with `--api-key-file`; it is never logged or stored. The result records only whether the host is loopback, never an address. Failing checks write their requests and responses to a local-only evidence file next to the result.
+
+## Fixed-length throughput
+
+`engine-throughput` measures prefill and decode throughput of an OpenAI-compatible streaming chat endpoint with fixed request shapes. It is a performance measurement: it does not check output quality or API behavior, so run `engine-api-conformance` first.
+
+- **Workloads.** Each pass sends two requests serially (concurrency 1). `prefill.in2048.out1` has about 2048 prompt tokens and one output token. `decode.in128.out256` has about 128 prompt tokens and exactly 256 output tokens. Reasoning models run with thinking disabled so the output tokens are the answer. Sampling is temperature 0 with the evaluation's fixed seed; `--request-field KEY=VALUE` can add engine-specific scalars such as `min_tokens`, which are recorded in the result's settings and cannot replace the fixed fields.
+- **Input length.** Before the passes, the driver sizes each prompt with probe requests until the engine's own `usage.prompt_tokens` is within half the allowed deviation of the target (2% or 8 tokens, whichever is larger). The count includes the chat template. A request whose reported prompt tokens fall outside the allowed deviation fails.
+- **Output length.** A request must produce exactly the workload's output tokens, by `usage.completion_tokens`. A request that stops early fails, so a short answer is never averaged in as a fast one.
+- **Cache policy.** Every prompt, including calibration and warm-up prompts, starts with a unique nonce, so no prefix can be reused. Where the engine reports cached prompt tokens they must be zero, and the result records whether the engine reports them at all.
+- **Timing.** All intervals use one monotonic clock at the client. Prefill seconds are the client time from dispatch to the first output chunk, so they include queueing, transfer, and the first sampled token; processed input tokens are the reported prompt tokens minus cached ones. Decode throughput is the sum of N−1 over the sum of first-to-last chunk intervals, with N from `usage.completion_tokens`. It applies only when the engine sends at least 0.9 output chunks per token. Otherwise decode is "Not obtained" and the result says why, because multi-token chunks need a native definition that is never relabeled N−1.
+- **Passes.** The contract's warm-up and formal repetition counts are passed as `--warmup` and `--repetitions`. A pass with any request that fails its gates is excluded from the metrics and stays in the result's repetitions, with the reason. `formal_repetitions` counts the successful formal passes. Cold load is not measured here.
+- **Resources.** Swap-out is the whole-machine delta over the formal passes and is measured only for a loopback endpoint. Peak memory is sampled only when `--memory-pid` names the engine process, and is the sampled resident size, which may not include GPU memory; otherwise it is "Not obtained".
+- **Quality block.** `quality.application` counts formal requests that met their workload gates. It is not a correctness result and does not include conformance, which is its own result document.
+- **Negative control.** Before every run the driver starts a reference engine with known rates and checks that the timing recovers them within 30%, that a half-speed engine reads about half, and that each injected fault is caught: reported cache hits, early stops, missing usage, coalesced chunks, and HTTP errors.
+
+```sh
+python3 evaluations/engine-throughput/scripts/throughput.py \
+  --endpoint http://127.0.0.1:8080 --model MODEL --role candidate --engine-name NAME \
+  --warmup 1 --repetitions 3 --evaluation-revision FULL_COMMIT_SHA \
+  --artifact ENGINE_BINARY=SHA256 --engine-command "COMMAND THAT STARTED THE ENGINE" \
+  --hardware-model HARDWARE --toolchain TOOLCHAIN --power-mode MODE --thermal-observations TEXT --exclusive-gpu \
+  --output experiments/EXPERIMENT_ID/runs/RUN_ID/candidate-NAME.json
+```
+
+It needs Python 3.9 or newer and no packages. Run it on the engine's machine against a loopback endpoint (a remote one needs `--allow-remote` and is recorded as a deviation), and pass a key with `--api-key-file`. The environment options describe what you observed; `exclusive-gpu` is your statement that nothing else used the GPU. The driver writes the result document and, next to it, a `.requests.evidence` file with every request's timings and gate outcomes. That file holds no prompts or model output, is referenced by hash as local-only evidence, and is not committed (the repository ignores `*.evidence`).
 
 ## Correctness gates
 
