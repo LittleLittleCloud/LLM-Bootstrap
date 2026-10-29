@@ -1,0 +1,21 @@
+name: Validate plugin package
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check both plugin formats and bundled resources
+        run: node --test tests/plugin.test.mjs
+      - name: Check whitespace
+        run: git diff --check

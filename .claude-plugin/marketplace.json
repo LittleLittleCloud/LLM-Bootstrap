@@ -1,0 +1,14 @@
+{
+  "name": "llm-bootstrap-marketplace",
+  "owner": {
+    "name": "LittleLittleCloud"
+  },
+  "plugins": [
+    {
+      "name": "llm-bootstrap",
+      "source": "./",
+      "version": "0.1.0",
+      "description": "Plan, build, and evaluate LLM-built inference engines under reproducible experiment contracts."
+    }
+  ]
+}

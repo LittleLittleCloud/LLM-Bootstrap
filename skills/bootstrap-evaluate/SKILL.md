@@ -7,6 +7,10 @@ description: Evaluate LLM-built inference engines against a frozen experiment co
 
 Read [the experiment protocol](../../docs/experiment-protocol.md), the frozen contract, and the candidate's runtime/build instructions. Use [the record template](../../experiments/TEMPLATE.md) for results. If reviewing historical evidence, preserve its original configuration and mark unavailable fields rather than rerunning or inventing them.
 
+Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: copy the template and write reports and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
+
+Use English for project writing, preserving literal inputs, identifiers, commands, hashes, and raw evidence. Use codex/ feature branches and pull requests for project changes; merge only with explicit user authorization. Do not publish weights, credentials, private prompts, or unreviewed agent transcripts; record hashes and access limitations instead. Keep planned targets, prior external evidence, and measurements from these skills distinct.
+
 Verify actual hardware, model hashes, deployed runtime identities, and allowed settings. Execute correctness gates and baseline/candidate measurements within existing authorization. Run competing GPU loads serially, isolate generated-code assertion evaluation, distinguish warm-up from formal rounds, and retain all failures/repetitions.
 
 Collect complete per-request native metrics and client TTFT observations. Reconcile request/token totals with the evaluation harness; report coverage. Compute throughput from sums. Preserve the N−1 versus command-timing distinction and report missing values explicitly. Report quality, resource gates, and application duration alongside speed.
