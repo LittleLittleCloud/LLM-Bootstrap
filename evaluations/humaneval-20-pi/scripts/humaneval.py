@@ -93,8 +93,8 @@ def load_dataset(path=None):
 
 def make_prompt(task_prompt, nonce):
     return ('Session %s.\nImplement the Python function specified below. Use your standard tools to write the complete '
-            'implementation, including required imports, to solution.py in the current directory. Do not merely print '
-            'the code. Do not fetch reference solutions or external tests. You may inspect and syntax-check your own '
+            'implementation, including required imports, to solution.py in the current directory, using the relative path '
+            'solution.py rather than an absolute path. Do not merely print the code. Do not fetch reference solutions or external tests. You may inspect and syntax-check your own '
             'file. Finish when the file is ready.\n\n%s' % (nonce, task_prompt))
 
 
@@ -162,12 +162,11 @@ def run_task(ctx, phase, repetition, task_id):
     records = chat_records(ctx, label)
     mismatch = any(m['provider'] not in (None, pi_run.PROVIDER) or m['model'] not in (None, ctx.model) for m in events['assistant'])
     agent_ok = events['settled'] and not events['aborted'] and not events['malformed'] and events['final_stop'] == 'stop' and not mismatch
-    completed = ran['returncode'] == 0 and not ran['timed_out'] and agent_ok and solution is not None
+    completed = ran['returncode'] == 0 and not ran['timed_out'] and agent_ok
     problem = None
     if not completed:
         problem = ('timed out after %g seconds' % ctx.timeout if ran['timed_out'] else
-                   'Pi exited with status %s' % ran['returncode'] if ran['returncode'] else
-                   'no solution.py was written' if solution is None else 'Pi did not finish cleanly')
+                   'Pi exited with status %s' % ran['returncode'] if ran['returncode'] else 'Pi did not finish cleanly')
     return {'phase': phase, 'repetition': repetition, 'task_id': task_id, 'nonce': nonce, 'wall_seconds': ran['wall_seconds'],
             'returncode': ran['returncode'], 'timed_out': ran['timed_out'], 'completed': completed, 'problem': problem,
             'assistant_messages': len(events['assistant']), 'tool_calls': events['tool_calls'], 'final_stop': events['final_stop'],
@@ -179,7 +178,9 @@ def run_task(ctx, phase, repetition, task_id):
 def assess(ctx, results):
     """Run the official assertions on every completed solution. They run after the cohort so they never share the machine with the engine."""
     for result in results:
-        if result['completed']:
+        if result['completed'] and result['_solution'] is None:
+            result['assertion'] = {'status': 'no_solution'}
+        elif result['completed']:
             program = assertions.program(result['_solution'], ctx.held[result['task_id']])
             result['assertion'] = assertions.run_case(program, ctx.staging)
 
@@ -395,7 +396,7 @@ def self_test():
         if name == 'wrong_solution':
             return all(r['assertion']['status'] == 'failed' for r in results) and not formal_failures(run)
         if name == 'no_solution':
-            return all(r['problem'] and 'solution.py' in r['problem'] for r in results) and bool(formal_failures(run))
+            return all(r['assertion']['status'] == 'no_solution' for r in results) and not formal_failures(run)
         if name == 'hang':
             return all(r['timed_out'] for r in results) and run['passes'][-1]['outcome'] == 'timed-out'
         if name == 'usage_mismatch':

@@ -118,8 +118,7 @@ test('faults are scored or caught, never passed off as measurements', needsDocke
   ].join('\n')));
   assert.deepEqual([out.wrong.passed, out.wrong.total, out.wrong.formal], [0, 2, 1], 'a wrong solution runs cleanly and fails its test');
   assert.equal(out.wrong.reconciled, true);
-  assert.deepEqual([out.silent.passed, out.silent.formal], [0, 0]);
-  assert.ok(out.silent.problems.every(text => /solution\.py/.test(text)));
+  assert.deepEqual([out.silent.passed, out.silent.total, out.silent.formal], [0, 2, 1], 'a missing solution fails the task, not the pass');
   assert.equal(out.mismatch.reconciled, false, 'usage that disagrees with the wire is unreconciled');
   assert.equal(out.mismatch.passed, 2);
   assert.deepEqual([out.down.passed, out.down.formal], [0, 0]);
