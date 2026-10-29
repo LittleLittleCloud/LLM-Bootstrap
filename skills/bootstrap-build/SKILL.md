@@ -5,7 +5,7 @@ description: Build and profile an inference engine specialized to a fixed LLM Bo
 
 # Build the engine
 
-Read [the experiment protocol](../../docs/experiment-protocol.md) and the selected frozen experiment contract. If essential platform, model, budget, or acceptance fields are unresolved, use bootstrap-plan before dependent work.
+Read [the experiment protocol](../../docs/experiment-protocol.md) and the selected frozen experiment contract (for a derived contract, its resolved effective contract). If essential platform, model, budget, or acceptance fields are unresolved, use bootstrap-plan before dependent work.
 
 Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only; read the contract and write engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
 

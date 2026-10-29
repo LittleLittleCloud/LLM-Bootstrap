@@ -19,7 +19,7 @@ The package ships these skills:
 | [bootstrap-build](../skills/bootstrap-build/SKILL.md) | Implement, validate, and profile the engine. | `/llm-bootstrap:bootstrap-build` |
 | [bootstrap-evaluate](../skills/bootstrap-evaluate/SKILL.md) | Measure and report against the frozen contract. | `/llm-bootstrap:bootstrap-evaluate` |
 
-Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, weights, or experiment executables. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
+Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, weights, or experiment executables. The only script is the dependency-free [contract resolver](../schema/resolve-contract.mjs) for derived experiments, which nothing runs automatically. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
 
 ## Install with Agent Plugins / VS Code
 
