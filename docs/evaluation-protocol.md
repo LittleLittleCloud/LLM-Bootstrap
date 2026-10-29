@@ -51,7 +51,7 @@ The driver checks every script against its hash before importing any of them, th
 ```sh
 python3 evaluations/engine-api-conformance/scripts/conformance.py \
   --endpoint http://127.0.0.1:8080 --model MODEL --engine-name NAME --context-window 4096 \
-  --evaluation-revision FULL_COMMIT_SHA --output results/conformance.json
+  --evaluation-revision FULL_COMMIT_SHA --output experiments/EXPERIMENT_ID/runs/RUN_ID/conformance.json
 ```
 
 It needs Python 3.9 or newer and no packages. The endpoint must be a credential-free origin, and plain http is allowed only on loopback. Pass a key with `--api-key-file`; it is never logged or stored. The result records only whether the host is loopback, never an address. Failing checks write their requests and responses to a local-only evidence file next to the result.

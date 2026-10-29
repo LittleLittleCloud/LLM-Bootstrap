@@ -47,6 +47,17 @@ Record all human interventions with timestamps and purpose: task setup, implemen
 
 For self-hosting, record the exact transition point, builder/target identity match, generated engine runtime/artifact identity, actual harness endpoint routing, and subsequent development steps executed through that engine. Distinguish an external recovery path from uninterrupted self-hosting. A claim of recursive improvement also requires a measured subsequent engine revision, with correctness retained.
 
+## Experiment records
+
+Everything an experiment produces lives under `experiments/<experiment-id>/`:
+
+- `contract.json`: the frozen contract, or the derived contract.
+- `record.md`: the human-readable record, a copy of [the template](../experiments/TEMPLATE.md).
+- `runs/<run-id>/run.json`: one `ExperimentRun`, with the evaluation result documents it references beside it (for example `candidate-<engine>.json`).
+- `evidence/`: local-only raw evidence, never committed. Run records refer to it by hash and access limitation.
+
+Paths inside these documents are relative to the repository root, except a derived contract's `extends.path`, which is relative to that contract file. `experiments/TEMPLATE.md` and the unrun example sit directly under `experiments/` and are not records. Prior external evidence is not an experiment; it is kept in [prior-evidence.md](prior-evidence.md) so it is never mistaken for a result of these skills.
+
 ## Results and adoption
 
 Keep implementation and results reviewable independently. Record failed, interrupted, neutral, and successful attempts; preserve original observations when appending corrections. Each run identifies the contract revision, skills revision, implementation/runtime SHA and artifact hashes, configuration, commands, raw evidence hashes/access, quality results, resource gates, metric coverage, and interpretation.
