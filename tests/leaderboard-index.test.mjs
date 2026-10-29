@@ -20,7 +20,6 @@ function result(role, engine, patch = {}) {
   const document = syntheticResult();
   Object.assign(document, { role, engine_name: engine, runtime_revision: role === 'baseline' ? commit('6') : unavailable('Not exposed by the runtime.') }, patch);
   document.environment.hardware_model = 'fixture-hardware';
-  document.quality.numerical_status = 'passed';
   document.metrics.client_ttft_median_seconds = 0.5;
   document.metrics.application_duration_seconds = 100;
   document.resources.peak_memory_gib = 12;
@@ -102,9 +101,7 @@ test('the quality gate is passed only for a completed, verified, fully passing r
     return qualityGate(r, status);
   };
   assert.equal(gate({}), 'passed');
-  assert.equal(gate({ quality: { numerical_status: 'failed' } }), 'failed');
   assert.equal(gate({ application: { passed: 0 } }), 'failed');
-  assert.equal(gate({ quality: { numerical_status: 'not-run' } }), 'unverified');
   assert.equal(gate({ application: { negative_control_verified: false } }), 'unverified');
   assert.equal(gate({ application: { restricted_environment: false } }), 'unverified');
   assert.equal(gate({}, 'interrupted'), 'unverified');
@@ -117,7 +114,6 @@ test('missing metrics and an unavailable intervention log stay null, never zero'
   Object.assign(interrupted.metrics, { prefill: 'Not obtained', decode: 'Not obtained', client_ttft_median_seconds: 'Not obtained', application_duration_seconds: 'Not obtained',
     formal_repetitions: 0, preliminary: true, requests_reconciled: false });
   Object.assign(interrupted.resources, { peak_memory_gib: 'Not obtained' });
-  interrupted.quality.numerical_status = 'not-run';
   addRun(files, hashes, 'exp-base', 'run-1', [interrupted], { status: 'interrupted', human_interventions: unavailable('No log was kept.') });
   const [entry] = buildIndex(files, { validators }).entries;
   assert.equal(entry.run_status, 'interrupted');

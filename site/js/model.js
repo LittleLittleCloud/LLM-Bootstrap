@@ -52,7 +52,7 @@ const haystack = run => [run.run_id, run.experiment_id, run.derived_from, run.en
 // Why an entry is not ranked on a metric, or null when it is. Only verified, reconciled measurements are ranked.
 export function unrankedReason(run, metric) {
   if (run.quality_gate === 'failed') return 'Failed the quality gate';
-  if (run.quality_gate === 'unverified') return 'The quality gate was not verified (interrupted run, numerical check not run, or negative control not verified)';
+  if (run.quality_gate === 'unverified') return 'The quality gate was not verified (interrupted run or negative control not verified)';
   if (!run.metrics.requests_reconciled) return 'Request counts were not reconciled with the evaluation harness, so the metrics are not complete';
   if (METRICS[metric].read(run) == null) return `No ${METRICS[metric].label} was obtained`;
   return null;

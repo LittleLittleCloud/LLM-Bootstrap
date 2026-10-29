@@ -13,9 +13,8 @@ Status: Draft / Running / Completed / Interrupted. Acceptance: Unverified / Pass
 - Builder model/provider/identifier, initial inference location, and tool access:
 - Development harness version/hash:
 - Evaluation reference (id, repository revision, definition hash), warm-up, and formal repetitions:
-- Numerical oracle/tolerances:
 - Baseline engines/revisions, selection date/method, and comparison tracks:
-- Primary metric, numerical targets, quality/resource gates:
+- Primary metric, quality/resource gates:
 - Budget and stopping rule:
 - Scope authorization and unresolved fields:
 
@@ -35,7 +34,6 @@ Use “Not obtained” for unavailable values. Preserve all formal repetitions a
 
 | Metric / gate | Baseline | Candidate | Definition, coverage, and conditions |
 | --- | --- | --- | --- |
-| Numerical/state correctness | | | |
 | Official assertions / fixed task count | | | |
 | Prefill tokens / seconds / tok/s | | | |
 | Decode intervals / seconds / tok/s | | | N−1; native command metrics separate |
@@ -61,5 +59,5 @@ Reviewed text only. Refer to private artifacts by hash and access limitation; do
 - Preflight checks that would have caught them earlier:
 - Recurring human interventions and what would have avoided them:
 - Suggested changes to skills or evaluations (cite the run and evidence hash):
-- Calibration notes for baselines, budgets, thresholds, and tolerances (priors only; each contract fixes its own before tuning):
+- Calibration notes for baselines, budgets, and thresholds (priors only; each contract fixes its own before tuning):
 - Limits on generalizing: preliminary cohorts, unmatched comparisons, hardware-specific effects:

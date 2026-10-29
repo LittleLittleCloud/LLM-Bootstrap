@@ -16,8 +16,8 @@ Record:
 - Hardware model, GPU/core configuration, physical memory/VRAM, OS, drivers, compiler/runtime, power mode, thermal observations, and relevant memory limits. Record exclusive GPU use and any CPU fallback, offloading, SSD streaming, or multi-host participation.
 - Target repository/revision, weight and tokenizer hashes, chat template, quantization method/group size, weight/activation/KV/recurrent-state precision, context limit, sampling settings, and speculative draft identities/settings.
 - Builder model/provider/revision or provider-exposed identifier, inference location, decoding settings, tools, network/source access, harness version/revision, and starting context. Mark provider details that are unavailable; do not fabricate immutable IDs.
-- The repository-defined evaluation (id, repository revision, and definition hash; see the evaluation protocol), warm-up, formal repetitions, and correctness oracle/tolerances.
-- Primary performance metric and numerical acceptance thresholds, permitted quality loss, memory/swap constraints, allowed optimizations, total wall-clock/token/compute budgets, and stopping rules. Explicitly state which operating-system changes are in scope; no silent precision or resource-limit relaxation.
+- The repository-defined evaluation (id, repository revision, and definition hash; see the evaluation protocol), warm-up, and formal repetitions.
+- Primary performance metric and acceptance thresholds, permitted quality loss, memory/swap constraints, allowed optimizations, total wall-clock/token/compute budgets, and stopping rules. Explicitly state which operating-system changes are in scope; no silent precision or resource-limit relaxation.
 
 Freeze the contract in version control before implementation. Amendments receive a new revision and a reason; they do not retroactively redefine a successful run. Existing user authorization governs execution. Missing essential configuration is resolved before dependent work, while independent preparation may continue.
 
@@ -31,7 +31,7 @@ The effective contract (base plus overrides) is what freezes and runs. It must v
 
 ## Evaluation
 
-Evaluation is defined by the [evaluation protocol](evaluation-protocol.md), including correctness gates and measurement definitions. Evaluation code and scripts are owned by this repository, not by experiments or the builder LLM. A contract selects an evaluation by id, repository revision, and definition hash, and adds only what depends on the experiment: warm-up, formal repetitions, and the numerical oracle and tolerances.
+Evaluation is defined by the [evaluation protocol](evaluation-protocol.md), including correctness gates and measurement definitions. Evaluation code and scripts are owned by this repository, not by experiments or the builder LLM. A contract selects an evaluation by id, repository revision, and definition hash, and adds only what depends on the experiment: warm-up and formal repetitions.
 
 ## Baselines and SOTA
 
@@ -58,7 +58,7 @@ Everything an experiment produces lives under `experiments/<experiment-id>/`:
 
 Only these files are committed to the repository: `contract.json`, `report.md`, `runs/<run-id>/run.json`, and `runs/<run-id>/{baseline,candidate}-<engine>.json`. Results are submitted as a pull request, which the bootstrap-submit-results skill prepares. Paths inside these documents are relative to the repository root, except a derived contract's `extends.path`, which is relative to that contract file. `experiments/TEMPLATE.md` sits directly under `experiments/` and is not a record. Prior external evidence is not an experiment; it is kept in [prior-evidence.md](prior-evidence.md) so it is never mistaken for a result of these skills.
 
-The report's feedback section is the only place experiment-specific lessons are kept: failures and their causes, the preflight checks that would have caught them, recurring human interventions, suggested changes to skills or evaluations, and calibration notes for baselines, budgets, and tolerances. It holds reviewed text, never transcripts. A suggestion becomes a change only through a separate pull request to this repository. A changed skill revision is a new treatment, and an evaluation is changed only by this repository, never from inside an experiment.
+The report's feedback section is the only place experiment-specific lessons are kept: failures and their causes, the preflight checks that would have caught them, recurring human interventions, suggested changes to skills or evaluations, and calibration notes for baselines, budgets, and thresholds. It holds reviewed text, never transcripts. A suggestion becomes a change only through a separate pull request to this repository. A changed skill revision is a new treatment, and an evaluation is changed only by this repository, never from inside an experiment.
 
 ## Results and adoption
 

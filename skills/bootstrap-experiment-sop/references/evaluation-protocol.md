@@ -4,7 +4,7 @@ This protocol defines how engines are evaluated. It is separate from the [experi
 
 ## Repository-owned evaluation
 
-Evaluations are defined by the LLM Bootstrap repository (`https://github.com/LittleLittleCloud/LLM-Bootstrap`), not by individual experiments. An evaluation's definition, its driver and assertion-evaluator scripts, and its numerical-check code live under `evaluations/<evaluation-id>/` in that repository and change only through reviewed pull requests to it. An experiment selects an evaluation by id, repository revision, and definition hash. It does not carry, replace, or patch evaluation code.
+Evaluations are defined by the LLM Bootstrap repository (`https://github.com/LittleLittleCloud/LLM-Bootstrap`), not by individual experiments. An evaluation's definition, its driver and assertion-evaluator scripts live under `evaluations/<evaluation-id>/` in that repository and change only through reviewed pull requests to it. An experiment selects an evaluation by id, repository revision, and definition hash. It does not carry, replace, or patch evaluation code.
 
 The builder LLM does not write or edit evaluation definitions, scripts, dataset pins, or scoring during an experiment, so it cannot shape how its own engine is judged. A needed change is made in this repository outside any experiment and produces a new revision, which is a different evaluation. Earlier results stay tied to the revision they used.
 
@@ -27,11 +27,11 @@ Each evaluation has a definition file, `evaluations/<evaluation-id>/evaluation.j
 - The agent harness name and version that drives the endpoint under test.
 - The dataset repository, revision, file, and hash, the exact task IDs, and the seed.
 - Input/output limits, per-task timeout, request concurrency, cache policy, and sampling settings for the target model.
-- The scripts that carry out the evaluation, each with a role (driver, assertion evaluator, or numerical check), a path inside the evaluation directory, and a content hash.
+- The scripts that carry out the evaluation, each with a role (driver or assertion evaluator), a path inside the evaluation directory, and a content hash.
 
 A definition is a `draft` or `released`. A released definition has every field resolved, and every script exists in the repository and matches its hash. A draft has unresolved fields and cannot be used for formal runs.
 
-The experiment contract keeps only what depends on the experiment: the evaluation reference, the warm-up plan, formal repetitions, and the numerical oracle and tolerances. Tolerances depend on the target model and declared precision, so they are chosen before candidate results are inspected. The code that applies them is still repository-owned.
+The experiment contract keeps only what depends on the experiment: the evaluation reference, the warm-up plan, and formal repetitions.
 
 Evaluations in the repository at the time of writing (the commit you resolved is authoritative):
 
@@ -66,11 +66,11 @@ python3 evaluations/engine-api-conformance/scripts/conformance.py \
 
 It needs Python 3.9 or newer and no packages. The endpoint must be a credential-free origin, and plain http is allowed only on loopback. Pass a key with `--api-key-file`; it is never logged or stored. The result records only whether the host is loopback, never an address. Failing checks write their requests and responses to a local-only evidence file next to the result.
 
-## Correctness before performance claims
+## Correctness gates
 
-Validate tensor shapes/layouts, tokenizer and chat formatting, model operators, state/KV continuity, reset behavior, and representative short/long inputs against an independent reference. Choose tolerances appropriate to declared precision before inspecting candidate results. Localize the first differing logits/state when practical; plausible text alone is insufficient.
+Numerical equivalence with a reference implementation is not required. The correctness gates are the endpoint conformance evaluation and the application-level task checks, and neither is evidence of numerical equivalence.
 
-Retain application-level task checks as a separate quality gate. A coding agent can call the model repeatedly and repair solutions; a 20-task assertion pass is not model pass@1 or evidence of numerical equivalence. Run generated programs in a restricted evaluation environment with no credentials or network and bounded resources. Preserve timeouts/errors in the denominator and verify the assertion evaluator with a negative control.
+Retain application-level task checks as a separate quality gate. A coding agent can call the model repeatedly and repair solutions; a 20-task assertion pass is not model pass@1. Run generated programs in a restricted evaluation environment with no credentials or network and bounded resources. Preserve timeouts/errors in the denominator and verify the assertion evaluator with a negative control.
 
 ## Measurement
 
