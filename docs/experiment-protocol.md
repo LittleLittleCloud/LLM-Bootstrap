@@ -21,6 +21,14 @@ Record:
 
 Freeze the contract in version control before implementation. Amendments receive a new revision and a reason; they do not retroactively redefine a successful run. Existing user authorization governs execution. Missing essential configuration is resolved before dependent work, while independent preparation may continue.
 
+## Derived experiments
+
+An experiment may derive from a base experiment instead of restating it. A derived contract (`DerivedExperimentContract` in the [schema](../schema/experiment-protocol.openapi.json)) names its base by path, full commit, and file hash, and lists overrides. Everything may be overridden except the target model: a different target model is a different base experiment, never an override.
+
+Merging is deterministic and implemented by [schema/resolve-contract.mjs](../schema/resolve-contract.mjs). Objects merge by key, while arrays, scalars, and null replace the base value. The derived contract declares its own `experiment_id`, `status`, `description`, freeze time, and any amendment; these are never inherited. The skill revision and builder instruction hashes are inherited unless overridden, and overriding them changes the treatment.
+
+The effective contract (base plus overrides) is what freezes and runs. It must validate as a frozen contract with no unresolved fields before tuning, which also rejects misspelled override keys. A base may itself be derived; every link is pinned by hash, so a chain cannot change silently. Runs cite the derived contract file. Results are not inherited from the base, so any comparison with it needs its own matched runs.
+
 ## Correctness before performance claims
 
 Validate tensor shapes/layouts, tokenizer and chat formatting, model operators, state/KV continuity, reset behavior, and representative short/long inputs against an independent reference. Choose tolerances appropriate to declared precision before inspecting candidate results. Localize the first differing logits/state when practical; plausible text alone is insufficient.

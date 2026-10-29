@@ -5,7 +5,7 @@ description: Evaluate LLM-built inference engines against a frozen experiment co
 
 # Evaluate and report
 
-Read [the experiment protocol](../../docs/experiment-protocol.md), the frozen contract, and the candidate's runtime/build instructions. Use [the record template](../../experiments/TEMPLATE.md) for results. If reviewing historical evidence, preserve its original configuration and mark unavailable fields rather than rerunning or inventing them.
+Read [the experiment protocol](../../docs/experiment-protocol.md), the frozen contract (for a derived contract, its resolved effective contract), and the candidate's runtime/build instructions. Use [the record template](../../experiments/TEMPLATE.md) for results. If reviewing historical evidence, preserve its original configuration and mark unavailable fields rather than rerunning or inventing them.
 
 Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: copy the template and write reports and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
 

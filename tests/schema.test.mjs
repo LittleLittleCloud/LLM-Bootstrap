@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Validator } from '@seriousme/openapi-schema-validator';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { resolveContract, resolveContractFile } from '../schema/resolve-contract.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const spec = JSON.parse(readFileSync(`${root}schema/experiment-protocol.openapi.json`, 'utf8'));
@@ -255,4 +259,92 @@ test('self-hosting claims need transition evidence and builder/target identity',
   };
   accepts('SelfHostingRecord', demonstrated);
   rejects('SelfHostingRecord', { ...demonstrated, builder_identity_matches_target: false }, 'identity must match');
+});
+
+const derivedFrom = (overrides, extra = {}) => ({
+  experiment_id: 'synthetic-derived',
+  status: 'frozen',
+  description: 'Synthetic derived fixture; not an experiment.',
+  contract_frozen_at: when,
+  extends: { path: 'base.json', revision: commit('6'), sha256: sha('9') },
+  overrides,
+  ...extra,
+});
+
+test('a derived contract inherits its base, overrides all but the target model, and resolves to a valid contract', () => {
+  const base = frozenContract();
+  const thresholds = [{ metric: 'prefill throughput', comparator: 'at-least', threshold: 2, unit: 'tok/s' }];
+  const derived = derivedFrom({
+    skills_revision: commit('7'),
+    hardware: { power: 'Battery' },
+    goal: { performance_thresholds: thresholds },
+    baselines: { engines_and_revisions: [{ name: 'other-baseline', revision: commit('8') }] },
+  });
+  accepts('DerivedExperimentContract', derived);
+
+  const effective = resolveContract(derived, base);
+  accepts('ExperimentContract', effective);
+  assert.deepEqual(effective.target_model, base.target_model);
+  assert.equal(effective.experiment_id, 'synthetic-derived');
+  assert.equal(effective.skills_revision, commit('7'));
+  assert.equal(effective.hardware.power, 'Battery');
+  assert.equal(effective.hardware.platform, base.hardware.platform);
+  assert.deepEqual(effective.goal.performance_thresholds, thresholds);
+  assert.equal(effective.goal.primary_metric, base.goal.primary_metric);
+  assert.deepEqual(effective.baselines.engines_and_revisions, [{ name: 'other-baseline', revision: commit('8') }]);
+  assert.equal(base.hardware.power, example.hardware.power, 'the base is not mutated');
+
+  const amended = mutate(base, c => { c.amends = { revision: commit('5'), reason: 'synthetic' }; });
+  assert.equal('amends' in resolveContract(derived, amended), false, 'amendments are not inherited');
+});
+
+test('a derived contract cannot override the target model or its own identity fields', () => {
+  for (const key of ['target_model', 'experiment_id', 'status', 'description', 'contract_frozen_at', 'amends']) {
+    const derived = derivedFrom({ [key]: {} });
+    rejects('DerivedExperimentContract', derived, `${key} must not be overridden`);
+    assert.throws(() => resolveContract(derived, frozenContract()), new RegExp(key));
+  }
+  rejects('DerivedExperimentContract', derivedFrom({}, { extends: { path: 'base.json' } }), 'base must be pinned');
+  rejects('DerivedExperimentContract', mutate(derivedFrom({}), d => { delete d.extends; }), 'base is required');
+});
+
+test('misspelled or unresolved overrides fail validation of the effective contract', () => {
+  const base = frozenContract();
+  rejects('ExperimentContract', resolveContract(derivedFrom({ hardwre: { power: 'x' } }), base), 'unknown section');
+  rejects('ExperimentContract', resolveContract(derivedFrom({ hardware: { powr: 'x' } }), base), 'unknown field');
+  rejects('ExperimentContract', resolveContract(derivedFrom({ hardware: { power: null } }), base), 'frozen forbids null');
+  const draft = derivedFrom({ hardware: { os_version: 'synthetic-os 2' } }, { status: 'draft-not-run', contract_frozen_at: null });
+  accepts('ExperimentContract', resolveContract(draft, example));
+});
+
+test('derived contract files resolve through a hash-pinned chain and reject a changed base', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-derive-'));
+  try {
+    const write = (name, value) => {
+      const text = `${JSON.stringify(value, null, 2)}\n`;
+      writeFileSync(join(dir, name), text);
+      return createHash('sha256').update(text).digest('hex');
+    };
+    const base = frozenContract();
+    const baseHash = write('base.json', base);
+    const middleHash = write('middle.json', derivedFrom({ hardware: { power: 'Battery' } }, {
+      experiment_id: 'synthetic-middle',
+      extends: { path: 'base.json', revision: commit('6'), sha256: baseHash },
+    }));
+    write('leaf.json', derivedFrom({ budget: { wall_clock_hours: 2 } }, {
+      extends: { path: 'middle.json', revision: commit('6'), sha256: middleHash },
+    }));
+
+    const effective = resolveContractFile(join(dir, 'leaf.json'));
+    accepts('ExperimentContract', effective);
+    assert.equal(effective.experiment_id, 'synthetic-derived');
+    assert.equal(effective.hardware.power, 'Battery');
+    assert.equal(effective.budget.wall_clock_hours, 2);
+    assert.deepEqual(effective.target_model, base.target_model);
+
+    write('base.json', mutate(base, c => { c.hardware.power = 'Changed'; }));
+    assert.throws(() => resolveContractFile(join(dir, 'leaf.json')), /sha256/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

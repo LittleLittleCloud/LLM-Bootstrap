@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap experiment protocol schemas",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "summary": "Lean structural schemas for experiment contracts and run records.",
     "description": "Machine-readable core of docs/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a contract against ExperimentContract and a run record against ExperimentRun with any JSON Schema 2020-12 validator.\n\nThe schemas keep only the fields needed to reproduce an experiment and to stop unsupported claims. Per-request timings and other raw detail stay in hashed evidence files referenced from the run record. The prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It does not show that measurements are correct, that arithmetic is consistent (for example, that tokens_per_second equals total_tokens divided by total_seconds), or that the procedure was followed. It is not evidence of SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. A contract with status frozen forbids null anywhere. A field that cannot apply is declared with a NotApplicable object, and an unobtainable provider or historical detail with an Unavailable object. Run records preserve unmeasured values as the literal \"Not obtained\", never zero. The schemas constrain claims but still allow honest recording of deviations and failures."
   },
@@ -150,16 +150,7 @@
             "items": { "$ref": "#/components/schemas/HashedArtifact" }
           },
           "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
-          "amends": {
-            "description": "Present only on an amendment. It never redefines an earlier run.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["revision", "reason"],
-            "properties": {
-              "revision": { "$ref": "#/components/schemas/GitCommitSha" },
-              "reason": { "$ref": "#/components/schemas/Text" }
-            }
-          },
+          "amends": { "$ref": "#/components/schemas/ContractAmendment" },
           "scope": {
             "description": "What the experiment covers, which operating-system changes are permitted (none is a valid statement), and the user authorization that governs execution. Plugin installation authorizes nothing.",
             "$ref": "#/components/schemas/ResolvableText"
@@ -183,6 +174,51 @@
             }
           }
         ]
+      },
+      "ContractAmendment": {
+        "description": "Present only on an amendment. It never redefines an earlier run.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "reason"],
+        "properties": {
+          "revision": { "$ref": "#/components/schemas/GitCommitSha" },
+          "reason": { "$ref": "#/components/schemas/Text" }
+        }
+      },
+      "ContractReference": {
+        "description": "Pins a contract file by path, full commit, and file hash.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "revision", "sha256"],
+        "properties": {
+          "path": { "$ref": "#/components/schemas/Text" },
+          "revision": { "$ref": "#/components/schemas/GitCommitSha" },
+          "sha256": { "$ref": "#/components/schemas/Sha256" }
+        }
+      },
+      "DerivedExperimentContract": {
+        "description": "A contract that inherits a base contract and overrides parts of it. Resolve it to an effective contract (see schema/resolve-contract.mjs), then validate that result as ExperimentContract. The target model cannot be overridden, so a derived experiment always runs the base's target model; a different model needs a new base experiment. This schema checks the envelope only. Unknown or misspelled override keys are rejected when the effective contract is validated.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["experiment_id", "status", "description", "contract_frozen_at", "extends", "overrides"],
+        "properties": {
+          "experiment_id": { "$ref": "#/components/schemas/Text" },
+          "status": { "enum": ["draft-not-run", "frozen"] },
+          "description": { "$ref": "#/components/schemas/Text" },
+          "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
+          "amends": { "$ref": "#/components/schemas/ContractAmendment" },
+          "extends": {
+            "description": "The base contract, pinned by path relative to this file, full commit, and file hash. The base may itself be derived.",
+            "$ref": "#/components/schemas/ContractReference"
+          },
+          "overrides": {
+            "description": "Deep-merged onto the base: objects merge by key, while arrays, scalars, and null replace the base value. Identity fields and the target model are never overridden; they are declared here or inherited unchanged.",
+            "type": "object",
+            "propertyNames": {
+              "not": { "enum": ["target_model", "experiment_id", "status", "description", "contract_frozen_at", "amends"] }
+            }
+          }
+        }
       },
       "ContractHardware": {
         "type": "object",
@@ -460,15 +496,8 @@
           "status": { "enum": ["draft", "running", "completed", "interrupted"] },
           "acceptance": { "description": "Unverified until every frozen target is evaluated.", "enum": ["unverified", "passed", "failed"] },
           "contract": {
-            "description": "The frozen contract a run executes. A later revision of the contract is a different reference.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["path", "revision", "sha256"],
-            "properties": {
-              "path": { "$ref": "#/components/schemas/Text" },
-              "revision": { "$ref": "#/components/schemas/GitCommitSha" },
-              "sha256": { "$ref": "#/components/schemas/Sha256" }
-            }
+            "description": "The frozen contract a run executes; for a derived experiment, the derived contract file. A later revision is a different reference.",
+            "$ref": "#/components/schemas/ContractReference"
           },
           "skills_revision": { "$ref": "#/components/schemas/GitCommitSha" },
           "started_at": { "type": ["string", "null"], "format": "date-time" },
