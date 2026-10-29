@@ -1,7 +1,7 @@
 {
   "evaluation_id": "engine-throughput",
   "status": "released",
-  "description": "Fixed-length throughput measurement of an OpenAI-compatible streaming chat endpoint. Two workloads run serially in each pass: prefill.in2048.out1 (about 2048 prompt tokens, one output token; prefill time is the client time from dispatch to the first output chunk) and decode.in128.out256 (about 128 prompt tokens, exactly 256 output tokens; decode throughput is N-1 tokens divided by the first-to-last chunk interval, and is not obtained when the engine sends fewer than 0.9 chunks per token). Prompt sizes are calibrated with the engine's own usage counts. Every prompt begins with a unique nonce so no prefix can be reused, and reported cached prompt tokens must be zero. A request counts only if it reaches its input and output lengths; a pass with any request that does not is excluded from the metrics and stays in the repetitions. All intervals come from one monotonic clock at the client. Warm-up and formal pass counts come from the experiment contract (--warmup, --repetitions). Cold load is not measured. Peak memory is sampled only when --memory-pid is given, and swap-out is the whole-machine delta on a loopback endpoint. It does not judge output quality or API conformance; run engine-api-conformance first, with thinking disabled for reasoning models. Before every run the driver repeats its negative control: a reference engine with known rates that the timing must recover, a slower one that must read slower, and injected faults (reported cache hits, short output, missing usage, coalesced chunks, HTTP errors) that must each be caught.",
+  "description": "Fixed-shape throughput measurement of an OpenAI-compatible streaming chat endpoint, with k meaning 1024 tokens. Workloads: prefill at 2k, 4k, 8k, and 216k prompt tokens with one output token (prefill.inNk.out1); decode of 256 output tokens at 128, 8k, and 32k tokens of context (decode.inN.out256); an agent session of five turns that share a 32k or 128k prefix and append about 256 tokens each, with turn 1 cold and turns 2 to 5 expected to hit the prefix cache (agent.pNk.s256.t5); and closed-loop concurrency of 1, 2, 4, and 8 workers that each send four requests of about 512 input and 64 output tokens (batch.cN.in512.out64). A run may select a subset of workloads. Prompt sizes up to 8k are calibrated with the engine's own usage counts; larger ones are extrapolated from a fit at 2k and checked on every request. Every session begins with a unique nonce so no prefix is reused except where an agent session reuses its own, and reported cached tokens must be zero everywhere else. A request counts only if it reaches its input and output lengths (output length can be forced with an engine field such as ignore_eos, passed through --request-field). A workload instance with any request that does not is excluded from that workload's metrics, and its pass is recorded as failed. All intervals come from one monotonic client clock. Prefill is the time to the first output chunk over processed input tokens. Decode is N-1 tokens over the first-to-last chunk interval and is not obtained when the engine sends fewer than 0.9 chunks per token. Concurrent batches report the aggregate output tokens over the batch window and the per-request decode speed. The run-level prefill, decode, and TTFT are the single-stream workloads prefill.in2k.out1 and decode.in128.out256; everything else is in the per-workload results, with the spread across repetitions. Warm-up and formal pass counts come from the experiment contract (--warmup, --repetitions). Cold load is not measured. Peak memory is sampled only when --memory-pid is given, and swap-out is the whole-machine delta on a loopback endpoint. It does not judge output quality or API conformance; run engine-api-conformance first, with thinking disabled for reasoning models. Before every run the driver repeats its negative control: a reference engine with known rates, block prefix caching, and slot-limited concurrency, whose behavior the timing must recover; a half-speed engine that must read about half; long-context and agent scenarios that must calibrate and show cache reuse; and injected faults (reported cache hits, early stops, missing usage, coalesced chunks, HTTP errors, and a missing prefix cache) that must each be caught.",
   "result_schema": "EvaluationResult",
   "harness": {
     "not_applicable": true,
@@ -12,17 +12,28 @@
     "reason": "The prompts are built by the scripts from a fixed word list and a fixed seed; there is no external dataset."
   },
   "task_ids": [
-    "prefill.in2048.out1",
-    "decode.in128.out256"
+    "prefill.in2k.out1",
+    "prefill.in4k.out1",
+    "prefill.in8k.out1",
+    "prefill.in216k.out1",
+    "decode.in128.out256",
+    "decode.in8k.out256",
+    "decode.in32k.out256",
+    "agent.p32k.s256.t5",
+    "agent.p128k.s256.t5",
+    "batch.c1.in512.out64",
+    "batch.c2.in512.out64",
+    "batch.c4.in512.out64",
+    "batch.c8.in512.out64"
   ],
   "seed": 0,
   "limits": {
-    "context_window": 4096,
+    "context_window": 262144,
     "max_output_tokens_per_request": 256,
-    "timeout_seconds_per_task": 300,
-    "request_concurrency": 1
+    "timeout_seconds_per_task": 3600,
+    "request_concurrency": 8
   },
-  "cache_policy": "No prefix reuse: a unique nonce starts every prompt, including warm-up and calibration prompts, and reported cached prompt tokens must be zero. Engines that do not report cached tokens are recorded as unverified.",
+  "cache_policy": "No prefix reuse across sessions: a unique nonce starts every session, including warm-up and calibration prompts, and reported cached prompt tokens must be zero. The warm turns of an agent session must reuse at least 0.9 of their shared prefix; when the engine reports no cached tokens, they must reach the first token within half the cold turn's time. Engines that do not report cached tokens are recorded as unverified.",
   "sampling_settings": {
     "temperature": 0
   },
@@ -30,22 +41,22 @@
     {
       "role": "driver",
       "path": "scripts/throughput.py",
-      "sha256": "6c281667c060bba7ed411978cfc27e20b6847d940a429dee393c6d3acdf9221f"
+      "sha256": "4a9560df22ce615121ba206d6050b0c2ea0e06c7d829c988f4f865e6b08c0649"
     },
     {
       "role": "driver",
       "path": "scripts/measure.py",
-      "sha256": "308c86e8ba9a754eb6b5a868b9ecd4fee2c3e7c43ed03ed3a681bf2195a2d48b"
+      "sha256": "9a7b1f16652bf3310066b33402d95e736bb87e9c504f120596d451064f5d337c"
     },
     {
       "role": "driver",
       "path": "scripts/workload.py",
-      "sha256": "26b1616dd3031326a7ac1c4def45c2c512ac73d4c8bbd35c7f98cdc78514b7a3"
+      "sha256": "20257a5031baa2ac6ce30164fb3805a5234c0fc19151c46e89199eb548bf5270"
     },
     {
       "role": "driver",
       "path": "scripts/reference_engine.py",
-      "sha256": "15496df0bdb0700bd4739a758fc1cec1e97e0ce23c9e12772ad03a31156cb866"
+      "sha256": "7605858218772e9c7a82efd3d5bdb32ca9082bca6984ebc768b124e5fdde5dda"
     }
   ]
 }

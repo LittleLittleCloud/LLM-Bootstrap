@@ -24,8 +24,8 @@ def observe(origin, model, prompt, max_tokens, api_key, timeout, fields):
     payload = dict(fields)
     payload.update({'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': max_tokens,
                     'temperature': 0, 'stream': True, 'stream_options': {'include_usage': True}})
-    obs = {'error': None, 'timed_out': False, 'status': None, 'first': None, 'last': None, 'chunks': 0,
-           'prompt_tokens': None, 'completion_tokens': None, 'cached_tokens': None, 'finish_reason': None}
+    obs = {'error': None, 'timed_out': False, 'status': None, 'started': None, 'ended': None, 'first': None, 'last': None,
+           'chunks': 0, 'prompt_tokens': None, 'completion_tokens': None, 'cached_tokens': None, 'finish_reason': None}
     parts = urlsplit(origin)
     connect = http.client.HTTPSConnection if parts.scheme == 'https' else http.client.HTTPConnection
     connection = connect(parts.hostname, parts.port, timeout=timeout)
@@ -33,8 +33,8 @@ def observe(origin, model, prompt, max_tokens, api_key, timeout, fields):
     if api_key:
         headers['Authorization'] = 'Bearer ' + api_key
     body = json.dumps(payload).encode('utf-8')
+    start = obs['started'] = time.monotonic()
     try:
-        start = time.monotonic()
         connection.request('POST', '/v1/chat/completions', body=body, headers=headers)
         response = connection.getresponse()
         obs['status'] = response.status
@@ -77,11 +77,12 @@ def observe(origin, model, prompt, max_tokens, api_key, timeout, fields):
     except (OSError, http.client.HTTPException) as exc:
         obs['error'] = type(exc).__name__
     finally:
+        obs['ended'] = time.monotonic()
         connection.close()
     return obs
 
 
-def judge(spec, obs):
+def judge(spec, obs, turn=1):
     """Reasons a request does not satisfy its workload. An empty list means it counts."""
     if obs['error']:
         return [obs['error']]
@@ -89,10 +90,17 @@ def judge(spec, obs):
     prompt, completion = obs['prompt_tokens'], obs['completion_tokens']
     if not isinstance(prompt, int) or not isinstance(completion, int):
         return ['the engine reported no usage with integer prompt_tokens and completion_tokens']
-    if abs(prompt - spec['input_tokens']) > workload.input_tolerance(spec['input_tokens']):
-        problems.append('prompt had %d tokens instead of about %d' % (prompt, spec['input_tokens']))
-    if obs['cached_tokens']:
-        problems.append('the engine reported %d cached prompt tokens for a unique prompt' % obs['cached_tokens'])
+    expected = workload.expected_input(spec, turn)
+    if abs(prompt - expected) > workload.input_tolerance(spec['input_tokens']):
+        problems.append('prompt had %d tokens instead of about %d' % (prompt, expected))
+    cached = obs['cached_tokens']
+    if spec['kind'] == 'agent' and turn > 1:
+        floor = int(workload.CACHE_HIT_FLOOR * spec['input_tokens'])
+        if isinstance(cached, int) and cached < floor:
+            problems.append('the engine reported %d cached prompt tokens for a repeated prefix of %d; at least %d were expected'
+                            % (cached, spec['input_tokens'], floor))
+    elif cached:
+        problems.append('the engine reported %d cached prompt tokens for a unique prompt' % cached)
     if completion != spec['output_tokens']:
         problems.append('produced %d output tokens instead of %d' % (completion, spec['output_tokens']))
     if obs['first'] is None:
