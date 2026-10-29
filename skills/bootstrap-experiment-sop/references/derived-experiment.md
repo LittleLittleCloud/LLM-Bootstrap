@@ -1,6 +1,6 @@
 # Derived experiment
 
-Stage 1 and 2 of the [experiment SOP](../SKILL.md) for an improvement of an existing experiment. Resolve links relative to this file; the plugin root is three directories above it. The rules for derived contracts are in [the experiment protocol](../../../docs/experiment-protocol.md).
+Stage 1 and 2 of the [experiment SOP](../SKILL.md) for an improvement of an existing experiment. Resolve links relative to this file. The rules for derived contracts are in [the experiment protocol](experiment-protocol.md).
 
 1. **Pin the base.** Record the base contract's path, full commit, and file hash. The base must be a frozen contract. Read its run record and results first: if it has none, say that the derived experiment has no evidence to improve on.
 2. **Find the gap.** State which result or failure in the base motivates the change, and quote the base evidence for it. The hypothesis must come from that evidence, not from preference.

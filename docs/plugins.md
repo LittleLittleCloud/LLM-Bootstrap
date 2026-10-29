@@ -17,7 +17,7 @@ The package ships one skill:
 | --- | --- | --- |
 | [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end: plan, build, evaluate, and report, with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
 
-Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [contract resolver](../schema/resolve-contract.mjs) and the [contract check](../schema/check-experiment.mjs) built on it, which the experiment SOP asks the agent to run, and the Python evaluation scripts under [evaluations/](../evaluations/engine-api-conformance/evaluation.json), which need Python 3.9 or newer and nothing else. Nothing runs them automatically, and the evaluation scripts verify their own hashes before running. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
+Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [contract resolver](../skills/bootstrap-experiment-sop/scripts/resolve-contract.mjs) and the [contract check](../skills/bootstrap-experiment-sop/scripts/check-experiment.mjs) built on it, which the experiment SOP asks the agent to run, and the Python evaluation scripts under [evaluations/](../evaluations/engine-api-conformance/evaluation.json), which need Python 3.9 or newer and nothing else. Nothing runs them automatically, and the evaluation scripts verify their own hashes before running. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
 
 ## Install with Agent Plugins / VS Code
 
@@ -70,9 +70,9 @@ Use `/plugin` to confirm that the plugin is enabled, start a fresh session as ne
 
 ## Bundled resources and workspace outputs
 
-Keep the complete package together, including [docs/experiment-protocol.md](experiment-protocol.md), [docs/evaluation-protocol.md](evaluation-protocol.md), [the protocol schema](../schema/experiment-protocol.openapi.json), [the evaluation schema](../schema/evaluation-protocol.openapi.json), [the draft evaluation](../evaluations/humaneval-20-pi/evaluation.json), [experiments/TEMPLATE.md](../experiments/TEMPLATE.md), and [prior external evidence](prior-evidence.md). The skills' relative links resolve from each skill file, not from the session's current directory. They stay inside the plugin root and do not require client-specific environment-variable substitution.
+The skill is self-contained: its protocols, report template, schemas, prior evidence, and scripts are inside `skills/bootstrap-experiment-sop/`, and its links resolve from `SKILL.md`, not from the session's current directory. Evaluations are the one exception. They are fetched from the repository's latest `main` commit, so running an evaluation needs network access.
 
-Treat the plugin installation/cache as read-only. Copy the report template to a new directory in the user's project, write and resolve the draft contract there, and keep implementation code and new evidence in that workspace. Updates may replace plugin files. Do not place weights, credentials, private prompts, or unreviewed trajectories in the distributable package. A root AGENTS.md is not automatically injected by plugin installation; essential workflow constraints are included in each skill and the linked protocol.
+Treat the plugin installation/cache as read-only. Copy the report template to a new directory in the user's project, write and resolve the draft contract there, and keep implementation code and new evidence in that workspace. Updates may replace plugin files. Do not place weights, credentials, private prompts, or unreviewed trajectories in the distributable package. A root AGENTS.md is not automatically injected by plugin installation; essential workflow constraints are included in the skill and its protocol.
 
 Record the exact plugin repository revision and hashes of the instructions actually supplied to the builder. The plugin version alone is not an immutable experiment treatment. Planned targets and prior Infer.NET measurements remain separate from results produced using these skills.
 
@@ -86,7 +86,7 @@ npm test
 git diff --check
 ```
 
-The checks cover the package's manifest field subset, synchronized metadata, marketplace source, skill names/descriptions, local Markdown resource containment, JSON resources, and relocation into a path containing spaces. They also validate the [protocol schema](../schema/experiment-protocol.openapi.json) against the OpenAPI 3.1 schema and strict JSON Schema 2020-12, and check it against the draft example and synthetic fixtures. These are repository regression checks, not a replacement for official client validation or end-to-end installation tests. CI runs the same checks.
+The checks cover the package's manifest field subset, synchronized metadata, marketplace source, skill names/descriptions, local Markdown resource containment, JSON resources, and relocation into a path containing spaces. They also validate the [protocol schema](../skills/bootstrap-experiment-sop/assets/schema/experiment-protocol.openapi.json) against the OpenAPI 3.1 schema and strict JSON Schema 2020-12, and check it against a draft fixture and synthetic fixtures. These are repository regression checks, not a replacement for official client validation or end-to-end installation tests. CI runs the same checks.
 
 When Claude Code is available, also validate the manifest and marketplace explicitly:
 

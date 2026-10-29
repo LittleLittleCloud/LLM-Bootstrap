@@ -6,7 +6,7 @@ An experiment fixes hardware, target model, builder LLM, agent harness, workload
 
 The builder LLM writes the engine. The target model runs inside it. Their identities may differ, but self-hosting requires the builder's inference to actually move onto the generated engine. Record where initial builder inference runs and who controls routing. Improving an engine while continuing to use an unrelated hosted builder is engine construction, not demonstrated self-hosting.
 
-The structure of contracts and run records is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.json), which checks shape and required declarations only. It models just the core fields; per-request records and other raw detail stay in hashed evidence files. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and the evaluation harness.
+The structure of contracts and run records is formalized in the [OpenAPI schema](../assets/schema/experiment-protocol.openapi.json), which checks shape and required declarations only. It models just the core fields; per-request records and other raw detail stay in hashed evidence files. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and the evaluation harness.
 
 ## Freeze before tuning
 
@@ -23,9 +23,9 @@ Freeze the contract in version control before implementation. Amendments receive
 
 ## Derived experiments
 
-An experiment may derive from a base experiment instead of restating it. A derived contract (`DerivedExperimentContract` in the [schema](../schema/experiment-protocol.openapi.json)) names its base by path, full commit, and file hash, and lists overrides. Everything may be overridden except the target model: a different target model is a different base experiment, never an override.
+An experiment may derive from a base experiment instead of restating it. A derived contract (`DerivedExperimentContract` in the [schema](../assets/schema/experiment-protocol.openapi.json)) names its base by path, full commit, and file hash, and lists overrides. Everything may be overridden except the target model: a different target model is a different base experiment, never an override.
 
-Merging is deterministic and implemented by [schema/resolve-contract.mjs](../schema/resolve-contract.mjs). Objects merge by key, while arrays, scalars, and null replace the base value. The derived contract declares its own `experiment_id`, `status`, `description`, freeze time, and any amendment; these are never inherited. The skill revision and builder instruction hashes are inherited unless overridden, and overriding them changes the treatment.
+Merging is deterministic and implemented by [scripts/resolve-contract.mjs](../scripts/resolve-contract.mjs). Objects merge by key, while arrays, scalars, and null replace the base value. The derived contract declares its own `experiment_id`, `status`, `description`, freeze time, and any amendment; these are never inherited. The skill revision and builder instruction hashes are inherited unless overridden, and overriding them changes the treatment.
 
 The effective contract (base plus overrides) is what freezes and runs. It must validate as a frozen contract with no unresolved fields before tuning, which also rejects misspelled override keys. A base may itself be derived; every link is pinned by hash, so a chain cannot change silently. Runs cite the derived contract file. Results are not inherited from the base, so any comparison with it needs its own matched runs.
 
@@ -52,7 +52,7 @@ For self-hosting, record the exact transition point, builder/target identity mat
 Everything an experiment produces lives under `experiments/<experiment-id>/`:
 
 - `contract.json`: the frozen contract, or the derived contract.
-- `report.md`: the human-readable report, a copy of [the template](../experiments/TEMPLATE.md), including its feedback section.
+- `report.md`: the human-readable report, a copy of [the template](../assets/report-template.md), including its feedback section.
 - `runs/<run-id>/run.json`: one `ExperimentRun`, with the evaluation result documents it references beside it (for example `candidate-<engine>.json`).
 - `evidence/`: local-only raw evidence, never committed. Run records refer to it by hash and access limitation.
 

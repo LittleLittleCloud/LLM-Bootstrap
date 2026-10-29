@@ -28,15 +28,8 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [.claude-plugin/plugin.json](.claude-plugin/plugin.json) | Claude Code manifest using the same skills and resources. |
 | [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) | Single-plugin marketplace for installation and updates. |
 | `site/` (not part of the plugin package) | Static leaderboard with multi-dimensional filters and a trend dashboard, currently on synthetic demo data. Preview with `python3 -m http.server -d site`; deployment to GitHub Pages is a manual workflow. |
-| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | The single skill: run a new or derived experiment end to end. Its `references/` hold the planning, build, and evaluation stages. |
-| [docs/experiment-protocol.md](docs/experiment-protocol.md) | Shared experiment definitions and claim requirements. |
-| [docs/evaluation-protocol.md](docs/evaluation-protocol.md) | Repository-owned evaluation, correctness gates, and measurement definitions. |
-| [evaluations/](evaluations/engine-api-conformance/evaluation.json) | Evaluation definitions and scripts owned by this repository. `engine-api-conformance` is released; `humaneval-20-pi` is a draft without scripts. |
-| [schema/evaluation-protocol.openapi.json](schema/evaluation-protocol.openapi.json) | OpenAPI 3.1 schemas for evaluation definitions and result documents; structural checks only. |
-| [schema/experiment-protocol.openapi.json](schema/experiment-protocol.openapi.json) | OpenAPI 3.1 schemas for the contract and run record; structural checks only. |
-| [schema/resolve-contract.mjs](schema/resolve-contract.mjs) | Dependency-free resolver that merges a derived contract onto its pinned base. |
-| [experiments/TEMPLATE.md](experiments/TEMPLATE.md) | Experiment report template, including a feedback section for future experiments. |
-| [docs/prior-evidence.md](docs/prior-evidence.md) | Sourced prior results and their limits. |
+| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | The single, self-contained skill: run a new or derived experiment end to end. `references/` hold the stages, both protocols, and prior evidence; `assets/` the report template and schemas; `scripts/` the contract check and resolver. |
+| [evaluations/](evaluations/engine-api-conformance/evaluation.json) | Evaluation definitions and scripts owned by this repository; the skill fetches them from the latest `main` commit. `engine-api-conformance` is released; `humaneval-20-pi` is a draft without scripts. |
 | [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
 
 The plugin contains agent instructions and experiment templates, not executable hooks or MCP servers. This repository does not yet ship an inference engine, an automated experiment runner, or a validated SOTA result. Installing the plugin does not run an experiment or authorize machine changes.
@@ -82,10 +75,10 @@ Both records use M5 Pro / 48 GiB, `mlx-community/Qwen3.6-35B-A3B-8bit` at revisi
 
 **These rows are not a controlled engine speedup comparison.** Infer.NET used FP32 KV/state and no speculative decoding; Splash used Q8 KV, FP32 recurrent state, and a DFlash2 draft model. Work generated different request token totals, timing boundaries differ, and Splash required a raised GPU memory limit. Both recorded whole-machine swap-out. Splash first failed to start under the default budget; that failure is retained in the source record.
 
-See [prior evidence](docs/prior-evidence.md) for versions, metric definitions, resource observations, and public evidence links. HumanEval task correctness is not cross-backend numerical equivalence or long-context acceptance. **No experiment under the LLM Bootstrap protocol has been completed yet; platform SOTA and self-hosting remain unverified.**
+See [prior evidence](skills/bootstrap-experiment-sop/references/prior-evidence.md) for versions, metric definitions, resource observations, and public evidence links. HumanEval task correctness is not cross-backend numerical equivalence or long-context acceptance. **No experiment under the LLM Bootstrap protocol has been completed yet; platform SOTA and self-hosting remain unverified.**
 
 ## What counts as success?
 
 Success is defined per experiment before tuning: quality and correctness gates, prefill/decode and client latency objectives, memory constraints, and a fixed compute/time budget. Report the gap to named, dated baselines alongside agent cost and human assistance.
 
-A SOTA claim requires a credible search for strong current baselines, matched conditions or clearly separated comparison tracks, reproducible measurements, and stated workload boundaries. A result on one model and platform supports that configuration only. See the [protocol](docs/experiment-protocol.md) for the full reporting contract.
+A SOTA claim requires a credible search for strong current baselines, matched conditions or clearly separated comparison tracks, reproducible measurements, and stated workload boundaries. A result on one model and platform supports that configuration only. See the [protocol](skills/bootstrap-experiment-sop/references/experiment-protocol.md) for the full reporting contract.

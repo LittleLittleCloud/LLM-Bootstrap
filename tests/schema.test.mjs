@@ -9,12 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { Validator } from '@seriousme/openapi-schema-validator';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { resolveContract, resolveContractFile } from '../schema/resolve-contract.mjs';
+import { resolveContract, resolveContractFile } from '../skills/bootstrap-experiment-sop/scripts/resolve-contract.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = path => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
-const spec = read('schema/experiment-protocol.openapi.json');
-const evaluationSpec = read('schema/evaluation-protocol.openapi.json');
+const spec = read('skills/bootstrap-experiment-sop/assets/schema/experiment-protocol.openapi.json');
+const evaluationSpec = read('skills/bootstrap-experiment-sop/assets/schema/evaluation-protocol.openapi.json');
 const example = read('tests/fixtures/draft-contract.json');
 
 // Conditional overlays name sibling properties, so strictTypes and strictRequired stay off.
