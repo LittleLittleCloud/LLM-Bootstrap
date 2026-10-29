@@ -1,0 +1,105 @@
+{
+  "evaluation_id": "engine-api-conformance",
+  "status": "released",
+  "description": "Cheap endpoint conformance checks for OpenAI Chat Completions (non-streaming, streaming, and tool calling), OpenAI Responses, and Anthropic Messages. They validate response structure and protocol invariants with tiny requests (temperature 0, at most 64 output tokens), not model quality. Run reasoning models with thinking disabled. Required checks decide conformance; advisory checks record common behavior that the APIs do not mandate. Before every run the driver repeats its negative control: a reference engine that must pass every check, and each injected fault, which must be caught.",
+  "result_schema": "ConformanceResult",
+  "harness": {
+    "not_applicable": true,
+    "reason": "The driver script sends HTTP requests to the endpoint directly; no agent harness is involved."
+  },
+  "dataset": {
+    "not_applicable": true,
+    "reason": "The checks and their prompts are built into the scripts; there is no external dataset."
+  },
+  "task_ids": [
+    "chat.models.list",
+    "chat.models.contains_model",
+    "chat.basic.schema",
+    "chat.max_tokens",
+    "chat.stop_sequence",
+    "chat.roles.multiturn",
+    "chat.determinism",
+    "chat.json_object",
+    "chat.error.missing_messages",
+    "chat.error.unknown_model",
+    "chat.stream.framing",
+    "chat.stream.chunks",
+    "chat.stream.usage",
+    "chat.stream.incremental",
+    "chat.stream.max_tokens",
+    "chat.stream.matches_nonstream",
+    "chat.tools.forced_call",
+    "chat.tools.choice_among_two",
+    "chat.tools.none",
+    "chat.tools.auto",
+    "chat.tools.result_roundtrip",
+    "chat.tools.stream",
+    "responses.basic.schema",
+    "responses.max_output_tokens",
+    "responses.input_items",
+    "responses.error.missing_input",
+    "responses.stream.events",
+    "responses.stream.matches_nonstream",
+    "responses.tools.forced_call",
+    "responses.tools.result_roundtrip",
+    "responses.tools.stream",
+    "anthropic.basic.schema",
+    "anthropic.max_tokens",
+    "anthropic.stop_sequences",
+    "anthropic.system_multiturn",
+    "anthropic.error.missing_max_tokens",
+    "anthropic.stream.events",
+    "anthropic.stream.matches_nonstream",
+    "anthropic.tools.forced_call",
+    "anthropic.tools.result_roundtrip",
+    "anthropic.tools.stream"
+  ],
+  "seed": 0,
+  "limits": {
+    "context_window": 2048,
+    "max_output_tokens_per_request": 64,
+    "timeout_seconds_per_task": 60,
+    "request_concurrency": 1
+  },
+  "cache_policy": "Not controlled; no check depends on prefix-cache behavior.",
+  "sampling_settings": {
+    "temperature": 0
+  },
+  "scripts": [
+    {
+      "role": "driver",
+      "path": "scripts/conformance.py",
+      "sha256": "988e477d41b3d459f1fd9e8b101dd975a4f8ce0a26c6bc291f2218f860cb440a"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/client.py",
+      "sha256": "2520475fd14fbd0c2f7806abfbe738d1b25fcf6f749cd8145e5d728e310ea2b3"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/checks_core.py",
+      "sha256": "3756548b450390f8ab5531751f911b93b559efb7ea101fb62ad42e5d49b93cb2"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/checks_chat.py",
+      "sha256": "8d659104b7668ca258df5c174ac638a465e953347a7361c6a9c40a9d12982f0d"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/checks_responses.py",
+      "sha256": "d2c59d33b5f937109935299344d75a3bb798fa865eca29057b91c904b238d94d"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/checks_anthropic.py",
+      "sha256": "286e716aad2d8edf14f4bb0bed181e88b776d4fcb518d605a0ca9d2d8c841147"
+    },
+    {
+      "role": "driver",
+      "path": "scripts/fake_engine.py",
+      "sha256": "2787aec4721d3f053168f12d2368f48dc27dd707bc14f47889fa327e697d2169"
+    }
+  ]
+}

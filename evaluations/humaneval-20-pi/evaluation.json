@@ -2,6 +2,7 @@
   "evaluation_id": "humaneval-20-pi",
   "status": "draft",
   "description": "Draft derived from the prior Infer.NET workload; not yet usable for formal runs. No scripts are written in this repository yet. A planned assertion-evaluator script would run the pinned official HumanEval assertions in restricted containers. The external driver behind the prior measurements (Infer.NET revision ce151663b4182bcb8371c9d0160fa20b9f8b1274, scripts/benchmark-pi-humaneval.py, sha256 594f60571fabc5d05d7aa849cfd25ad668a3ee8fed7c5f278b6a7ea47b9d9c22) measures Pi coding-agent wall time and records correctness_evaluated false, so it does not satisfy the evaluation protocol.",
+  "result_schema": "EvaluationResult",
   "harness": {
     "name": "Pi",
     "version": "1.4.0"

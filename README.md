@@ -32,7 +32,7 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [skills/bootstrap-evaluate](skills/bootstrap-evaluate/SKILL.md) | Evaluate complete runs and report performance, quality, resources, and autonomy. |
 | [docs/experiment-protocol.md](docs/experiment-protocol.md) | Shared experiment definitions and claim requirements. |
 | [docs/evaluation-protocol.md](docs/evaluation-protocol.md) | Repository-owned evaluation, correctness gates, and measurement definitions. |
-| [evaluations/](evaluations/humaneval-20-pi/evaluation.json) | Evaluation definitions and scripts owned by this repository. One draft exists and none is released. |
+| [evaluations/](evaluations/engine-api-conformance/evaluation.json) | Evaluation definitions and scripts owned by this repository. `engine-api-conformance` is released; `humaneval-20-pi` is a draft without scripts. |
 | [schema/evaluation-protocol.openapi.json](schema/evaluation-protocol.openapi.json) | OpenAPI 3.1 schemas for evaluation definitions and result documents; structural checks only. |
 | [schema/experiment-protocol.openapi.json](schema/experiment-protocol.openapi.json) | OpenAPI 3.1 schemas for the contract and run record; structural checks only. |
 | [schema/resolve-contract.mjs](schema/resolve-contract.mjs) | Dependency-free resolver that merges a derived contract onto its pinned base. |

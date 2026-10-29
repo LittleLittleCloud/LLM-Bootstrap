@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap evaluation protocol schemas",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "summary": "Structural schemas for repository-owned evaluation definitions and result documents.",
     "description": "Machine-readable core of docs/evaluation-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a definition at evaluations/<id>/evaluation.json against EvaluationDefinition and a result document against EvaluationResult with any JSON Schema 2020-12 validator.\n\nEvaluations are owned by the LLM Bootstrap repository. Experiments select one by EvaluationReference and never carry or change evaluation code. The prose protocol and the skills remain authoritative. A passing validation shows only the required shape. It does not show that scripts exist or match their hashes (the repository tests check that), that measurements are correct, or that arithmetic is consistent. Primitive schemas shared with the experiment protocol schema are kept identical, and a test enforces that."
   },
@@ -20,6 +20,16 @@
       "NullableText": { "type": ["string", "null"], "pattern": "\\S" },
       "NullableSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
       "NullableCommit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+      "NotApplicable": {
+        "description": "Explicit declaration that a field does not apply to this experiment.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["not_applicable", "reason"],
+        "properties": {
+          "not_applicable": { "const": true },
+          "reason": { "$ref": "#/components/schemas/Text" }
+        }
+      },
       "Unavailable": {
         "description": "A provider or historical detail that cannot be obtained. Never substitute a fabricated identifier.",
         "type": "object",
@@ -123,34 +133,49 @@
         "description": "A repository-owned evaluation, stored at evaluations/<evaluation_id>/evaluation.json. Experiments select it by EvaluationReference and cannot change it. A draft keeps unresolved fields as null and cannot be used for formal runs. A released definition has no null, and a driver script.",
         "type": "object",
         "additionalProperties": false,
-        "required": ["evaluation_id", "status", "description", "harness", "dataset", "task_ids", "seed", "limits", "cache_policy", "sampling_settings", "scripts"],
+        "required": ["evaluation_id", "status", "description", "result_schema", "harness", "dataset", "task_ids", "seed", "limits", "cache_policy", "sampling_settings", "scripts"],
         "properties": {
           "evaluation_id": { "$ref": "#/components/schemas/EvaluationId" },
           "status": { "enum": ["draft", "released"] },
           "description": { "$ref": "#/components/schemas/Text" },
+          "result_schema": {
+            "description": "The result document the scripts emit: EvaluationResult for performance evaluations, ConformanceResult for endpoint conformance evaluations.",
+            "enum": ["EvaluationResult", "ConformanceResult"]
+          },
           "harness": {
-            "description": "The agent harness that drives the endpoint under test.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "version"],
-            "properties": {
-              "name": { "$ref": "#/components/schemas/NullableText" },
-              "version": { "$ref": "#/components/schemas/NullableText" }
-            }
+            "description": "The agent harness that drives the endpoint under test, or not applicable when the driver script talks to the endpoint directly.",
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "version"],
+                "properties": {
+                  "name": { "$ref": "#/components/schemas/NullableText" },
+                  "version": { "$ref": "#/components/schemas/NullableText" }
+                }
+              },
+              { "$ref": "#/components/schemas/NotApplicable" }
+            ]
           },
           "dataset": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["repository", "revision", "file", "sha256"],
-            "properties": {
-              "repository": { "type": ["string", "null"], "format": "uri" },
-              "revision": { "$ref": "#/components/schemas/NullableCommit" },
-              "file": { "$ref": "#/components/schemas/NullableText" },
-              "sha256": { "$ref": "#/components/schemas/NullableSha256" }
-            }
+            "description": "The external dataset pin, or not applicable when the workload is built into the scripts.",
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["repository", "revision", "file", "sha256"],
+                "properties": {
+                  "repository": { "type": ["string", "null"], "format": "uri" },
+                  "revision": { "$ref": "#/components/schemas/NullableCommit" },
+                  "file": { "$ref": "#/components/schemas/NullableText" },
+                  "sha256": { "$ref": "#/components/schemas/NullableSha256" }
+                }
+              },
+              { "$ref": "#/components/schemas/NotApplicable" }
+            ]
           },
           "task_ids": {
-            "description": "Exact task identifiers.",
+            "description": "Exact task identifiers, or for a conformance evaluation the ids of its checks.",
             "type": ["array", "null"],
             "minItems": 1,
             "uniqueItems": true,
@@ -341,6 +366,106 @@
           "total_seconds": { "type": "number", "exclusiveMinimum": 0 },
           "tokens_per_second": { "type": "number", "minimum": 0 }
         }
+      },
+      "ConformanceCheckResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "api", "level", "outcome", "requests"],
+        "properties": {
+          "check_id": { "$ref": "#/components/schemas/Text" },
+          "api": { "enum": ["openai-chat", "openai-responses", "anthropic-messages"] },
+          "level": { "description": "A required check must pass for the endpoint to be conformant. An advisory check is recorded but does not decide it.", "enum": ["required", "advisory"] },
+          "outcome": { "description": "skip means the feature is unsupported or the check was inconclusive; error means the check could not run to a verdict.", "enum": ["pass", "fail", "skip", "error"] },
+          "requests": { "description": "Requests first issued by this check. Checks that share a response count it once.", "type": "integer", "minimum": 0 },
+          "detail": { "$ref": "#/components/schemas/Text" }
+        },
+        "allOf": [
+          {
+            "if": { "required": ["outcome"], "properties": { "outcome": { "enum": ["fail", "skip", "error"] } } },
+            "then": { "required": ["detail"] }
+          }
+        ]
+      },
+      "ConformanceResult": {
+        "description": "The result document of an endpoint conformance evaluation. Checks validate structure and protocol invariants, not model quality. An endpoint is conformant only for a complete run whose evaluator passed its negative control; JSON Schema cannot check that the summary counts match the checks.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evaluation", "engine_name", "endpoint", "started_at", "ended_at", "runtime_revision", "artifacts", "identity_verification", "checks", "summary", "complete", "cost", "negative_control"],
+        "properties": {
+          "evaluation": { "$ref": "#/components/schemas/EvaluationReference" },
+          "engine_name": { "$ref": "#/components/schemas/Text" },
+          "endpoint": {
+            "description": "Only the scheme and whether the host is loopback are recorded, never a machine address or credential.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["scheme", "host_class", "model"],
+            "properties": {
+              "scheme": { "enum": ["http", "https"] },
+              "host_class": { "enum": ["loopback", "remote"] },
+              "model": { "$ref": "#/components/schemas/Text" }
+            }
+          },
+          "started_at": { "type": "string", "format": "date-time" },
+          "ended_at": { "type": "string", "format": "date-time" },
+          "runtime_revision": { "$ref": "#/components/schemas/CommitOrUnavailable" },
+          "artifacts": {
+            "description": "Deployed engine artifacts when the operator supplied them. A conformance run observes only the HTTP endpoint.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HashedArtifact" }
+          },
+          "identity_verification": { "$ref": "#/components/schemas/Text" },
+          "checks": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/ConformanceCheckResult" } },
+          "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["total", "passed", "failed", "skipped", "errored", "required_failed", "conformant"],
+            "properties": {
+              "total": { "type": "integer", "minimum": 1 },
+              "passed": { "type": "integer", "minimum": 0 },
+              "failed": { "type": "integer", "minimum": 0 },
+              "skipped": { "type": "integer", "minimum": 0 },
+              "errored": { "type": "integer", "minimum": 0 },
+              "required_failed": { "description": "Required checks that failed or errored.", "type": "integer", "minimum": 0 },
+              "conformant": { "description": "True only when no required check failed or errored.", "type": "boolean" }
+            }
+          },
+          "complete": { "description": "Every check in the pinned definition ran.", "type": "boolean" },
+          "cost": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requests", "prompt_tokens", "completion_tokens"],
+            "properties": {
+              "requests": { "type": "integer", "minimum": 0 },
+              "prompt_tokens": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
+              "completion_tokens": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] }
+            }
+          },
+          "negative_control": {
+            "description": "Whether the evaluator detected every known injected defect before this run.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["verified", "method"],
+            "properties": {
+              "verified": { "type": "boolean" },
+              "method": { "$ref": "#/components/schemas/Text" }
+            }
+          },
+          "evidence": { "$ref": "#/components/schemas/EvidenceRef" }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["summary"],
+              "properties": { "summary": { "required": ["conformant"], "properties": { "conformant": { "const": true } } } }
+            },
+            "then": {
+              "properties": {
+                "complete": { "const": true },
+                "negative_control": { "properties": { "verified": { "const": true } } }
+              }
+            }
+          }
+        ]
       }
     }
   }
