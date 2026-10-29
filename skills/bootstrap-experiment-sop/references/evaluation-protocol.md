@@ -39,9 +39,9 @@ Evaluations in the repository at the time of writing (the commit you resolved is
 | --- | --- | --- | --- |
 | `engine-api-conformance` | released | `ConformanceResult` | Cheap structural checks of an endpoint's OpenAI chat, OpenAI Responses, and Anthropic Messages behavior. |
 | `engine-throughput` | released | `EvaluationResult` | Fixed-shape throughput of a streaming chat endpoint: prefill by prompt length up to 216k, decode by context depth, an agent session with prefix-cache hits, and closed-loop concurrency, with client timing. |
-| `humaneval-20-pi` | draft, no scripts | `EvaluationResult` | Planned 20-task coding workload from the prior Infer.NET measurements. |
+| `humaneval-20-pi` | released | `EvaluationResult` | Pi 1.4.0 solves 20 fixed HumanEval tasks against the endpoint; the official assertions score every solution in offline containers, with proxy-measured request timing and application duration. |
 
-The driver behind the prior Infer.NET measurements is external to this repository. It measures Pi coding-agent wall time and records `correctness_evaluated: false`, so it does not satisfy this protocol. Those measurements are prior evidence only.
+The driver behind the prior Infer.NET measurements is external to this repository. It measures Pi coding-agent wall time and records `correctness_evaluated: false`, so it does not satisfy this protocol. Those measurements are prior evidence only and are not comparable with `humaneval-20-pi` results.
 
 When a script changes (a maintainer task in the repository), update its hash in the definition (for example with `shasum -a 256`). The repository tests fail until the hashes match.
 
@@ -104,6 +104,28 @@ python3 evaluations/engine-throughput/scripts/throughput.py \
 It needs Python 3.9 or newer and no packages. Omit `--workloads` to run every workload. Run it on the engine's machine against a loopback endpoint (a remote one needs `--allow-remote` and is recorded as a deviation), and pass a key with `--api-key-file`. The environment options describe what you observed; `exclusive-gpu` is your statement that nothing else used the GPU. The driver writes the result document and, next to it, a `.requests.evidence` file with every request's timings and gate outcomes. That file holds no prompts or model output, is referenced by hash as local-only evidence, and is not committed (the repository ignores `*.evidence`).
 
 These shapes follow common engine benchmarks: fixed-length synthetic prompts and outputs (TensorRT-LLM's `trtllm-bench`, vLLM's random dataset), forced output length (`ignore_eos`), warm-up before measurement, bounded concurrency with aggregate throughput over the benchmark window (vLLM, GenAI-Perf), shared-prefix workloads (SGLang's generated-shared-prefix, vLLM's prefix repetition), and decode measured at a context depth (llama.cpp's `llama-bench -d`). Where this evaluation differs, it is stricter: a request that misses its length or cache gate fails instead of being averaged in.
+
+## Pi on HumanEval
+
+`humaneval-20-pi` runs the Pi coding agent (pinned to 1.4.0) on 20 fixed HumanEval tasks, then scores the solutions with the official assertions. It is the agent-level workload: requests are whatever Pi sends, so request counts and token totals differ between engines. Use `engine-throughput` for controlled engine comparisons.
+
+- **Pi launch.** One fresh Pi process per task, in an empty workspace with a private home and agent directory, thinking off, the `read`, `write`, `bash`, and `edit` tools, no extensions, skills, MCP, context files, compaction, or retries, and a minimal environment without credentials. Pi 1.4.0 has no sampling option, so the engine's default sampling applies and is recorded. The prompt starts with a unique session nonce and asks for the complete implementation in `solution.py`. Only prompts are given to Pi; the tests stay with the evaluator.
+- **Measuring proxy.** Pi talks to a local reverse proxy that forwards to `--endpoint`. The proxy holds the API key (from `--api-key-file`), so the key never reaches Pi or the programs it runs. It records each request's dispatch, first and last output chunk on one monotonic clock, and the engine's usage. Prefill, decode, and client TTFT use the same definitions as `engine-throughput`, measured at the proxy; decode is "Not obtained" when the engine sends fewer than 0.9 chunks per token.
+- **Reconciliation.** Pi's own message and usage totals (input plus cache-read, output, message count) must equal the proxy's totals for the task, or `requests_reconciled` is false.
+- **Passes.** Warm-up passes cover the first two tasks; formal passes cover all 20, serially (`--warmup`, `--repetitions` from the contract). A pass is failed when Pi does not finish a task cleanly (non-zero exit, an aborted or non-`stop` ending), and timed-out when a task exceeds 300 seconds. A missing or wrong `solution.py` is a failed task (quality), not a failed pass, so its timings still count. Application duration is the mean summed Pi wall time of the tasks over succeeded passes; assertions are excluded. `--tasks` selects a subset and records that deviation.
+- **Assertions.** After each formal pass, every `solution.py` plus its official test runs in its own container from a digest-pinned Python image: no network, read-only root and mount, all capabilities dropped, unprivileged user, bounded memory, processes, CPU, and 30 seconds. Docker is required. `quality.application` is the number of solutions that pass out of all formal tasks; tasks without a solution, unfinished, timed-out, or failing tasks stay in the denominator. This is an agent that can run and repair code, not model pass@1.
+- **Negative control.** Before every run the driver checks the sandbox (a correct solution passes, a stub fails, network access and file writes are blocked, a runaway program times out), then runs a scripted stand-in for Pi against a reference engine with known rates and prefix caching: its rates must be recovered within 35% and its canonical solutions must all pass. Five faults must each be caught: a wrong solution, no solution file, a Pi hang, usage that disagrees with the wire, and engine HTTP errors.
+
+```sh
+python3 evaluations/humaneval-20-pi/scripts/humaneval.py \
+  --endpoint http://127.0.0.1:8080 --model MODEL --role candidate --engine-name NAME \
+  --warmup 1 --repetitions 3 --evaluation-revision FULL_COMMIT_SHA \
+  --artifact ENGINE_BINARY=SHA256 --engine-command "COMMAND THAT STARTED THE ENGINE" \
+  --hardware-model HARDWARE --toolchain TOOLCHAIN --power-mode MODE --thermal-observations TEXT --exclusive-gpu \
+  --output experiments/EXPERIMENT_ID/runs/RUN_ID/candidate-NAME.json
+```
+
+It needs Python 3.9 or newer, Docker, Pi 1.4.0 (`--pi` names the executable), and network access once to fetch the pinned dataset (or `--dataset-file`; the hash is checked either way). The first run pulls the pinned image. Run it on the engine's machine against a loopback endpoint. The `.requests.evidence` file holds per-task outcomes and per-request timings but no prompts, solutions, or model output; `--artifacts-dir` additionally keeps Pi's event stream and each solution locally and is never committed.
 
 ## Correctness gates
 
