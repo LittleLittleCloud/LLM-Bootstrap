@@ -38,8 +38,7 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [schema/evaluation-protocol.openapi.json](schema/evaluation-protocol.openapi.json) | OpenAPI 3.1 schemas for evaluation definitions and result documents; structural checks only. |
 | [schema/experiment-protocol.openapi.json](schema/experiment-protocol.openapi.json) | OpenAPI 3.1 schemas for the contract and run record; structural checks only. |
 | [schema/resolve-contract.mjs](schema/resolve-contract.mjs) | Dependency-free resolver that merges a derived contract onto its pinned base. |
-| [experiments/m5pro-qwen36-pi/example.json](experiments/m5pro-qwen36-pi/example.json) | Unrun starting configuration based on the motivating workload. |
-| [experiments/TEMPLATE.md](experiments/TEMPLATE.md) | Experiment plan and result record. |
+| [experiments/TEMPLATE.md](experiments/TEMPLATE.md) | Experiment report template, including a feedback section for future experiments. |
 | [docs/prior-evidence.md](docs/prior-evidence.md) | Sourced prior results and their limits. |
 | [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
 
@@ -61,11 +60,11 @@ Other harnesses may consume the skills directly if they preserve the entire repo
 
 For example: **Apple M5 Pro, 48 GiB + Qwen3.6-35B-A3B 8bit + Pi 1.4.0**, with a fixed HumanEval workload and explicit correctness, memory, and latency requirements. This tuple identifies a starting point; it is insufficient until revisions, builder identity, baseline settings, budgets, and thresholds are filled in.
 
-The example deliberately contains unresolved fields and `status: draft-not-run`. Fill them before running; it is a planning template, not an executable configuration. Distinguish the harness driving engine development from the harness evaluating the resulting endpoint, even if both use Pi.
+While a contract is being written, unresolved fields stay `null` and `status` is `draft-not-run`; fill them before running. A draft is a planning artifact, not an executable configuration. Distinguish the harness driving engine development from the harness evaluating the resulting endpoint, even if both use Pi.
 
 Supply a task such as:
 
-> Use bootstrap-plan to copy the bundled example and record template into a new experiment directory in my project workspace, then define and freeze the contract there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, use bootstrap-build and bootstrap-evaluate to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
+> Use bootstrap-experiment-sop to start a new experiment: copy the report template into a new experiment directory in my project workspace, then write and freeze the contract there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, use bootstrap-build and bootstrap-evaluate to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
 
 ### 3. Build, measure, and retain evidence
 

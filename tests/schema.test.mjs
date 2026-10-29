@@ -15,7 +15,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = path => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
 const spec = read('schema/experiment-protocol.openapi.json');
 const evaluationSpec = read('schema/evaluation-protocol.openapi.json');
-const example = read('experiments/m5pro-qwen36-pi/example.json');
+const example = read('tests/fixtures/draft-contract.json');
 
 // Conditional overlays name sibling properties, so strictTypes and strictRequired stay off.
 const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false, strictRequired: false });
@@ -208,7 +208,7 @@ test('primitive schemas shared by both protocols are identical', () => {
   for (const name of shared) assert.deepEqual(evaluationSpec.components.schemas[name], spec.components.schemas[name], name);
 });
 
-test('the draft example validates as a draft contract but not as a frozen one', () => {
+test('the draft fixture validates as a draft contract but not as a frozen one', () => {
   accepts('ExperimentContract', example);
   rejects('ExperimentContract', { ...example, status: 'frozen' }, 'unresolved nulls must not freeze');
 });
@@ -317,7 +317,7 @@ test('repository evaluation definitions are valid, own their directory, and matc
   const names = readdirSync(base, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name);
   assert.ok(names.length > 0);
   for (const name of names) checkEvaluationDir(join(base, name));
-  assert.ok(names.includes(example.evaluation.definition.evaluation_id), 'the example selects a repository evaluation');
+  assert.ok(names.includes(example.evaluation.definition.evaluation_id), 'the draft fixture selects a repository evaluation');
 });
 
 test('a released evaluation needs a driver, no unresolved fields, contained paths, and verified scripts', () => {

@@ -6,7 +6,7 @@ An experiment fixes hardware, target model, builder LLM, agent harness, workload
 
 The builder LLM writes the engine. The target model runs inside it. Their identities may differ, but self-hosting requires the builder's inference to actually move onto the generated engine. Record where initial builder inference runs and who controls routing. Improving an engine while continuing to use an unrelated hosted builder is engine construction, not demonstrated self-hosting.
 
-The example JSON is a planning aid. Its structure, and that of run records, is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.json), which checks shape and required declarations only. It models just the core fields; per-request records and other raw detail stay in hashed evidence files. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and the evaluation harness.
+The structure of contracts and run records is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.json), which checks shape and required declarations only. It models just the core fields; per-request records and other raw detail stay in hashed evidence files. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and the evaluation harness.
 
 ## Freeze before tuning
 
@@ -52,11 +52,13 @@ For self-hosting, record the exact transition point, builder/target identity mat
 Everything an experiment produces lives under `experiments/<experiment-id>/`:
 
 - `contract.json`: the frozen contract, or the derived contract.
-- `record.md`: the human-readable record, a copy of [the template](../experiments/TEMPLATE.md).
+- `report.md`: the human-readable report, a copy of [the template](../experiments/TEMPLATE.md), including its feedback section.
 - `runs/<run-id>/run.json`: one `ExperimentRun`, with the evaluation result documents it references beside it (for example `candidate-<engine>.json`).
 - `evidence/`: local-only raw evidence, never committed. Run records refer to it by hash and access limitation.
 
-Paths inside these documents are relative to the repository root, except a derived contract's `extends.path`, which is relative to that contract file. `experiments/TEMPLATE.md` and the unrun example sit directly under `experiments/` and are not records. Prior external evidence is not an experiment; it is kept in [prior-evidence.md](prior-evidence.md) so it is never mistaken for a result of these skills.
+Paths inside these documents are relative to the repository root, except a derived contract's `extends.path`, which is relative to that contract file. `experiments/TEMPLATE.md` sits directly under `experiments/` and is not a record. Prior external evidence is not an experiment; it is kept in [prior-evidence.md](prior-evidence.md) so it is never mistaken for a result of these skills.
+
+The report's feedback section is the only place experiment-specific lessons are kept: failures and their causes, the preflight checks that would have caught them, recurring human interventions, suggested changes to skills or evaluations, and calibration notes for baselines, budgets, and tolerances. It holds reviewed text, never transcripts. A suggestion becomes a change only through a separate pull request to this repository. A changed skill revision is a new treatment, and an evaluation is changed only by this repository, never from inside an experiment.
 
 ## Results and adoption
 

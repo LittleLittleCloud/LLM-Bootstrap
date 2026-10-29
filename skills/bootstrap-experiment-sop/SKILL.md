@@ -30,13 +30,13 @@ Each gate must hold before the next stage starts. If it does not, stop and say w
 | 2. Freeze | Commit the contract on a codex/ branch and record its commit. | The contract commit exists before any engine work. Amendments are new revisions with a reason. |
 | 3. Build | bootstrap-build in a separate engine workspace. | The engine runs and passes the contract's numerical checks. |
 | 4. Evaluate | bootstrap-evaluate with the pinned evaluation, conformance gate first. | The conformance gate passes before any performance measurement. |
-| 5. Report | Fill the record and a run record; open a separate results PR. | Every acceptance criterion is marked passed, failed, or open. |
+| 5. Report | Fill the report, including its feedback section, and a run record; open a separate results PR. | Every acceptance criterion is marked passed, failed, or open, and the feedback section is filled in. |
 
 Keep implementation and results in separate changes. Publishing results does not imply acceptance and does not authorize a merge. Costly runs and operating-system changes need the user's authorization even when the contract names them in scope.
 
 ## Workspace layout
 
-In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `record.md` (a copy of [the record template](../../experiments/TEMPLATE.md)), `runs/<run-id>/run.json` with the evaluation result documents it references beside it, and `evidence/` for local-only raw evidence that is never committed. The layout is defined in [the experiment protocol](../../docs/experiment-protocol.md), so records can be submitted unchanged. Copy [the M5 Pro example](../../experiments/m5pro-qwen36-pi/example.json) when starting a new contract. The example is an unrun draft.
+In the user's project workspace, keep one directory per experiment: `experiments/<experiment-id>/` with `contract.json`, `report.md` (a copy of [the report template](../../experiments/TEMPLATE.md)), `runs/<run-id>/run.json` with the evaluation result documents it references beside it, and `evidence/` for local-only raw evidence that is never committed. The layout is defined in [the experiment protocol](../../docs/experiment-protocol.md), so records can be submitted unchanged. Write the contract against `ExperimentContract` in [the protocol schema](../../schema/experiment-protocol.openapi.json); unresolved fields stay null until it is frozen.
 
 ## Check a contract
 

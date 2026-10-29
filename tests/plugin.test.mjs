@@ -86,7 +86,6 @@ function checkResources(base) {
       containedFile(base, resolve(dirname(path), local));
     }
   }
-  assert.equal(json(base, 'experiments/m5pro-qwen36-pi/example.json').status, 'draft-not-run');
 }
 
 test('Agent Plugins and Claude manifests share valid package metadata and marketplace source', () => {

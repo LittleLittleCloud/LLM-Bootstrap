@@ -52,3 +52,14 @@ Use “Not obtained” for unavailable values. Preserve all formal repetitions a
 - Self-hosting transition and subsequent development evidence, or not demonstrated:
 - Failures, amendments, recovery, and next steps:
 - Implementation PR, independent results PR, and adoption decision:
+
+## Feedback for future experiments
+
+Reviewed text only. Refer to private artifacts by hash and access limitation; do not paste transcripts, weights, credentials, or private prompts. A suggestion here becomes a change only through a separate pull request.
+
+- Failures, interruptions, and their causes:
+- Preflight checks that would have caught them earlier:
+- Recurring human interventions and what would have avoided them:
+- Suggested changes to skills or evaluations (cite the run and evidence hash):
+- Calibration notes for baselines, budgets, thresholds, and tolerances (priors only; each contract fixes its own before tuning):
+- Limits on generalizing: preliminary cohorts, unmatched comparisons, hardware-specific effects:
