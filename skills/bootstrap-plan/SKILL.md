@@ -5,9 +5,9 @@ description: Define a reproducible LLM Bootstrap experiment for an agent buildin
 
 # Plan an inference bootstrap experiment
 
-Read [the experiment protocol](../../docs/experiment-protocol.md). Use [the record template](../../experiments/TEMPLATE.md) and, when relevant, [the M5 Pro example](../../experiments/m5pro-qwen36-pi/example.json).
+Read [the experiment protocol](../../docs/experiment-protocol.md). Use [the report template](../../experiments/TEMPLATE.md).
 
-Resolve these bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: create contracts, engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Copy templates into that workspace before editing; the bundled example remains an unrun draft. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
+Resolve these bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: create contracts, engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Copy the template into that workspace before editing. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
 
 Use English for project writing, preserving literal inputs, identifiers, commands, hashes, and raw evidence. Use codex/ feature branches and pull requests for project changes; merge only with explicit user authorization. Do not publish weights, credentials, private prompts, or unreviewed agent transcripts; record hashes and access limitations instead. Keep planned targets, prior external evidence, and measurements from these skills distinct.
 

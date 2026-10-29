@@ -5,7 +5,7 @@ description: Evaluate LLM-built inference engines against a frozen experiment co
 
 # Evaluate and report
 
-Read [the experiment protocol](../../docs/experiment-protocol.md), the frozen contract (for a derived contract, its resolved effective contract), and the candidate's runtime/build instructions. Use [the record template](../../experiments/TEMPLATE.md) for results. If reviewing historical evidence, preserve its original configuration and mark unavailable fields rather than rerunning or inventing them.
+Read [the experiment protocol](../../docs/experiment-protocol.md), the frozen contract (for a derived contract, its resolved effective contract), and the candidate's runtime/build instructions. Use [the report template](../../experiments/TEMPLATE.md) for results. If reviewing historical evidence, preserve its original configuration and mark unavailable fields rather than rerunning or inventing them.
 
 Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: copy the template and write reports and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
 
@@ -20,3 +20,5 @@ Audit comparison conditions before deriving a speedup. Separate matched engine c
 Report numerical correctness, task assertion results, memory/swap, variation, cost, budget, human interventions, and gaps to every acceptance criterion. Verify any self-hosting claim with builder identity, routing/runtime transition, and subsequent development evidence. Historical measurements without trajectories do not prove autonomy.
 
 Create a reviewable results change independently of implementation adoption. When a JSON run record is used, its shape follows the `ExperimentRun` schema in [the protocol schema](../../schema/experiment-protocol.openapi.json) and its result documents follow `EvaluationResult` in [the evaluation schema](../../schema/evaluation-protocol.openapi.json); schema validity shows structure only, not correct measurements or an accepted result. Link source revisions, evidence hashes/access limitations, and failures. State “best among tested configurations” unless baseline coverage supports a bounded SOTA claim. Leave unmet or unmeasured criteria open; results publication does not imply acceptance or authorize merge.
+
+Fill the report's feedback section from the run: failures and their causes, the preflight check that would have caught each, recurring human interventions, suggested skill or evaluation changes, and calibration notes for baselines, budgets, and tolerances. Make suggestions there for a separate review; do not change an evaluation or a skill from inside an experiment.

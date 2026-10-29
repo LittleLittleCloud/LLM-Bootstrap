@@ -1,7 +1,7 @@
 {
-  "experiment_id": "m5pro-qwen36-pi-example",
+  "experiment_id": "draft-contract-fixture",
   "status": "draft-not-run",
-  "description": "Planning template; values sourced from prior workload evidence, not a new experiment.",
+  "description": "Draft contract fixture for repository tests; not an experiment.",
   "skills_revision": null,
   "builder_instruction_hashes": null,
   "contract_frozen_at": null,
