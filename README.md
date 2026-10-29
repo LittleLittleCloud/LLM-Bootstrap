@@ -45,7 +45,7 @@ The plugin contains agent instructions and experiment templates, not executable 
 
 ### 1. Install the plugin
 
-**Agent Plugins / VS Code:** run **Chat: Install Plugin from Source** and enter `https://github.com/LittleLittleCloud/LLM-Bootstrap.git`, or select a local checkout of this branch while developing. Enable agent plugins if required by the client. A supporting client discovers the root [manifest](plugin.json) and the three skills automatically.
+**Agent Plugins / VS Code:** run **Chat: Install Plugin from Source** and enter `https://github.com/LittleLittleCloud/LLM-Bootstrap.git`, or select a local checkout of this branch while developing. Enable agent plugins if required by the client. A supporting client discovers the root [manifest](plugin.json) and the skill automatically.
 
 **Claude Code:** add `LittleLittleCloud/LLM-Bootstrap` with `/plugin marketplace add`, then install `llm-bootstrap@llm-bootstrap-marketplace` with `/plugin install`. For an unpublished local checkout, start Claude Code with `claude --plugin-dir /absolute/path/to/LLM-Bootstrap` instead.
 
