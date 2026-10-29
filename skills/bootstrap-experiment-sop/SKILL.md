@@ -30,7 +30,8 @@ Each gate must hold before the next stage starts. If it does not, stop and say w
 | 2. Freeze | Commit the contract on a codex/ branch and record its commit. | The contract commit exists before any engine work. Amendments are new revisions with a reason. |
 | 3. Build | [The build reference](references/build.md), in a separate engine workspace. | The engine runs and passes the contract's numerical checks. |
 | 4. Evaluate | [The evaluation reference](references/evaluate.md) with the pinned evaluation, conformance gate first. | The conformance gate passes before any performance measurement. |
-| 5. Report | Fill the report, including its feedback section, and a run record; open a separate results PR. | Every acceptance criterion is marked passed, failed, or open, and the feedback section is filled in. |
+| 5. Report | Fill the report, including its feedback section, and a run record. | Every acceptance criterion is marked passed, failed, or open, and the feedback section is filled in. |
+| 6. Submit | Use bootstrap-submit-results to open a results PR against the LLM Bootstrap repository, separate from any implementation change. | The user authorized the PR; the PR is open. Merging is the maintainers' decision. |
 
 Keep implementation and results in separate changes. Publishing results does not imply acceptance and does not authorize a merge. Costly runs and operating-system changes need the user's authorization even when the contract names them in scope.
 

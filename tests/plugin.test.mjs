@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const schema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
-const skills = ['bootstrap-experiment-sop'];
+const skills = ['bootstrap-experiment-sop', 'bootstrap-submit-results'];
 const resources = ['README.md', 'AGENTS.md', 'docs', 'evaluations', 'skills'];
 const read = (base, path) => readFileSync(join(base, path), 'utf8');
 const json = (base, path) => JSON.parse(read(base, path));
@@ -67,7 +67,7 @@ function checkResources(base) {
     assert.match(frontmatter[1], new RegExp(`^name: ${name}$`, 'm'));
     const description = frontmatter[1].match(/^description: (.+)$/m)?.[1];
     assert.ok(description && description.length <= 1024, `Missing/invalid description: ${name}`);
-    assert.ok(content.includes('references/experiment-protocol.md'));
+    if (name === 'bootstrap-experiment-sop') assert.ok(content.includes('references/experiment-protocol.md'));
     assert.match(content, /relative to this SKILL\.md file/);
     assert.match(content, /read-only/);
     assert.match(content, /codex\//);
@@ -110,16 +110,18 @@ test('the complete plugin remains readable after relocation, independently of th
     rmSync(temp, { recursive: true, force: true });
   }
 });
-test('every link inside the skill stays inside the skill folder', () => {
-  const skill = join(root, 'skills', 'bootstrap-experiment-sop');
-  const inside = files(skill).filter(path => path.endsWith('.md'));
-  assert.ok(inside.length > 5);
-  for (const path of inside) {
-    for (const [, target] of readFileSync(path, 'utf8').matchAll(/\[[^\]\n]+\]\(([^)\s]+)\)/g)) {
-      if (/^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('#')) continue;
-      const resolved = realpathSync(resolve(dirname(path), decodeURIComponent(target.split('#')[0])));
-      const rel = relative(realpathSync(skill), resolved);
-      assert.ok(rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel), `${relative(root, path)} links outside the skill: ${target}`);
+test('every link inside each skill stays inside that skill folder', () => {
+  for (const name of skills) {
+    const skill = join(root, 'skills', name);
+    const inside = files(skill).filter(path => path.endsWith('.md'));
+    assert.ok(inside.length > 0);
+    for (const path of inside) {
+      for (const [, target] of readFileSync(path, 'utf8').matchAll(/\[[^\]\n]+\]\(([^)\s]+)\)/g)) {
+        if (/^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('#')) continue;
+        const resolved = realpathSync(resolve(dirname(path), decodeURIComponent(target.split('#')[0])));
+        const rel = relative(realpathSync(skill), resolved);
+        assert.ok(rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel), `${relative(root, path)} links outside the skill: ${target}`);
+      }
     }
   }
 });
