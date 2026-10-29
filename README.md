@@ -27,6 +27,7 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [plugin.json](plugin.json) | Agent Plugins 1.0 manifest; portable skills are discovered from the shared skills directory. |
 | [.claude-plugin/plugin.json](.claude-plugin/plugin.json) | Claude Code manifest using the same skills and resources. |
 | [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) | Single-plugin marketplace for installation and updates. |
+| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end with explicit gates between stages. |
 | [skills/bootstrap-plan](skills/bootstrap-plan/SKILL.md) | Freeze the experiment contract and baseline comparison before implementation. |
 | [skills/bootstrap-build](skills/bootstrap-build/SKILL.md) | Build and optimize the engine through correctness checks and profiling. |
 | [skills/bootstrap-evaluate](skills/bootstrap-evaluate/SKILL.md) | Evaluate complete runs and report performance, quality, resources, and autonomy. |

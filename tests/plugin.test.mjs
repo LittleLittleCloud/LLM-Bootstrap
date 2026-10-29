@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const schema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
-const skills = ['bootstrap-build', 'bootstrap-evaluate', 'bootstrap-plan'];
+const skills = ['bootstrap-build', 'bootstrap-evaluate', 'bootstrap-experiment-sop', 'bootstrap-plan'];
 const resources = ['README.md', 'AGENTS.md', 'docs', 'evaluations', 'experiments', 'results', 'schema', 'skills'];
 const read = (base, path) => readFileSync(join(base, path), 'utf8');
 const json = (base, path) => JSON.parse(read(base, path));
@@ -93,7 +93,7 @@ test('Agent Plugins and Claude manifests share valid package metadata and market
   checkManifests(root);
 });
 
-test('all three skills and their bundled Markdown/JSON resources resolve within the package', () => {
+test('all skills and their bundled Markdown/JSON resources resolve within the package', () => {
   checkResources(root);
 });
 

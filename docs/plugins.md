@@ -15,11 +15,12 @@ The package ships these skills:
 
 | Skill | Purpose | Claude invocation |
 | --- | --- | --- |
+| [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
 | [bootstrap-plan](../skills/bootstrap-plan/SKILL.md) | Define and freeze the experiment contract. | `/llm-bootstrap:bootstrap-plan` |
 | [bootstrap-build](../skills/bootstrap-build/SKILL.md) | Implement, validate, and profile the engine. | `/llm-bootstrap:bootstrap-build` |
 | [bootstrap-evaluate](../skills/bootstrap-evaluate/SKILL.md) | Measure and report against the frozen contract. | `/llm-bootstrap:bootstrap-evaluate` |
 
-Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [contract resolver](../schema/resolve-contract.mjs) for derived experiments and the Python evaluation scripts under [evaluations/](../evaluations/engine-api-conformance/evaluation.json), which need Python 3.9 or newer and nothing else. Nothing runs them automatically, and the evaluation scripts verify their own hashes before running. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
+Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [contract resolver](../schema/resolve-contract.mjs) and the [contract check](../schema/check-experiment.mjs) built on it, which the experiment SOP asks the agent to run, and the Python evaluation scripts under [evaluations/](../evaluations/engine-api-conformance/evaluation.json), which need Python 3.9 or newer and nothing else. Nothing runs them automatically, and the evaluation scripts verify their own hashes before running. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
 
 ## Install with Agent Plugins / VS Code
 
@@ -29,7 +30,7 @@ Use a client that supports Agent Plugins 1.0. In VS Code:
 2. Run **Chat: Install Plugin from Source** in the Command Palette.
 3. Enter `https://github.com/LittleLittleCloud/LLM-Bootstrap.git`, or the absolute path of a local checkout for unpublished changes.
 4. Confirm the plugin is enabled for the intended harness and workspace in the Agent Customizations editor.
-5. Start a fresh chat and confirm all three skills appear. Invoke `bootstrap-plan` for a planning-only task before authorizing an experiment.
+5. Start a fresh chat and confirm all four skills appear. Invoke `bootstrap-plan` for a planning-only task before authorizing an experiment.
 
 For live local development without installing a copy, add your checkout to the user setting `chat.pluginLocations`:
 
