@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const schema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 const skills = ['bootstrap-build', 'bootstrap-evaluate', 'bootstrap-plan'];
-const resources = ['README.md', 'AGENTS.md', 'docs', 'experiments', 'results', 'schema', 'skills'];
+const resources = ['README.md', 'AGENTS.md', 'docs', 'evaluations', 'experiments', 'results', 'schema', 'skills'];
 const read = (base, path) => readFileSync(join(base, path), 'utf8');
 const json = (base, path) => JSON.parse(read(base, path));
 

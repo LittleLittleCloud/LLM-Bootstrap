@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Validator } from '@seriousme/openapi-schema-validator';
@@ -11,24 +11,30 @@ import addFormats from 'ajv-formats';
 import { resolveContract, resolveContractFile } from '../schema/resolve-contract.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const spec = JSON.parse(readFileSync(`${root}schema/experiment-protocol.openapi.json`, 'utf8'));
-const example = JSON.parse(readFileSync(`${root}experiments/m5pro-qwen36-pi/example.json`, 'utf8'));
+const read = path => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
+const spec = read('schema/experiment-protocol.openapi.json');
+const evaluationSpec = read('schema/evaluation-protocol.openapi.json');
+const example = read('experiments/m5pro-qwen36-pi/example.json');
 
-// Component refs become $defs refs so each Schema Object compiles under strict JSON Schema 2020-12.
-const defs = JSON.parse(JSON.stringify(spec.components.schemas).replaceAll('#/components/schemas/', () => '#/$defs/'));
-const id = 'https://llm-bootstrap.invalid/experiment-protocol';
 // Conditional overlays name sibling properties, so strictTypes and strictRequired stay off.
 const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false, strictRequired: false });
 addFormats(ajv);
-ajv.addSchema({ $id: id, $defs: defs });
-const validators = Object.fromEntries(
-  Object.keys(defs).map(name => [name, ajv.compile({ $ref: `${id}#/$defs/${name}` })]),
-);
 
-const accepts = (name, value) => {
-  assert.ok(validators[name](value), JSON.stringify(validators[name].errors, null, 2));
-};
-const rejects = (name, value, why) => assert.equal(validators[name](value), false, why);
+// Component refs become $defs refs so each Schema Object compiles under strict JSON Schema 2020-12.
+function compileAll(document, id) {
+  const defs = JSON.parse(JSON.stringify(document.components.schemas).replaceAll('#/components/schemas/', () => '#/$defs/'));
+  ajv.addSchema({ $id: id, $defs: defs });
+  return Object.fromEntries(Object.keys(defs).map(name => [name, ajv.compile({ $ref: `${id}#/$defs/${name}` })]));
+}
+const validators = compileAll(spec, 'https://llm-bootstrap.invalid/experiment-protocol');
+const evaluationValidators = compileAll(evaluationSpec, 'https://llm-bootstrap.invalid/evaluation-protocol');
+
+const checks = set => ({
+  accepts: (name, value) => assert.ok(set[name](value), JSON.stringify(set[name].errors, null, 2)),
+  rejects: (name, value, why) => assert.equal(set[name](value), false, why),
+});
+const { accepts, rejects } = checks(validators);
+const { accepts: acceptsEvaluation, rejects: rejectsEvaluation } = checks(evaluationValidators);
 
 const sha = char => char.repeat(64);
 const commit = char => char.repeat(40);
@@ -64,8 +70,8 @@ function frozenContract() {
     network_and_source_access: 'none',
   });
   contract.development_harness.revision_or_package_hash = unavailable('No package hash.');
+  contract.evaluation.definition = { ...evaluationReference };
   Object.assign(contract.evaluation, {
-    sampling_settings: { temperature: 0 },
     warmup_plan: 'one warm-up round',
     formal_repetitions: 3,
     numerical_oracle_and_tolerances: {
@@ -99,17 +105,15 @@ function frozenContract() {
   return contract;
 }
 
-function syntheticRun() {
+const evaluationReference = { evaluation_id: 'synthetic-evaluation', revision: commit('3'), sha256: sha('c') };
+const evidenceFixture = { description: 'synthetic', access: 'local-only', sha256: sha('8'), access_limitation: 'synthetic' };
+
+function syntheticResult() {
   const detail = 'synthetic';
-  const evidence = { description: detail, access: 'local-only', sha256: sha('8'), access_limitation: detail };
   return {
-    run_id: 'synthetic-schema-fixture',
-    status: 'completed',
-    acceptance: 'unverified',
-    contract: { path: 'contract.json', revision: commit('4'), sha256: sha('f') },
-    skills_revision: commit('1'),
-    started_at: when,
-    ended_at: when,
+    evaluation: evaluationReference,
+    role: 'candidate',
+    engine_name: 'synthetic-engine',
     environment: {
       hardware_model: detail,
       os_version: detail,
@@ -119,30 +123,40 @@ function syntheticRun() {
       exclusive_gpu: true,
       deviations_from_contract: [],
     },
-    engines: [{
-      role: 'candidate',
-      engine_name: 'synthetic-engine',
-      runtime_revision: unavailable('Not exposed by the runtime.'),
-      artifacts: [{ name: 'synthetic-engine', sha256: sha('e') }],
-      commands: ['synthetic-run'],
-      settings: { weight_precision: detail },
-      repetitions: [{ phase: 'formal', outcome: 'succeeded' }],
-      metrics: {
-        formal_repetitions: 3,
-        preliminary: false,
-        prefill: { basis: 'processed-input-tokens', total_tokens: 100, total_seconds: 1, tokens_per_second: 100 },
-        decode: { basis: 'n-minus-1-intervals', total_tokens: 9, total_seconds: 1, tokens_per_second: 9 },
-        client_ttft_median_seconds: 'Not obtained',
-        application_duration_seconds: 'Not obtained',
-        requests_reconciled: true,
-        per_request_evidence: evidence,
-      },
-      resources: { peak_memory_gib: 'Not obtained', swap_out_delta_bytes: 'Not obtained' },
-      quality: {
-        numerical_status: 'not-run',
-        application: { passed: 1, total: 1, negative_control_verified: true, restricted_environment: true },
-      },
-    }],
+    runtime_revision: unavailable('Not exposed by the runtime.'),
+    artifacts: [{ name: 'synthetic-engine', sha256: sha('e') }],
+    commands: ['synthetic-run'],
+    settings: { weight_precision: detail },
+    repetitions: [{ phase: 'formal', outcome: 'succeeded' }],
+    metrics: {
+      formal_repetitions: 3,
+      preliminary: false,
+      prefill: { basis: 'processed-input-tokens', total_tokens: 100, total_seconds: 1, tokens_per_second: 100 },
+      decode: { basis: 'n-minus-1-intervals', total_tokens: 9, total_seconds: 1, tokens_per_second: 9 },
+      client_ttft_median_seconds: 'Not obtained',
+      application_duration_seconds: 'Not obtained',
+      requests_reconciled: true,
+      per_request_evidence: evidenceFixture,
+    },
+    resources: { peak_memory_gib: 'Not obtained', swap_out_delta_bytes: 'Not obtained' },
+    quality: {
+      numerical_status: 'not-run',
+      application: { passed: 1, total: 1, negative_control_verified: true, restricted_environment: true },
+    },
+  };
+}
+
+function syntheticRun() {
+  const detail = 'synthetic';
+  return {
+    run_id: 'synthetic-schema-fixture',
+    status: 'completed',
+    acceptance: 'unverified',
+    contract: { path: 'contract.json', revision: commit('4'), sha256: sha('f') },
+    skills_revision: commit('1'),
+    started_at: when,
+    ended_at: when,
+    evaluation_results: [{ role: 'candidate', engine_name: 'synthetic-engine', path: 'results/candidate.json', sha256: sha('d') }],
     comparisons: [{
       track: 'matched-configuration',
       metric: 'decode throughput',
@@ -162,7 +176,7 @@ function syntheticRun() {
       hardware_hours: unavailable('Synthetic fixture.'),
     },
     self_hosting: { status: 'not-in-scope' },
-    evidence: [evidence],
+    evidence: [evidenceFixture],
     interpretation: 'Synthetic schema fixture; not a measurement.',
   };
 }
@@ -174,13 +188,23 @@ const mutate = (value, change) => {
 };
 
 test('every component schema compiles under strict JSON Schema 2020-12', () => {
-  assert.equal(spec.openapi, '3.1.0');
-  assert.deepEqual(Object.keys(validators).sort(), Object.keys(spec.components.schemas).sort());
+  for (const [document, set] of [[spec, validators], [evaluationSpec, evaluationValidators]]) {
+    assert.equal(document.openapi, '3.1.0');
+    assert.deepEqual(Object.keys(set).sort(), Object.keys(document.components.schemas).sort());
+  }
 });
 
-test('the OpenAPI document passes the official OpenAPI 3.1 schema', async () => {
-  const result = await new Validator().validate(structuredClone(spec));
-  assert.ok(result.valid, JSON.stringify(result.errors, null, 2));
+test('both OpenAPI documents pass the official OpenAPI 3.1 schema', async () => {
+  for (const document of [spec, evaluationSpec]) {
+    const result = await new Validator().validate(structuredClone(document));
+    assert.ok(result.valid, JSON.stringify(result.errors, null, 2));
+  }
+});
+
+test('primitive schemas shared by both protocols are identical', () => {
+  const shared = Object.keys(spec.components.schemas).filter(name => name in evaluationSpec.components.schemas);
+  assert.ok(shared.length >= 12, `only ${shared.length} shared schemas`);
+  for (const name of shared) assert.deepEqual(evaluationSpec.components.schemas[name], spec.components.schemas[name], name);
 });
 
 test('the draft example validates as a draft contract but not as a frozen one', () => {
@@ -198,22 +222,21 @@ test('a fully resolved contract can be frozen and unresolved or invalid fields a
   rejects('ExperimentContract', mutate(frozen, c => { c.hardware.typo_field = 1; }), 'unknown property');
   rejects('ExperimentContract', mutate(frozen, c => { c.target_model.speculative_decoding = true; }), 'draft not declared');
   rejects('ExperimentContract', mutate(frozen, c => { c.target_model.tokenizer_hash = notApplicable('x'); }), 'identity hash cannot be N/A');
+  rejects('ExperimentContract', mutate(frozen, c => { c.evaluation.definition.sha256 = null; }), 'frozen evaluation must be pinned');
+  rejects('ExperimentContract', mutate(frozen, c => { c.evaluation.scripts = [{ role: 'driver', path: 'run.sh', sha256: sha('1') }]; }), 'a contract cannot carry evaluation scripts');
+  rejects('ExperimentContract', mutate(frozen, c => { c.evaluation.task_ids = ['task-1']; }), 'a contract cannot define the workload');
 });
 
-test('a synthetic run record validates and metric, evidence, and comparison rules reject unsupported records', () => {
+test('a synthetic run record validates and status, comparison, and claim rules reject unsupported records', () => {
   const run = syntheticRun();
   accepts('ExperimentRun', run);
-  const engine = r => r.engines[0];
 
-  rejects('ExperimentRun', mutate(run, r => { engine(r).metrics.prefill = 0; }), 'missing metric is not zero');
-  rejects('ExperimentRun', mutate(run, r => { engine(r).metrics.decode.basis = 'arithmetic-mean'; }), 'unknown decode basis');
-  rejects('ExperimentRun', mutate(run, r => { engine(r).metrics.formal_repetitions = 1; }), 'single cohort is preliminary');
-  rejects('ExperimentRun', mutate(run, r => { engine(r).repetitions[0].outcome = 'failed'; }), 'failure needs description');
-  rejects('ExperimentRun', mutate(run, r => { engine(r).artifacts = []; }), 'runtime identity needs hashes');
-  rejects('ExperimentRun', mutate(run, r => { engine(r).metrics.per_request_evidence.url = 'https://example.invalid/log'; }), 'local-only evidence has no URL');
   rejects('ExperimentRun', mutate(run, r => { r.acceptance = 'passed'; r.status = 'running'; }), 'passed needs completed');
   rejects('ExperimentRun', mutate(run, r => { r.ended_at = null; }), 'completed needs an end');
   rejects('ExperimentRun', mutate(run, r => { r.evidence = []; }), 'evidence required');
+  rejects('ExperimentRun', mutate(run, r => { r.evaluation_results = []; }), 'completed needs a result document');
+  rejects('ExperimentRun', mutate(run, r => { r.evaluation_results[0].sha256 = 'abc'; }), 'result documents are pinned by hash');
+  rejects('ExperimentRun', mutate(run, r => { r.engines = []; }), 'results live in evaluation result documents');
 
   rejects('ExperimentRun', mutate(run, r => {
     Object.assign(r.comparisons[0], { matched_settings: true, speedup_ratio: 2 });
@@ -243,6 +266,87 @@ test('a synthetic run record validates and metric, evidence, and comparison rule
   rejects('PerformanceClaim', { ...claim, claim_type: 'bounded-sota' }, 'bounded SOTA needs baseline coverage');
   rejects('PerformanceClaim', { ...claim, claim_type: 'competitive-with' }, 'competitive-with needs a named baseline');
   accepts('PerformanceClaim', { ...claim, claim_type: 'bounded-sota', baseline_coverage_sufficient: true });
+});
+
+test('an evaluation result validates and metric, evidence, and repetition rules reject unsupported results', () => {
+  const result = syntheticResult();
+  acceptsEvaluation('EvaluationResult', result);
+
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.evaluation.revision = null; }), 'result must pin its evaluation');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { delete r.evaluation; }), 'result must cite its evaluation');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.prefill = 0; }), 'missing metric is not zero');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.decode.basis = 'arithmetic-mean'; }), 'unknown decode basis');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.formal_repetitions = 1; }), 'single cohort is preliminary');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.repetitions[0].outcome = 'failed'; }), 'failure needs description');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.artifacts = []; }), 'runtime identity needs hashes');
+  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.per_request_evidence.url = 'https://example.invalid/log'; }), 'local-only evidence has no URL');
+});
+
+const releasedDefinition = scriptHash => ({
+  evaluation_id: 'synthetic-evaluation',
+  status: 'released',
+  description: 'Synthetic fixture; not an evaluation.',
+  harness: { name: 'synthetic-harness', version: '1' },
+  dataset: { repository: 'https://example.invalid/data', revision: commit('a'), file: 'data.jsonl', sha256: sha('b') },
+  task_ids: ['task-1'],
+  seed: 0,
+  limits: { context_window: 1024, max_output_tokens_per_request: 128, timeout_seconds_per_task: 10, request_concurrency: 1 },
+  cache_policy: 'none',
+  sampling_settings: { temperature: 0 },
+  scripts: [{ role: 'driver', path: 'scripts/run.sh', sha256: scriptHash }],
+});
+
+// Evaluation code is owned by its directory in this repository: valid definition, matching id, contained scripts, matching hashes.
+function checkEvaluationDir(dir) {
+  const definition = JSON.parse(readFileSync(join(dir, 'evaluation.json'), 'utf8'));
+  acceptsEvaluation('EvaluationDefinition', definition);
+  assert.equal(basename(dir), definition.evaluation_id, 'directory name must equal evaluation_id');
+  for (const script of definition.scripts ?? []) {
+    const file = resolve(dir, script.path);
+    assert.ok(!relative(dir, file).startsWith('..') && file.startsWith(dir + sep), `${script.path} escapes ${dir}`);
+    assert.ok(existsSync(file), `${script.path} is missing`);
+    assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'), script.sha256, `${script.path} hash`);
+  }
+  return definition;
+}
+
+test('repository evaluation definitions are valid, own their directory, and match their script hashes', () => {
+  const base = join(root, 'evaluations');
+  const names = readdirSync(base, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name);
+  assert.ok(names.length > 0);
+  for (const name of names) checkEvaluationDir(join(base, name));
+  assert.ok(names.includes(example.evaluation.definition.evaluation_id), 'the example selects a repository evaluation');
+});
+
+test('a released evaluation needs a driver, no unresolved fields, contained paths, and verified scripts', () => {
+  const released = releasedDefinition(sha('1'));
+  acceptsEvaluation('EvaluationDefinition', released);
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.cache_policy = null; }), 'released has no null');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts[0].role = 'assertion-evaluator'; }), 'released needs a driver');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts[0].path = '../outside.sh'; }), 'no parent traversal');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts[0].path = '/etc/passwd'; }), 'no absolute path');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.evaluation_id = 'Not Kebab'; }), 'kebab-case id');
+  acceptsEvaluation('EvaluationDefinition', mutate(released, d => { d.status = 'draft'; d.cache_policy = null; d.scripts = null; }));
+
+  const base = mkdtempSync(join(tmpdir(), 'llm-bootstrap-evaluation-'));
+  try {
+    const script = '#!/bin/sh\necho synthetic\n';
+    const place = (name, definition, content = script) => {
+      const dir = join(base, name);
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(join(dir, 'scripts'), { recursive: true });
+      writeFileSync(join(dir, 'evaluation.json'), JSON.stringify(definition));
+      if (content !== null) writeFileSync(join(dir, 'scripts', 'run.sh'), content);
+      return dir;
+    };
+    const hash = createHash('sha256').update(script).digest('hex');
+    checkEvaluationDir(place('synthetic-evaluation', releasedDefinition(hash)));
+    assert.throws(() => checkEvaluationDir(place('synthetic-evaluation', releasedDefinition(hash), `${script}tampered\n`)), /hash/);
+    assert.throws(() => checkEvaluationDir(place('synthetic-evaluation', releasedDefinition(hash), null)), /missing/);
+    assert.throws(() => checkEvaluationDir(place('other-name', releasedDefinition(hash))), /directory name/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 });
 
 test('self-hosting claims need transition evidence and builder/target identity', () => {

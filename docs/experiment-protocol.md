@@ -6,7 +6,7 @@ An experiment fixes hardware, target model, builder LLM, agent harness, workload
 
 The builder LLM writes the engine. The target model runs inside it. Their identities may differ, but self-hosting requires the builder's inference to actually move onto the generated engine. Record where initial builder inference runs and who controls routing. Improving an engine while continuing to use an unrelated hosted builder is engine construction, not demonstrated self-hosting.
 
-The example JSON is a planning aid. Its structure, and that of run records, is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.json), which checks shape and required declarations only. It models just the core fields; per-request records and other raw detail stay in hashed evidence files. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and evaluation driver.
+The example JSON is a planning aid. Its structure, and that of run records, is formalized in the [OpenAPI schema](../schema/experiment-protocol.openapi.json), which checks shape and required declarations only. It models just the core fields; per-request records and other raw detail stay in hashed evidence files. This prose protocol and the skills remain authoritative, and passing schema validation does not show correct measurements, followed procedure, or an experimental result. Every unresolved experimental field must be resolved or explicitly declared inapplicable before execution; a frozen contract forbids unresolved (null) fields. Keep separate identities for the development harness and the evaluation harness.
 
 ## Freeze before tuning
 
@@ -16,7 +16,7 @@ Record:
 - Hardware model, GPU/core configuration, physical memory/VRAM, OS, drivers, compiler/runtime, power mode, thermal observations, and relevant memory limits. Record exclusive GPU use and any CPU fallback, offloading, SSD streaming, or multi-host participation.
 - Target repository/revision, weight and tokenizer hashes, chat template, quantization method/group size, weight/activation/KV/recurrent-state precision, context limit, sampling settings, and speculative draft identities/settings.
 - Builder model/provider/revision or provider-exposed identifier, inference location, decoding settings, tools, network/source access, harness version/revision, and starting context. Mark provider details that are unavailable; do not fabricate immutable IDs.
-- Evaluation driver revision/hash, dataset revision/hash, exact task IDs and seed, request sequencing, input/output limits, timeout, cache policy, warm-up, formal repetitions, and correctness oracle/tolerances.
+- The repository-defined evaluation (id, repository revision, and definition hash; see the evaluation protocol), warm-up, formal repetitions, and correctness oracle/tolerances.
 - Primary performance metric and numerical acceptance thresholds, permitted quality loss, memory/swap constraints, allowed optimizations, total wall-clock/token/compute budgets, and stopping rules. Explicitly state which operating-system changes are in scope; no silent precision or resource-limit relaxation.
 
 Freeze the contract in version control before implementation. Amendments receive a new revision and a reason; they do not retroactively redefine a successful run. Existing user authorization governs execution. Missing essential configuration is resolved before dependent work, while independent preparation may continue.
@@ -29,25 +29,9 @@ Merging is deterministic and implemented by [schema/resolve-contract.mjs](../sch
 
 The effective contract (base plus overrides) is what freezes and runs. It must validate as a frozen contract with no unresolved fields before tuning, which also rejects misspelled override keys. A base may itself be derived; every link is pinned by hash, so a chain cannot change silently. Runs cite the derived contract file. Results are not inherited from the base, so any comparison with it needs its own matched runs.
 
-## Correctness before performance claims
+## Evaluation
 
-Validate tensor shapes/layouts, tokenizer and chat formatting, model operators, state/KV continuity, reset behavior, and representative short/long inputs against an independent reference. Choose tolerances appropriate to declared precision before inspecting candidate results. Localize the first differing logits/state when practical; plausible text alone is insufficient.
-
-Retain application-level task checks as a separate quality gate. A coding agent can call the model repeatedly and repair solutions; a 20-task assertion pass is not model pass@1 or evidence of numerical equivalence. Run generated programs in a restricted evaluation environment with no credentials or network and bounded resources. Preserve timeouts/errors in the denominator and verify the assertion evaluator with a negative control.
-
-## Measurement
-
-Run baselines and candidates serially on the same device under documented conditions. Separate cold load/compilation, warm-up, and steady state. Preserve every formal repetition and failure; report variability across repetitions. A single cohort is preliminary evidence, not a stability study.
-
-Collect per-request native timings, client observations, input/output token counts, cache hits, request IDs, actual runtime builds/artifact hashes, and sampling coverage. A checkout commit does not prove the deployed executable's identity. Reconcile request counts and token totals with the harness before reporting complete metrics.
-
-- Prefill throughput: sum of processed input tokens divided by sum of measured prefill seconds; define whether queueing, transfer, and state import are included. Cached tokens are identified separately.
-- Decode throughput: sum of N−1 generation intervals divided by sum of first-to-last token durations. Requests with fewer than two tokens have no such throughput. Engines reporting command-level tokens/time or speculative multi-token emissions require their native definition to be reported separately; do not relabel it N−1.
-- Client TTFT: monotonic time from request dispatch to first valid text/tool output. Ignore role-only, heartbeat, and usage events. Disclose proxy boundaries and observation overhead.
-- Application duration: full task/cohort time, separate from GPU work. For interactive workloads, generated requests may diverge between engines; retain trajectories and token totals. Use a separate fixed-request workload for controlled kernel/engine comparisons when needed.
-- Resources: sampled memory allocation/footprint with definition and interval, memory pressure, whole-machine swap-out delta over bracketed boundaries, power/thermal conditions, and failures. Do not attribute whole-machine paging to a process without evidence.
-
-Aggregate throughput as ratios of sums, not an arithmetic mean of request speeds. Do not derive prefill/decode from application wall time. Missing metrics are “Not obtained”, not zero. Use monotonic clocks on a common observer for end-to-end intervals; do not subtract uncalibrated cross-host timestamps.
+Evaluation is defined by the [evaluation protocol](evaluation-protocol.md), including correctness gates and measurement definitions. Evaluation code and scripts are owned by this repository, not by experiments or the builder LLM. A contract selects an evaluation by id, repository revision, and definition hash, and adds only what depends on the experiment: warm-up, formal repetitions, and the numerical oracle and tolerances.
 
 ## Baselines and SOTA
 
