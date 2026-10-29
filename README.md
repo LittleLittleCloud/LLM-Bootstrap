@@ -2,7 +2,7 @@
 
 **Can an LLM build its own inference engine?**
 
-LLM Bootstrap is a skills plugin for agents that build inference engines, packaged for both **Agent Plugins 1.0** and **Claude Code plugins**. Both formats load the same skill and bundled experiment resources. Each experiment fixes a **hardware + target model + agent harness + workload** configuration, supplies the skills and a measurable goal, and studies whether an LLM can build an engine competitive with the strongest verified baselines on that specific platform.
+LLM Bootstrap is a skills plugin for agents that build inference engines, packaged for both **Agent Plugins 1.0** and **Claude Code plugins**. Both formats load the same skills and bundled experiment resources. Each experiment fixes a **hardware + target model + agent harness + workload** configuration, supplies the skills and a measurable goal, and studies whether an LLM can build an engine competitive with the strongest verified baselines on that specific platform.
 
 The engine may specialize aggressively for the chosen hardware and model. General-purpose engine coverage is not the objective. Platform-specific state-of-the-art performance is the research target, not an established result.
 
@@ -29,7 +29,8 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) | Single-plugin marketplace for installation and updates. |
 | `site/` (not part of the plugin package) | Static leaderboard with multi-dimensional filters and a trend dashboard, currently on synthetic demo data. Preview with `python3 -m http.server -d site`; deployment to GitHub Pages is a manual workflow. |
 | `tools/leaderboard/build-index.mjs` (not part of the plugin package) | Builds the leaderboard index from `experiments/<id>/runs/<run-id>/run.json` and the contract and result documents it pins, checking every pinned hash and, when Ajv is installed, every schema. `site/data/leaderboard.mock.json` is a static synthetic index; a real `site/data/leaderboard.json` takes precedence when present. |
-| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | The single, self-contained skill: run a new or derived experiment end to end. `references/` hold the stages, both protocols, and prior evidence; `assets/` the report template and schemas; `scripts/` the contract check and resolver. |
+| [skills/bootstrap-submit-results](skills/bootstrap-submit-results/SKILL.md) | Submit finished experiment results to this repository as a reviewable pull request, after a private-material scan and the repository's own validation. |
+| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | A self-contained skill: run a new or derived experiment end to end. `references/` hold the stages, both protocols, and prior evidence; `assets/` the report template and schemas; `scripts/` the contract check and resolver. |
 | [evaluations/](evaluations/engine-api-conformance/evaluation.json) | Evaluation definitions and scripts owned by this repository; the skill fetches them from the latest `main` commit. `engine-api-conformance` is released; `humaneval-20-pi` is a draft without scripts. |
 | [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
 

@@ -11,11 +11,12 @@ The repository root is the plugin root for both formats. No generation step, dup
 
 The portable manifest intentionally contains metadata only: Agent Plugins 1.0 does not allow top-level skill paths, agents, commands, or hooks. The Claude manifest does not need a custom skills path either. Both manifests keep their name, version, and shared metadata identical. The [.claude-plugin/marketplace.json](../.claude-plugin/marketplace.json) catalog lists this entire root as `./`, so installation retains the shared resources. This is a Claude-compatible marketplace, not a marketplace format defined by Agent Plugins 1.0.
 
-The package ships one skill:
+The package ships two skills:
 
 | Skill | Purpose | Claude invocation |
 | --- | --- | --- |
 | [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end: plan, build, evaluate, and report, with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
+| [bootstrap-submit-results](../skills/bootstrap-submit-results/SKILL.md) | Submit finished experiment results to this repository as a reviewable pull request. | `/llm-bootstrap:bootstrap-submit-results` |
 
 Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [contract resolver](../skills/bootstrap-experiment-sop/scripts/resolve-contract.mjs) and the [contract check](../skills/bootstrap-experiment-sop/scripts/check-experiment.mjs) built on it, which the experiment SOP asks the agent to run, and the Python evaluation scripts under [evaluations/](../evaluations/engine-api-conformance/evaluation.json), which need Python 3.9 or newer and nothing else. Nothing runs them automatically, and the evaluation scripts verify their own hashes before running. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
 
@@ -27,7 +28,7 @@ Use a client that supports Agent Plugins 1.0. In VS Code:
 2. Run **Chat: Install Plugin from Source** in the Command Palette.
 3. Enter `https://github.com/LittleLittleCloud/LLM-Bootstrap.git`, or the absolute path of a local checkout for unpublished changes.
 4. Confirm the plugin is enabled for the intended harness and workspace in the Agent Customizations editor.
-5. Start a fresh chat and confirm the skill appears. Invoke `bootstrap-experiment-sop` for a planning-only task before authorizing an experiment.
+5. Start a fresh chat and confirm both skills appear. Invoke `bootstrap-experiment-sop` for a planning-only task before authorizing an experiment.
 
 For live local development without installing a copy, add your checkout to the user setting `chat.pluginLocations`:
 
@@ -70,7 +71,7 @@ Use `/plugin` to confirm that the plugin is enabled, start a fresh session as ne
 
 ## Bundled resources and workspace outputs
 
-The skill is self-contained: its protocols, report template, schemas, prior evidence, and scripts are inside `skills/bootstrap-experiment-sop/`, and its links resolve from `SKILL.md`, not from the session's current directory. Evaluations are the one exception. They are fetched from the repository's latest `main` commit, so running an evaluation needs network access.
+Each skill is self-contained. The experiment skill carries its protocols, report template, schemas, prior evidence, and scripts inside `skills/bootstrap-experiment-sop/`; the submission skill works from a fresh clone of the repository. Links resolve from each `SKILL.md`, not from the session's current directory. Evaluations are the one exception. They are fetched from the repository's latest `main` commit, so running an evaluation needs network access.
 
 Treat the plugin installation/cache as read-only. Copy the report template to a new directory in the user's project, write and resolve the draft contract there, and keep implementation code and new evidence in that workspace. Updates may replace plugin files. Do not place weights, credentials, private prompts, or unreviewed trajectories in the distributable package. A root AGENTS.md is not automatically injected by plugin installation; essential workflow constraints are included in the skill and its protocol.
 
