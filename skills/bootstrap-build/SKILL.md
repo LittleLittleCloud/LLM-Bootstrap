@@ -7,6 +7,10 @@ description: Build and profile an inference engine specialized to a fixed LLM Bo
 
 Read [the experiment protocol](../../docs/experiment-protocol.md) and the selected frozen experiment contract. If essential platform, model, budget, or acceptance fields are unresolved, use bootstrap-plan before dependent work.
 
+Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only; read the contract and write engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
+
+Use English for project writing, preserving literal inputs, identifiers, commands, hashes, and raw evidence. Use codex/ feature branches and pull requests for project changes; merge only with explicit user authorization. Do not publish weights, credentials, private prompts, or unreviewed agent transcripts; record hashes and access limitations instead. Keep planned targets, prior external evidence, and measurements from these skills distinct.
+
 Implement in a separate engine workspace/feature branch with the declared scaffold, languages, toolchain, and dependencies. Make platform-native implementation choices based on the contract. Baseline engines may supply independent references; using their inference backend must be disclosed and cannot stand in for an independently built backend when that is the research condition.
 
 Get the minimal model execution path correct before optimizing: weight/tokenizer loading, tensor layouts, operators, attention/recurrent state, KV/reset behavior, and generation. Compare against the independent oracle at intermediate states and logits using the contract's tolerances. Expand representative input lengths before calling the engine validated. Keep application assertion checks separate from numerical equivalence.

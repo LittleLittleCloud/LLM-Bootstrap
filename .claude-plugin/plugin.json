@@ -1,0 +1,12 @@
+{
+  "name": "llm-bootstrap",
+  "version": "0.1.0",
+  "description": "Plan, build, and evaluate LLM-built inference engines under reproducible experiment contracts.",
+  "author": {
+    "name": "LittleLittleCloud",
+    "url": "https://github.com/LittleLittleCloud"
+  },
+  "homepage": "https://github.com/LittleLittleCloud/LLM-Bootstrap#readme",
+  "repository": "https://github.com/LittleLittleCloud/LLM-Bootstrap",
+  "keywords": ["inference", "llm", "bootstrap", "experiments", "evaluation"]
+}

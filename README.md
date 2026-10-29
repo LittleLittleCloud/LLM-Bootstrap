@@ -2,7 +2,7 @@
 
 **Can an LLM build its own inference engine?**
 
-LLM Bootstrap is a collection of skills for agents that build inference engines. Each experiment fixes a **hardware + target model + agent harness + workload** configuration, supplies the skills and a measurable goal, and studies whether an LLM can build an engine competitive with the strongest verified baselines on that specific platform.
+LLM Bootstrap is a skills plugin for agents that build inference engines, packaged for both **Agent Plugins 1.0** and **Claude Code plugins**. Both formats load the same three skills and bundled experiment resources. Each experiment fixes a **hardware + target model + agent harness + workload** configuration, supplies the skills and a measurable goal, and studies whether an LLM can build an engine competitive with the strongest verified baselines on that specific platform.
 
 The engine may specialize aggressively for the chosen hardware and model. General-purpose engine coverage is not the objective. Platform-specific state-of-the-art performance is the research target, not an established result.
 
@@ -24,6 +24,9 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 
 | Path | Purpose |
 | --- | --- |
+| [plugin.json](plugin.json) | Agent Plugins 1.0 manifest; portable skills are discovered from the shared skills directory. |
+| [.claude-plugin/plugin.json](.claude-plugin/plugin.json) | Claude Code manifest using the same skills and resources. |
+| [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) | Single-plugin marketplace for installation and updates. |
 | [skills/bootstrap-plan](skills/bootstrap-plan/SKILL.md) | Freeze the experiment contract and baseline comparison before implementation. |
 | [skills/bootstrap-build](skills/bootstrap-build/SKILL.md) | Build and optimize the engine through correctness checks and profiling. |
 | [skills/bootstrap-evaluate](skills/bootstrap-evaluate/SKILL.md) | Evaluate complete runs and report performance, quality, resources, and autonomy. |
@@ -31,22 +34,21 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [experiments/m5pro-qwen36-pi/example.json](experiments/m5pro-qwen36-pi/example.json) | Unrun starting configuration based on the motivating workload. |
 | [experiments/TEMPLATE.md](experiments/TEMPLATE.md) | Experiment plan and result record. |
 | [results/infernet-prior-evidence.md](results/infernet-prior-evidence.md) | Sourced prior results and their limits. |
+| [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
 
-These are agent instructions and experiment templates. This repository does not yet ship an inference engine, an automated experiment runner, or a validated SOTA result.
+The plugin contains agent instructions and experiment templates, not executable hooks or MCP servers. This repository does not yet ship an inference engine, an automated experiment runner, or a validated SOTA result. Installing the plugin does not run an experiment or authorize machine changes.
 
 ## Usage
 
-### 1. Give the agent the skills
+### 1. Install the plugin
 
-Clone the repository and make the three skill directories available through your agent harness's supported skill-loading mechanism. Alternatively, provide their `SKILL.md` files and the linked protocol directly as context. Keep the repository accessible so relative references resolve. Harness integration varies; no Pi auto-discovery integration is claimed here.
+**Agent Plugins / VS Code:** run **Chat: Install Plugin from Source** and enter `https://github.com/LittleLittleCloud/LLM-Bootstrap.git`, or select a local checkout of this branch while developing. Enable agent plugins if required by the client. A supporting client discovers the root [manifest](plugin.json) and the three skills automatically.
 
-```sh
-git clone https://github.com/LittleLittleCloud/LLM-Bootstrap.git
-cd LLM-Bootstrap
-mkdir -p experiments/my-run
-cp experiments/m5pro-qwen36-pi/example.json experiments/my-run/config.json
-cp experiments/TEMPLATE.md experiments/my-run/record.md
-```
+**Claude Code:** add `LittleLittleCloud/LLM-Bootstrap` with `/plugin marketplace add`, then install `llm-bootstrap@llm-bootstrap-marketplace` with `/plugin install`. For an unpublished local checkout, start Claude Code with `claude --plugin-dir /absolute/path/to/LLM-Bootstrap` instead.
+
+Remote installation uses the published revision, not unpushed local changes. See [the plugin guide](docs/plugins.md) for complete commands, prerequisites, and verification. Start a fresh session in your **experiment project**, not the plugin cache. Invoke `bootstrap-plan` from the client's skill menu; in Claude Code it is `/llm-bootstrap:bootstrap-plan`. `bootstrap-build` and `bootstrap-evaluate` follow the same naming pattern.
+
+Other harnesses may consume the skills directly if they preserve the entire repository layout. Copying only the skill files loses their shared resources. No Pi plugin auto-discovery integration is claimed here.
 
 ### 2. Fix the experiment and goal
 
@@ -56,7 +58,7 @@ The example deliberately contains unresolved fields and `status: draft-not-run`.
 
 Supply a task such as:
 
-> Read skills/bootstrap-plan/SKILL.md and define experiments/my-run/config.json and record.md. Then use bootstrap-build and bootstrap-evaluate to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
+> Use bootstrap-plan to copy the bundled example and record template into a new experiment directory in my project workspace, then define and freeze the contract there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, use bootstrap-build and bootstrap-evaluate to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
 
 ### 3. Build, measure, and retain evidence
 
