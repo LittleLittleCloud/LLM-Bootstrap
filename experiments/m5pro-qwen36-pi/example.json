@@ -3,16 +3,28 @@
   "status": "draft-not-run",
   "description": "Planning template; values sourced from prior workload evidence, not a new experiment.",
   "skills_revision": null,
+  "builder_instruction_hashes": null,
   "contract_frozen_at": null,
+  "amendments": [],
+  "scope": {
+    "statement": null,
+    "operating_system_changes_in_scope": null,
+    "execution_authorization": null
+  },
   "hardware": {
     "platform": "Apple M5 Pro",
     "gpu_cores": 20,
     "memory_gib": 48,
     "os_version": null,
+    "drivers": null,
     "toolchain": null,
     "power": "AC / High Power",
     "gpu_memory_limit": "system default; measure and record before running",
-    "exclusive_gpu": true
+    "exclusive_gpu": true,
+    "cpu_fallback_allowed": null,
+    "offloading_allowed": null,
+    "ssd_streaming_allowed": null,
+    "multi_host_allowed": null
   },
   "target_model": {
     "repository": "mlx-community/Qwen3.6-35B-A3B-8bit",
@@ -24,15 +36,20 @@
     "activation_precision": null,
     "kv_precision": "fp32",
     "recurrent_state_precision": "fp32",
-    "speculative_decoding": false
+    "context_limit_tokens": null,
+    "speculative_decoding": false,
+    "speculative_draft": null
   },
   "builder": {
     "model": null,
     "provider": null,
     "revision_or_exposed_identifier": null,
     "initial_inference_location": null,
+    "routing_control": null,
     "sampling_settings": null,
-    "network_and_source_access": null
+    "tools": null,
+    "network_and_source_access": null,
+    "starting_context": null
   },
   "development_harness": {
     "name": "Pi",
@@ -74,6 +91,7 @@
       "HumanEval/148"
     ],
     "seed": 0,
+    "request_sequencing": null,
     "context_window": 32768,
     "max_output_tokens_per_request": 4096,
     "timeout_seconds_per_task": 300,
@@ -83,10 +101,13 @@
     "warmup_plan": null,
     "formal_repetitions": null,
     "numerical_oracle_and_tolerances": null,
-    "application_assertion_evaluator": "Pinned official HumanEval assertions in restricted containers; freeze evaluator/image hashes before use"
+    "application_assertion_evaluator": "Pinned official HumanEval assertions in restricted containers; freeze evaluator/image hashes before use",
+    "evaluator_artifact_hashes": null
   },
   "implementation": {
     "starting_scaffold": null,
+    "starting_scaffold_revision": null,
+    "code_reuse": null,
     "language_and_backend": null,
     "allowed_libraries": null,
     "baseline_source_inspection_allowed": null,
@@ -96,13 +117,17 @@
     "selection_date": null,
     "selection_method": null,
     "engines_and_revisions": [],
-    "comparison_track": "matched-configuration"
+    "alternatives_not_evaluated": null,
+    "comparison_track": "matched-configuration",
+    "additional_comparison_tracks": []
   },
   "goal": {
     "primary_metric": null,
     "performance_thresholds": null,
     "quality_gate": "20/20 official task assertions plus separately defined numerical/state checks",
+    "permitted_quality_loss": null,
     "resource_limits": null,
+    "allowed_optimizations": null,
     "self_hosting_in_scope": false
   },
   "budget": {

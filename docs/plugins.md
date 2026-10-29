@@ -72,7 +72,7 @@ Use `/plugin` to confirm that the plugin is enabled, start a fresh session as ne
 
 ## Bundled resources and workspace outputs
 
-Keep the complete package together, including [docs/experiment-protocol.md](experiment-protocol.md), [experiments/TEMPLATE.md](../experiments/TEMPLATE.md), [the draft example](../experiments/m5pro-qwen36-pi/example.json), and [prior external evidence](../results/infernet-prior-evidence.md). The skills' relative links resolve from each skill file, not from the session's current directory. They stay inside the plugin root and do not require client-specific environment-variable substitution.
+Keep the complete package together, including [docs/experiment-protocol.md](experiment-protocol.md), [the protocol schema](../schema/experiment-protocol.openapi.yaml), [experiments/TEMPLATE.md](../experiments/TEMPLATE.md), [the draft example](../experiments/m5pro-qwen36-pi/example.json), and [prior external evidence](../results/infernet-prior-evidence.md). The skills' relative links resolve from each skill file, not from the session's current directory. They stay inside the plugin root and do not require client-specific environment-variable substitution.
 
 Treat the plugin installation/cache as read-only. Copy the example and record template to a new directory in the user's project, resolve the draft fields there, and keep implementation code and new evidence in that workspace. Updates may replace plugin files. Do not place weights, credentials, private prompts, or unreviewed trajectories in the distributable package. A root AGENTS.md is not automatically injected by plugin installation; essential workflow constraints are included in each skill and the linked protocol.
 
@@ -80,14 +80,15 @@ Record the exact plugin repository revision and hashes of the instructions actua
 
 ## Validate and maintain
 
-Repository checks require Node.js 22 or later, but plugin users do not need Node.js. From the repository root:
+Repository checks require Node.js 22 or later and the locked dev-only dependencies (JSON Schema and OpenAPI validators); plugin users need neither. From the repository root:
 
 ```sh
-node --test tests/plugin.test.mjs
+npm ci
+npm test
 git diff --check
 ```
 
-The checks cover the package's manifest field subset, synchronized metadata, marketplace source, skill names/descriptions, local Markdown resource containment, JSON resources, and relocation into a path containing spaces. These are repository regression checks, not a replacement for official client validation or end-to-end installation tests. CI runs the same checks.
+The checks cover the package's manifest field subset, synchronized metadata, marketplace source, skill names/descriptions, local Markdown resource containment, JSON resources, and relocation into a path containing spaces. They also validate the [protocol schema](../schema/experiment-protocol.openapi.yaml) against the OpenAPI 3.1 schema and strict JSON Schema 2020-12, and check it against the draft example and synthetic fixtures. These are repository regression checks, not a replacement for official client validation or end-to-end installation tests. CI runs the same checks.
 
 When Claude Code is available, also validate the manifest and marketplace explicitly:
 
