@@ -2,66 +2,43 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap experiment protocol schemas",
-    "version": "0.1.0",
-    "summary": "Structural schemas for experiment contracts and run records.",
-    "description": "Machine-readable structure for docs/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a contract against ExperimentContract and a run record against ExperimentRun with any JSON Schema 2020-12 validator.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape and carries the required declarations. It does not show that measurements are correct or that arithmetic is consistent (for example, that a reported tokens_per_second equals total_tokens divided by total_seconds). It does not show that process requirements were followed (freezing before tuning, serial runs, a restricted evaluation environment), and it is not evidence of SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. A contract with status frozen forbids null anywhere. A field that cannot apply must be declared with a NotApplicable object, and an unobtainable provider or historical detail with an Unavailable object. Run records preserve unmeasured values as the literal \"Not obtained\", never zero. Schemas constrain claims (speedups, SOTA, self-hosting) but still allow honest recording of deviations and failures.\n"
+    "version": "0.2.0",
+    "summary": "Lean structural schemas for experiment contracts and run records.",
+    "description": "Machine-readable core of docs/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a contract against ExperimentContract and a run record against ExperimentRun with any JSON Schema 2020-12 validator.\n\nThe schemas keep only the fields needed to reproduce an experiment and to stop unsupported claims. Per-request timings and other raw detail stay in hashed evidence files referenced from the run record. The prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It does not show that measurements are correct, that arithmetic is consistent (for example, that tokens_per_second equals total_tokens divided by total_seconds), or that the procedure was followed. It is not evidence of SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. A contract with status frozen forbids null anywhere. A field that cannot apply is declared with a NotApplicable object, and an unobtainable provider or historical detail with an Unavailable object. Run records preserve unmeasured values as the literal \"Not obtained\", never zero. The schemas constrain claims but still allow honest recording of deviations and failures."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {},
   "components": {
     "schemas": {
-      "Text": {
-        "description": "Non-blank text.",
-        "type": "string",
-        "pattern": "\\S"
-      },
-      "Sha256": {
-        "description": "Lowercase hexadecimal SHA-256 digest.",
-        "type": "string",
-        "pattern": "^[0-9a-f]{64}$"
-      },
+      "Text": { "description": "Non-blank text.", "type": "string", "pattern": "\\S" },
+      "Sha256": { "description": "Lowercase hexadecimal SHA-256 digest.", "type": "string", "pattern": "^[0-9a-f]{64}$" },
       "GitCommitSha": {
         "description": "Full 40-character Git commit SHA. Abbreviated SHAs, branches, and tags are not immutable revisions.",
         "type": "string",
         "pattern": "^[0-9a-f]{40}$"
       },
-      "Timestamp": {
-        "description": "RFC 3339 timestamp with an explicit UTC offset.",
-        "type": "string",
-        "format": "date-time"
-      },
+      "Timestamp": { "description": "RFC 3339 timestamp with an explicit UTC offset.", "type": "string", "format": "date-time" },
+      "NullableText": { "type": ["string", "null"], "pattern": "\\S" },
+      "NullableSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+      "NullableCommit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
       "NotApplicable": {
         "description": "Explicit declaration that a field does not apply to this experiment.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "not_applicable",
-          "reason"
-        ],
+        "required": ["not_applicable", "reason"],
         "properties": {
-          "not_applicable": {
-            "const": true
-          },
-          "reason": {
-            "$ref": "#/components/schemas/Text"
-          }
+          "not_applicable": { "const": true },
+          "reason": { "$ref": "#/components/schemas/Text" }
         }
       },
       "Unavailable": {
         "description": "A provider or historical detail that cannot be obtained. Never substitute a fabricated identifier.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "unavailable",
-          "reason"
-        ],
+        "required": ["unavailable", "reason"],
         "properties": {
-          "unavailable": {
-            "const": true
-          },
-          "reason": {
-            "$ref": "#/components/schemas/Text"
-          }
+          "unavailable": { "const": true },
+          "reason": { "$ref": "#/components/schemas/Text" }
         }
       },
       "NotObtained": {
@@ -71,210 +48,54 @@
       "NoNullValues": {
         "description": "Matches any JSON value containing no null at any depth. Used to require that a frozen contract has no unresolved fields.",
         "anyOf": [
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NoNullValues"
-            }
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NoNullValues"
-            }
-          },
-          {
-            "type": [
-              "string",
-              "number",
-              "boolean"
-            ]
-          }
-        ]
-      },
-      "DeclaredText": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/Text"
-          },
-          {
-            "$ref": "#/components/schemas/NotApplicable"
-          }
+          { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/NoNullValues" } },
+          { "type": "array", "items": { "$ref": "#/components/schemas/NoNullValues" } },
+          { "type": ["string", "number", "boolean"] }
         ]
       },
       "ResolvableText": {
         "description": "Text, an explicit not-applicable declaration, or null while the contract is a draft.",
         "anyOf": [
-          {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "ResolvableTextList": {
-        "anyOf": [
-          {
-            "type": "array",
-            "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
-          },
-          {
-            "$ref": "#/components/schemas/NotApplicable"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "ResolvablePositiveInteger": {
-        "anyOf": [
-          {
-            "type": "integer",
-            "minimum": 1
-          },
-          {
-            "$ref": "#/components/schemas/NotApplicable"
-          },
-          {
-            "type": "null"
-          }
+          { "$ref": "#/components/schemas/Text" },
+          { "$ref": "#/components/schemas/NotApplicable" },
+          { "type": "null" }
         ]
       },
       "ResolvableNumber": {
         "anyOf": [
-          {
-            "type": "number",
-            "minimum": 0
-          },
-          {
-            "$ref": "#/components/schemas/NotApplicable"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "ResolvableSha256": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/Sha256"
-          },
-          {
-            "$ref": "#/components/schemas/NotApplicable"
-          },
-          {
-            "type": "null"
-          }
-        ]
-      },
-      "ResolvableCommit": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/GitCommitSha"
-          },
-          {
-            "$ref": "#/components/schemas/NotApplicable"
-          },
-          {
-            "type": "null"
-          }
+          { "type": "number", "minimum": 0 },
+          { "$ref": "#/components/schemas/NotApplicable" },
+          { "type": "null" }
         ]
       },
       "ProviderText": {
         "description": "Builder or harness identity detail. Mark unavailable provider details instead of fabricating an immutable identifier.",
         "anyOf": [
-          {
-            "$ref": "#/components/schemas/Text"
-          },
-          {
-            "$ref": "#/components/schemas/Unavailable"
-          },
-          {
-            "type": "null"
-          }
+          { "$ref": "#/components/schemas/Text" },
+          { "$ref": "#/components/schemas/Unavailable" },
+          { "type": "null" }
         ]
       },
       "CommitOrUnavailable": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/GitCommitSha"
-          },
-          {
-            "$ref": "#/components/schemas/Unavailable"
-          }
-        ]
-      },
-      "IntegerOrUnavailable": {
-        "anyOf": [
-          {
-            "type": "integer",
-            "minimum": 0
-          },
-          {
-            "$ref": "#/components/schemas/Unavailable"
-          }
-        ]
+        "anyOf": [{ "$ref": "#/components/schemas/GitCommitSha" }, { "$ref": "#/components/schemas/Unavailable" }]
       },
       "NumberOrUnavailable": {
-        "anyOf": [
-          {
-            "type": "number",
-            "minimum": 0
-          },
-          {
-            "$ref": "#/components/schemas/Unavailable"
-          }
-        ]
+        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/Unavailable" }]
       },
-      "Money": {
+      "ScalarSettings": {
+        "description": "Settings as scalar key-value pairs, such as sampling parameters or the precision, speculation, and caching settings used.",
         "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "amount",
-          "currency"
-        ],
-        "properties": {
-          "amount": {
-            "type": "number",
-            "minimum": 0
-          },
-          "currency": {
-            "type": "string",
-            "pattern": "^[A-Z]{3}$"
-          }
-        }
+        "minProperties": 1,
+        "additionalProperties": { "type": ["string", "number", "boolean"] }
       },
       "HashedArtifact": {
         "description": "A named file, executable, kernel, image, or other artifact with its content hash.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name",
-          "sha256"
-        ],
+        "required": ["name", "sha256"],
         "properties": {
-          "name": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "sha256": {
-            "$ref": "#/components/schemas/Sha256"
-          }
-        }
-      },
-      "ScalarSettings": {
-        "description": "Decoding, sampling, or similar settings as scalar key-value pairs.",
-        "type": "object",
-        "minProperties": 1,
-        "additionalProperties": {
-          "type": [
-            "string",
-            "number",
-            "boolean"
-          ]
+          "name": { "$ref": "#/components/schemas/Text" },
+          "sha256": { "$ref": "#/components/schemas/Sha256" }
         }
       },
       "EvidenceRef": {
@@ -283,804 +104,210 @@
           {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "description",
-              "access",
-              "url",
-              "sha256"
-            ],
+            "required": ["description", "access", "url", "sha256"],
             "properties": {
-              "description": {
-                "$ref": "#/components/schemas/Text"
-              },
-              "access": {
-                "const": "public"
-              },
-              "url": {
-                "type": "string",
-                "format": "uri",
-                "pattern": "^https://"
-              },
-              "sha256": {
-                "$ref": "#/components/schemas/Sha256"
-              }
+              "description": { "$ref": "#/components/schemas/Text" },
+              "access": { "const": "public" },
+              "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+              "sha256": { "$ref": "#/components/schemas/Sha256" }
             }
           },
           {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "description",
-              "access",
-              "sha256",
-              "access_limitation"
-            ],
+            "required": ["description", "access", "sha256", "access_limitation"],
             "properties": {
-              "description": {
-                "$ref": "#/components/schemas/Text"
-              },
-              "access": {
-                "const": "local-only"
-              },
-              "sha256": {
-                "$ref": "#/components/schemas/Sha256"
-              },
-              "access_limitation": {
-                "$ref": "#/components/schemas/Text"
-              }
+              "description": { "$ref": "#/components/schemas/Text" },
+              "access": { "const": "local-only" },
+              "sha256": { "$ref": "#/components/schemas/Sha256" },
+              "access_limitation": { "$ref": "#/components/schemas/Text" }
             }
           }
         ]
       },
+
       "ExperimentContract": {
-        "description": "The frozen experiment contract. Draft files keep unresolved fields as null; status frozen requires every field to be resolved or declared not applicable. Amendments are new revisions listed with a reason and never redefine an earlier run.",
+        "description": "The frozen experiment contract. Draft files keep unresolved fields as null; status frozen requires every field to be resolved or declared not applicable. An amendment is a new revision that names the revision it amends and why.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "experiment_id",
-          "status",
-          "description",
-          "skills_revision",
-          "builder_instruction_hashes",
-          "contract_frozen_at",
-          "amendments",
-          "scope",
-          "hardware",
-          "target_model",
-          "builder",
-          "development_harness",
-          "evaluation",
-          "implementation",
-          "baselines",
-          "goal",
-          "budget"
+          "experiment_id", "status", "description", "skills_revision", "builder_instruction_hashes",
+          "contract_frozen_at", "scope", "hardware", "target_model", "builder", "development_harness",
+          "evaluation", "implementation", "baselines", "goal", "budget"
         ],
         "properties": {
-          "experiment_id": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "status": {
-            "enum": [
-              "draft-not-run",
-              "frozen"
-            ]
-          },
-          "description": {
-            "$ref": "#/components/schemas/Text"
-          },
+          "experiment_id": { "$ref": "#/components/schemas/Text" },
+          "status": { "enum": ["draft-not-run", "frozen"] },
+          "description": { "$ref": "#/components/schemas/Text" },
           "skills_revision": {
             "description": "Full commit of the skill repository supplied to the builder. A later skill revision defines a new treatment.",
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{40}$"
+            "$ref": "#/components/schemas/NullableCommit"
           },
           "builder_instruction_hashes": {
             "description": "Hashes of the exact instruction files provided to the builder.",
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/HashedArtifact"
-            }
+            "items": { "$ref": "#/components/schemas/HashedArtifact" }
           },
-          "contract_frozen_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "amendments": {
-            "description": "Reasoned amendments. Each names the earlier revision it supersedes.",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "amended_at",
-                "reason",
-                "supersedes_revision"
-              ],
-              "properties": {
-                "amended_at": {
-                  "$ref": "#/components/schemas/Timestamp"
-                },
-                "reason": {
-                  "$ref": "#/components/schemas/Text"
-                },
-                "supersedes_revision": {
-                  "$ref": "#/components/schemas/GitCommitSha"
-                }
-              }
+          "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
+          "amends": {
+            "description": "Present only on an amendment. It never redefines an earlier run.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["revision", "reason"],
+            "properties": {
+              "revision": { "$ref": "#/components/schemas/GitCommitSha" },
+              "reason": { "$ref": "#/components/schemas/Text" }
             }
           },
           "scope": {
-            "$ref": "#/components/schemas/ContractScope"
+            "description": "What the experiment covers, which operating-system changes are permitted (none is a valid statement), and the user authorization that governs execution. Plugin installation authorizes nothing.",
+            "$ref": "#/components/schemas/ResolvableText"
           },
-          "hardware": {
-            "$ref": "#/components/schemas/ContractHardware"
-          },
-          "target_model": {
-            "$ref": "#/components/schemas/ContractTargetModel"
-          },
-          "builder": {
-            "$ref": "#/components/schemas/ContractBuilder"
-          },
-          "development_harness": {
-            "$ref": "#/components/schemas/ContractDevelopmentHarness"
-          },
-          "evaluation": {
-            "$ref": "#/components/schemas/ContractEvaluation"
-          },
-          "implementation": {
-            "$ref": "#/components/schemas/ContractImplementation"
-          },
-          "baselines": {
-            "$ref": "#/components/schemas/ContractBaselines"
-          },
-          "goal": {
-            "$ref": "#/components/schemas/ContractGoal"
-          },
-          "budget": {
-            "$ref": "#/components/schemas/ContractBudget"
-          }
+          "hardware": { "$ref": "#/components/schemas/ContractHardware" },
+          "target_model": { "$ref": "#/components/schemas/ContractTargetModel" },
+          "builder": { "$ref": "#/components/schemas/ContractBuilder" },
+          "development_harness": { "$ref": "#/components/schemas/ContractDevelopmentHarness" },
+          "evaluation": { "$ref": "#/components/schemas/ContractEvaluation" },
+          "implementation": { "$ref": "#/components/schemas/ContractImplementation" },
+          "baselines": { "$ref": "#/components/schemas/ContractBaselines" },
+          "goal": { "$ref": "#/components/schemas/ContractGoal" },
+          "budget": { "$ref": "#/components/schemas/ContractBudget" }
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "const": "frozen"
-                }
-              }
-            },
+            "if": { "required": ["status"], "properties": { "status": { "const": "frozen" } } },
             "then": {
               "$ref": "#/components/schemas/NoNullValues",
-              "properties": {
-                "baselines": {
-                  "properties": {
-                    "engines_and_revisions": {
-                      "minItems": 1
-                    }
-                  }
-                }
-              }
+              "properties": { "baselines": { "properties": { "engines_and_revisions": { "minItems": 1 } } } }
             }
           }
         ]
-      },
-      "ContractScope": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "statement",
-          "operating_system_changes_in_scope",
-          "execution_authorization"
-        ],
-        "properties": {
-          "statement": {
-            "description": "What the experiment covers, for example engine construction versus self-hosting.",
-            "$ref": "#/components/schemas/ResolvableText"
-          },
-          "operating_system_changes_in_scope": {
-            "description": "Explicit list of permitted operating-system changes; none is a valid statement.",
-            "$ref": "#/components/schemas/ResolvableText"
-          },
-          "execution_authorization": {
-            "description": "Existing user authorization that governs execution. Plugin installation authorizes nothing.",
-            "$ref": "#/components/schemas/ResolvableText"
-          }
-        }
       },
       "ContractHardware": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "platform",
-          "gpu_cores",
-          "memory_gib",
-          "os_version",
-          "drivers",
-          "toolchain",
-          "power",
-          "gpu_memory_limit",
-          "exclusive_gpu",
-          "cpu_fallback_allowed",
-          "offloading_allowed",
-          "ssd_streaming_allowed",
-          "multi_host_allowed"
-        ],
+        "required": ["platform", "gpu_cores", "memory_gib", "os_version", "toolchain", "power", "gpu_memory_limit", "exclusive_gpu"],
         "properties": {
-          "platform": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "gpu_cores": {
-            "$ref": "#/components/schemas/ResolvablePositiveInteger"
-          },
-          "memory_gib": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "exclusiveMinimum": 0
-          },
-          "os_version": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "drivers": {
-            "$ref": "#/components/schemas/ResolvableText"
-          },
-          "toolchain": {
-            "description": "Compiler and runtime versions.",
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "power": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "gpu_memory_limit": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "exclusive_gpu": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "cpu_fallback_allowed": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "offloading_allowed": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "ssd_streaming_allowed": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "multi_host_allowed": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          }
+          "platform": { "$ref": "#/components/schemas/NullableText" },
+          "gpu_cores": { "type": ["integer", "null"], "minimum": 1 },
+          "memory_gib": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "os_version": { "$ref": "#/components/schemas/NullableText" },
+          "toolchain": { "description": "Compiler and runtime versions.", "$ref": "#/components/schemas/NullableText" },
+          "power": { "$ref": "#/components/schemas/NullableText" },
+          "gpu_memory_limit": { "$ref": "#/components/schemas/NullableText" },
+          "exclusive_gpu": { "type": ["boolean", "null"] }
         }
       },
       "ContractTargetModel": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "repository",
-          "revision",
-          "file_hash_manifest",
-          "tokenizer_hash",
-          "chat_template_hash",
-          "weights",
-          "activation_precision",
-          "kv_precision",
-          "recurrent_state_precision",
-          "context_limit_tokens",
-          "speculative_decoding",
-          "speculative_draft"
+          "repository", "revision", "file_hash_manifest", "tokenizer_hash", "chat_template_hash", "weights",
+          "activation_precision", "kv_precision", "recurrent_state_precision", "speculative_decoding", "speculative_draft"
         ],
         "properties": {
-          "repository": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "revision": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{40}$"
-          },
+          "repository": { "$ref": "#/components/schemas/NullableText" },
+          "revision": { "$ref": "#/components/schemas/NullableCommit" },
           "file_hash_manifest": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/HashedArtifact"
-            }
+            "items": { "$ref": "#/components/schemas/HashedArtifact" }
           },
-          "tokenizer_hash": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "chat_template_hash": {
-            "$ref": "#/components/schemas/ResolvableSha256"
-          },
-          "weights": {
-            "description": "Quantization method and group size with weight precision.",
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "activation_precision": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "kv_precision": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "recurrent_state_precision": {
-            "$ref": "#/components/schemas/ResolvableText"
-          },
-          "context_limit_tokens": {
-            "$ref": "#/components/schemas/ResolvablePositiveInteger"
-          },
-          "speculative_decoding": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
+          "tokenizer_hash": { "$ref": "#/components/schemas/NullableSha256" },
+          "chat_template_hash": { "$ref": "#/components/schemas/NullableSha256" },
+          "weights": { "description": "Quantization method and group size with weight precision.", "$ref": "#/components/schemas/NullableText" },
+          "activation_precision": { "$ref": "#/components/schemas/NullableText" },
+          "kv_precision": { "$ref": "#/components/schemas/NullableText" },
+          "recurrent_state_precision": { "$ref": "#/components/schemas/ResolvableText" },
+          "speculative_decoding": { "type": ["boolean", "null"] },
           "speculative_draft": {
             "description": "Draft model identity and settings. Required unless speculative decoding is disabled.",
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SpeculativeDraft"
-              },
-              {
-                "$ref": "#/components/schemas/NotApplicable"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/ResolvableText"
           }
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "speculative_decoding"
-              ],
-              "properties": {
-                "speculative_decoding": {
-                  "const": true
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "speculative_draft": {
-                  "not": {
-                    "$ref": "#/components/schemas/NotApplicable"
-                  }
-                }
-              }
-            }
+            "if": { "required": ["speculative_decoding"], "properties": { "speculative_decoding": { "const": true } } },
+            "then": { "properties": { "speculative_draft": { "not": { "$ref": "#/components/schemas/NotApplicable" } } } }
           }
         ]
-      },
-      "SpeculativeDraft": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "repository",
-          "revision",
-          "file_hash_manifest",
-          "settings"
-        ],
-        "properties": {
-          "repository": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/GitCommitSha"
-          },
-          "file_hash_manifest": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/HashedArtifact"
-            }
-          },
-          "settings": {
-            "$ref": "#/components/schemas/ScalarSettings"
-          }
-        }
       },
       "ContractBuilder": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "model",
-          "provider",
-          "revision_or_exposed_identifier",
-          "initial_inference_location",
-          "routing_control",
-          "sampling_settings",
-          "tools",
-          "network_and_source_access",
-          "starting_context"
-        ],
+        "required": ["model", "provider", "revision_or_exposed_identifier", "initial_inference_location", "sampling_settings", "network_and_source_access"],
         "properties": {
-          "model": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "provider": {
-            "$ref": "#/components/schemas/ProviderText"
-          },
-          "revision_or_exposed_identifier": {
-            "$ref": "#/components/schemas/ProviderText"
-          },
+          "model": { "$ref": "#/components/schemas/NullableText" },
+          "provider": { "$ref": "#/components/schemas/ProviderText" },
+          "revision_or_exposed_identifier": { "$ref": "#/components/schemas/ProviderText" },
           "initial_inference_location": {
             "description": "Where the builder's initial inference runs.",
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
+            "$ref": "#/components/schemas/NullableText"
           },
-          "routing_control": {
-            "description": "Who controls the builder's inference routing.",
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "sampling_settings": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ScalarSettings"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "tools": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
-          },
-          "network_and_source_access": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "starting_context": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          }
+          "sampling_settings": { "anyOf": [{ "$ref": "#/components/schemas/ScalarSettings" }, { "type": "null" }] },
+          "network_and_source_access": { "$ref": "#/components/schemas/NullableText" }
         }
       },
       "ContractDevelopmentHarness": {
         "description": "The harness that drives engine development. Keep it distinct from the evaluation driver even when both use the same product.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name",
-          "version",
-          "revision_or_package_hash",
-          "skill_loading_method"
-        ],
+        "required": ["name", "version", "revision_or_package_hash"],
         "properties": {
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "version": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "revision_or_package_hash": {
-            "$ref": "#/components/schemas/ProviderText"
-          },
-          "skill_loading_method": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          }
+          "name": { "$ref": "#/components/schemas/NullableText" },
+          "version": { "$ref": "#/components/schemas/NullableText" },
+          "revision_or_package_hash": { "$ref": "#/components/schemas/ProviderText" }
         }
       },
       "ContractEvaluation": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "agent_harness",
-          "driver_repository",
-          "driver_revision",
-          "driver_path",
-          "driver_sha256",
-          "dataset_revision",
-          "dataset_sha256",
-          "task_ids",
-          "seed",
-          "request_sequencing",
-          "context_window",
-          "max_output_tokens_per_request",
-          "timeout_seconds_per_task",
-          "request_concurrency",
-          "cache_policy",
-          "sampling_settings",
-          "warmup_plan",
-          "formal_repetitions",
-          "numerical_oracle_and_tolerances",
-          "application_assertion_evaluator",
-          "evaluator_artifact_hashes"
+          "agent_harness", "driver_repository", "driver_revision", "driver_path", "driver_sha256", "dataset_revision", "dataset_sha256",
+          "task_ids", "seed", "context_window", "max_output_tokens_per_request", "timeout_seconds_per_task",
+          "request_concurrency", "cache_policy", "sampling_settings", "warmup_plan", "formal_repetitions",
+          "numerical_oracle_and_tolerances", "application_assertion_evaluator"
         ],
         "properties": {
           "agent_harness": {
             "description": "The harness that evaluates the resulting endpoint.",
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "name",
-              "version"
-            ],
+            "required": ["name", "version"],
             "properties": {
-              "name": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "pattern": "\\S"
-              },
-              "version": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "pattern": "\\S"
-              }
+              "name": { "$ref": "#/components/schemas/NullableText" },
+              "version": { "$ref": "#/components/schemas/NullableText" }
             }
           },
-          "driver_repository": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uri"
-          },
-          "driver_revision": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{40}$"
-          },
-          "driver_path": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "driver_sha256": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "dataset_revision": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{40}$"
-          },
-          "dataset_sha256": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "^[0-9a-f]{64}$"
-          },
+          "driver_repository": { "type": ["string", "null"], "format": "uri" },
+          "driver_revision": { "$ref": "#/components/schemas/NullableCommit" },
+          "driver_path": { "$ref": "#/components/schemas/NullableText" },
+          "driver_sha256": { "$ref": "#/components/schemas/NullableSha256" },
+          "dataset_revision": { "$ref": "#/components/schemas/NullableCommit" },
+          "dataset_sha256": { "$ref": "#/components/schemas/NullableSha256" },
           "task_ids": {
             "description": "Exact task identifiers.",
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "minItems": 1,
             "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
+            "items": { "$ref": "#/components/schemas/Text" }
           },
-          "seed": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "request_sequencing": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "context_window": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "minimum": 1
-          },
-          "max_output_tokens_per_request": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "minimum": 1
-          },
-          "timeout_seconds_per_task": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "exclusiveMinimum": 0
-          },
-          "request_concurrency": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "minimum": 1
-          },
-          "cache_policy": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "sampling_settings": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ScalarSettings"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "warmup_plan": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "formal_repetitions": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "minimum": 1
-          },
+          "seed": { "type": ["integer", "null"] },
+          "context_window": { "type": ["integer", "null"], "minimum": 1 },
+          "max_output_tokens_per_request": { "type": ["integer", "null"], "minimum": 1 },
+          "timeout_seconds_per_task": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "request_concurrency": { "type": ["integer", "null"], "minimum": 1 },
+          "cache_policy": { "$ref": "#/components/schemas/NullableText" },
+          "sampling_settings": { "anyOf": [{ "$ref": "#/components/schemas/ScalarSettings" }, { "type": "null" }] },
+          "warmup_plan": { "$ref": "#/components/schemas/NullableText" },
+          "formal_repetitions": { "type": ["integer", "null"], "minimum": 1 },
           "numerical_oracle_and_tolerances": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/NumericalOracle"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "anyOf": [{ "$ref": "#/components/schemas/NumericalOracle" }, { "type": "null" }]
           },
           "application_assertion_evaluator": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "evaluator_artifact_hashes": {
-            "description": "Hashes of the evaluator and its container image, frozen before use.",
-            "anyOf": [
-              {
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                  "$ref": "#/components/schemas/HashedArtifact"
-                }
-              },
-              {
-                "$ref": "#/components/schemas/NotApplicable"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "description": "The evaluator and its container image, with hashes frozen before use.",
+            "$ref": "#/components/schemas/NullableText"
           }
         }
       },
@@ -1088,37 +315,20 @@
         "description": "Independent reference and tolerances chosen for the declared precision before candidate results are inspected.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "oracle",
-          "tolerances"
-        ],
+        "required": ["oracle", "tolerances"],
         "properties": {
-          "oracle": {
-            "$ref": "#/components/schemas/Text"
-          },
+          "oracle": { "$ref": "#/components/schemas/Text" },
           "tolerances": {
             "type": "array",
             "minItems": 1,
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "quantity",
-                "error_metric",
-                "threshold"
-              ],
+              "required": ["quantity", "error_metric", "threshold"],
               "properties": {
-                "quantity": {
-                  "description": "Tensor, state, or logits checked.",
-                  "$ref": "#/components/schemas/Text"
-                },
-                "error_metric": {
-                  "$ref": "#/components/schemas/Text"
-                },
-                "threshold": {
-                  "type": "number",
-                  "minimum": 0
-                }
+                "quantity": { "description": "Tensor, state, or logits checked.", "$ref": "#/components/schemas/Text" },
+                "error_metric": { "$ref": "#/components/schemas/Text" },
+                "threshold": { "type": "number", "minimum": 0 }
               }
             }
           }
@@ -1128,465 +338,182 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "starting_scaffold",
-          "starting_scaffold_revision",
-          "code_reuse",
-          "language_and_backend",
-          "allowed_libraries",
-          "baseline_source_inspection_allowed",
-          "existing_engine_backend_allowed"
+          "starting_scaffold", "language_and_backend", "allowed_libraries",
+          "baseline_source_inspection_allowed", "existing_engine_backend_allowed"
         ],
         "properties": {
           "starting_scaffold": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
+            "description": "Starting engine or scaffold with its revision, and any permitted code reuse.",
+            "$ref": "#/components/schemas/NullableText"
           },
-          "starting_scaffold_revision": {
-            "$ref": "#/components/schemas/ResolvableCommit"
-          },
-          "code_reuse": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "language_and_backend": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
+          "language_and_backend": { "$ref": "#/components/schemas/NullableText" },
           "allowed_libraries": {
             "description": "An empty array means no third-party implementation dependency is allowed.",
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
+            "items": { "$ref": "#/components/schemas/Text" }
           },
-          "baseline_source_inspection_allowed": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
+          "baseline_source_inspection_allowed": { "type": ["boolean", "null"] },
           "existing_engine_backend_allowed": {
             "description": "Wrapping a baseline engine does not demonstrate building an inference backend.",
-            "type": [
-              "boolean",
-              "null"
-            ]
-          }
-        }
-      },
-      "ContractBaselines": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "selection_date",
-          "selection_method",
-          "engines_and_revisions",
-          "alternatives_not_evaluated",
-          "comparison_track",
-          "additional_comparison_tracks"
-        ],
-        "properties": {
-          "selection_date": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date"
-          },
-          "selection_method": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "engines_and_revisions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BaselineEngine"
-            }
-          },
-          "alternatives_not_evaluated": {
-            "description": "Plausible baselines that could not be evaluated. An empty array records that none were identified.",
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "name",
-                "reason"
-              ],
-              "properties": {
-                "name": {
-                  "$ref": "#/components/schemas/Text"
-                },
-                "reason": {
-                  "$ref": "#/components/schemas/Text"
-                }
-              }
-            }
-          },
-          "comparison_track": {
-            "$ref": "#/components/schemas/ComparisonTrack"
-          },
-          "additional_comparison_tracks": {
-            "description": "Further tracks, reported separately from the primary one.",
-            "type": "array",
-            "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/ComparisonTrack"
-            }
+            "type": ["boolean", "null"]
           }
         }
       },
       "ComparisonTrack": {
         "description": "A matched-configuration track compares engines at matched precision, workload, caching, speculation, and resources. A best-permitted-configuration track compares complete systems inside a fixed quality and resource envelope, disclosing every difference.",
-        "enum": [
-          "matched-configuration",
-          "best-permitted-configuration"
-        ]
+        "enum": ["matched-configuration", "best-permitted-configuration"]
       },
-      "BaselineEngine": {
+      "ContractBaselines": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name",
-          "revision",
-          "primary_source_uri",
-          "primary_source_date"
-        ],
+        "required": ["selection_date", "selection_method", "engines_and_revisions", "comparison_track"],
         "properties": {
-          "name": {
-            "$ref": "#/components/schemas/Text"
+          "selection_date": { "type": ["string", "null"], "format": "date" },
+          "selection_method": {
+            "description": "How the candidate set was chosen from dated primary sources, and which plausible alternatives could not be evaluated.",
+            "$ref": "#/components/schemas/NullableText"
           },
-          "revision": {
-            "$ref": "#/components/schemas/GitCommitSha"
+          "engines_and_revisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "revision"],
+              "properties": {
+                "name": { "$ref": "#/components/schemas/Text" },
+                "revision": { "$ref": "#/components/schemas/GitCommitSha" }
+              }
+            }
           },
-          "primary_source_uri": {
-            "type": "string",
-            "format": "uri"
-          },
-          "primary_source_date": {
-            "type": "string",
-            "format": "date"
-          }
+          "comparison_track": { "$ref": "#/components/schemas/ComparisonTrack" }
         }
       },
       "ContractGoal": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "primary_metric",
-          "performance_thresholds",
-          "quality_gate",
-          "permitted_quality_loss",
-          "resource_limits",
-          "allowed_optimizations",
-          "self_hosting_in_scope"
-        ],
+        "required": ["primary_metric", "performance_thresholds", "quality_gate", "resource_limits", "self_hosting_in_scope"],
         "properties": {
           "primary_metric": {
-            "description": "Define which metric competitive refers to before tuning.",
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
+            "description": "Define which metric competitive refers to before tuning, including timing boundaries. Native command-level metrics are not interchangeable with N-1 interval metrics.",
+            "$ref": "#/components/schemas/NullableText"
           },
           "performance_thresholds": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "minItems": 1,
             "items": {
-              "$ref": "#/components/schemas/AcceptanceCriterion"
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["metric", "comparator", "threshold", "unit"],
+              "properties": {
+                "metric": { "$ref": "#/components/schemas/Text" },
+                "comparator": { "enum": ["at-least", "at-most"] },
+                "threshold": { "type": "number" },
+                "unit": { "$ref": "#/components/schemas/Text" }
+              }
             }
           },
           "quality_gate": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
+            "description": "Correctness gates and permitted quality loss.",
+            "$ref": "#/components/schemas/NullableText"
           },
-          "permitted_quality_loss": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          },
-          "resource_limits": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ResourceLimits"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "allowed_optimizations": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
-          },
-          "self_hosting_in_scope": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          }
-        }
-      },
-      "AcceptanceCriterion": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "metric",
-          "definition",
-          "comparator",
-          "threshold",
-          "unit"
-        ],
-        "properties": {
-          "metric": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "definition": {
-            "description": "Timing boundaries and aggregation. Native command-level metrics are not interchangeable with N-1 interval metrics.",
-            "$ref": "#/components/schemas/Text"
-          },
-          "comparator": {
-            "enum": [
-              "at-least",
-              "at-most"
-            ]
-          },
-          "threshold": {
-            "type": "number"
-          },
-          "unit": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "baseline": {
-            "description": "Named baseline when the threshold is relative to one.",
-            "$ref": "#/components/schemas/Text"
-          }
+          "resource_limits": { "anyOf": [{ "$ref": "#/components/schemas/ResourceLimits" }, { "type": "null" }] },
+          "self_hosting_in_scope": { "type": ["boolean", "null"] }
         }
       },
       "ResourceLimits": {
         "description": "Memory and swap constraints. Relaxing them silently to pass is not allowed.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "max_memory_footprint_gib",
-          "max_swap_out_delta_gib"
-        ],
+        "required": ["max_memory_footprint_gib", "max_swap_out_delta_gib"],
         "properties": {
-          "max_memory_footprint_gib": {
-            "$ref": "#/components/schemas/ResolvableNumber"
-          },
+          "max_memory_footprint_gib": { "$ref": "#/components/schemas/ResolvableNumber" },
           "max_swap_out_delta_gib": {
             "description": "Whole-machine swap-out delta over bracketed boundaries.",
             "$ref": "#/components/schemas/ResolvableNumber"
-          },
-          "notes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
           }
         }
       },
       "ContractBudget": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "wall_clock_hours",
-          "builder_tokens",
-          "api_cost_limit",
-          "hardware_hours",
-          "stopping_rule"
-        ],
+        "required": ["wall_clock_hours", "builder_tokens", "api_cost_limit", "hardware_hours", "stopping_rule"],
         "properties": {
-          "wall_clock_hours": {
-            "$ref": "#/components/schemas/ResolvableNumber"
-          },
-          "builder_tokens": {
-            "$ref": "#/components/schemas/ResolvablePositiveInteger"
-          },
-          "api_cost_limit": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "$ref": "#/components/schemas/NotApplicable"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "hardware_hours": {
-            "$ref": "#/components/schemas/ResolvableNumber"
-          },
-          "stopping_rule": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "pattern": "\\S"
-          }
+          "wall_clock_hours": { "$ref": "#/components/schemas/ResolvableNumber" },
+          "builder_tokens": { "$ref": "#/components/schemas/ResolvableNumber" },
+          "api_cost_limit": { "description": "Amount with currency, or not applicable.", "$ref": "#/components/schemas/ResolvableText" },
+          "hardware_hours": { "$ref": "#/components/schemas/ResolvableNumber" },
+          "stopping_rule": { "$ref": "#/components/schemas/NullableText" }
         }
       },
-      "ContractReference": {
-        "description": "The frozen contract a run executes. A later revision of the contract is a different reference.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "path",
-          "revision",
-          "sha256",
-          "frozen_at"
-        ],
-        "properties": {
-          "path": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/GitCommitSha"
-          },
-          "sha256": {
-            "$ref": "#/components/schemas/Sha256"
-          },
-          "frozen_at": {
-            "$ref": "#/components/schemas/Timestamp"
-          }
-        }
-      },
+
       "ExperimentRun": {
         "description": "One run record. Failed, interrupted, neutral, and successful attempts are all recorded; corrections are appended without overwriting original observations.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "run_id",
-          "status",
-          "acceptance",
-          "contract",
-          "skills_revision",
-          "started_at",
-          "ended_at",
-          "environment",
-          "measurements",
-          "comparisons",
-          "evidence",
-          "autonomy",
-          "self_hosting",
-          "claims",
-          "disposition",
-          "interpretation"
+          "run_id", "status", "acceptance", "contract", "skills_revision", "started_at", "ended_at", "environment",
+          "engines", "comparisons", "claims", "human_interventions", "cost", "self_hosting", "evidence", "interpretation"
         ],
         "properties": {
-          "run_id": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "status": {
-            "enum": [
-              "draft",
-              "running",
-              "completed",
-              "interrupted"
-            ]
-          },
-          "acceptance": {
-            "description": "Unverified until every frozen target is evaluated.",
-            "enum": [
-              "unverified",
-              "passed",
-              "failed"
-            ]
-          },
+          "run_id": { "$ref": "#/components/schemas/Text" },
+          "status": { "enum": ["draft", "running", "completed", "interrupted"] },
+          "acceptance": { "description": "Unverified until every frozen target is evaluated.", "enum": ["unverified", "passed", "failed"] },
           "contract": {
-            "$ref": "#/components/schemas/ContractReference"
+            "description": "The frozen contract a run executes. A later revision of the contract is a different reference.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "revision", "sha256"],
+            "properties": {
+              "path": { "$ref": "#/components/schemas/Text" },
+              "revision": { "$ref": "#/components/schemas/GitCommitSha" },
+              "sha256": { "$ref": "#/components/schemas/Sha256" }
+            }
           },
-          "skills_revision": {
-            "$ref": "#/components/schemas/GitCommitSha"
-          },
-          "started_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
+          "skills_revision": { "$ref": "#/components/schemas/GitCommitSha" },
+          "started_at": { "type": ["string", "null"], "format": "date-time" },
+          "ended_at": { "type": ["string", "null"], "format": "date-time" },
           "environment": {
-            "$ref": "#/components/schemas/ObservedEnvironment"
-          },
-          "measurements": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EngineMeasurement"
+            "description": "What was actually observed, which may differ from the contract. Record deviations rather than hiding them.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hardware_model", "os_version", "toolchain", "power_mode", "thermal_observations", "exclusive_gpu", "deviations_from_contract"],
+            "properties": {
+              "hardware_model": { "$ref": "#/components/schemas/Text" },
+              "os_version": { "$ref": "#/components/schemas/Text" },
+              "toolchain": { "$ref": "#/components/schemas/Text" },
+              "power_mode": { "$ref": "#/components/schemas/Text" },
+              "thermal_observations": { "$ref": "#/components/schemas/Text" },
+              "exclusive_gpu": { "type": "boolean" },
+              "deviations_from_contract": {
+                "description": "Include any CPU fallback, offloading, SSD streaming, or multi-host participation.",
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Text" }
+              }
             }
           },
-          "comparisons": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ComparisonRecord"
+          "engines": { "type": "array", "items": { "$ref": "#/components/schemas/EngineResult" } },
+          "comparisons": { "type": "array", "items": { "$ref": "#/components/schemas/ComparisonRecord" } },
+          "claims": { "type": "array", "items": { "$ref": "#/components/schemas/PerformanceClaim" } },
+          "human_interventions": {
+            "description": "Every intervention. Unavailable historical data stays Unavailable, never inferred as none.",
+            "anyOf": [
+              { "type": "array", "items": { "$ref": "#/components/schemas/HumanIntervention" } },
+              { "$ref": "#/components/schemas/Unavailable" }
+            ]
+          },
+          "cost": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["builder_tokens", "elapsed_hours", "hardware_hours"],
+            "properties": {
+              "builder_tokens": { "$ref": "#/components/schemas/NumberOrUnavailable" },
+              "elapsed_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" },
+              "hardware_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" }
             }
           },
-          "evidence": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/EvidenceRef"
-            }
-          },
-          "autonomy": {
-            "$ref": "#/components/schemas/AutonomyRecord"
-          },
-          "self_hosting": {
-            "$ref": "#/components/schemas/SelfHostingRecord"
-          },
-          "claims": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PerformanceClaim"
-            }
-          },
-          "disposition": {
-            "$ref": "#/components/schemas/Disposition"
-          },
+          "self_hosting": { "$ref": "#/components/schemas/SelfHostingRecord" },
+          "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/EvidenceRef" } },
           "interpretation": {
             "description": "Comparable conditions, limits of attribution, unresolved concerns, and gaps to each frozen target.",
             "$ref": "#/components/schemas/Text"
@@ -1594,1130 +521,190 @@
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "running",
-                    "completed",
-                    "interrupted"
-                  ]
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "started_at": {
-                  "type": "string"
-                }
-              }
-            }
+            "if": { "required": ["status"], "properties": { "status": { "enum": ["running", "completed", "interrupted"] } } },
+            "then": { "properties": { "started_at": { "type": "string" } } }
           },
           {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "enum": [
-                    "completed",
-                    "interrupted"
-                  ]
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "ended_at": {
-                  "type": "string"
-                }
-              }
-            }
+            "if": { "required": ["status"], "properties": { "status": { "enum": ["completed", "interrupted"] } } },
+            "then": { "properties": { "ended_at": { "type": "string" } } }
           },
           {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "const": "completed"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "measurements": {
-                  "minItems": 1
-                }
-              }
-            }
+            "if": { "required": ["status"], "properties": { "status": { "const": "completed" } } },
+            "then": { "properties": { "engines": { "minItems": 1 } } }
           },
           {
-            "if": {
-              "required": [
-                "acceptance"
-              ],
-              "properties": {
-                "acceptance": {
-                  "const": "passed"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "status": {
-                  "const": "completed"
-                }
-              }
-            }
+            "if": { "required": ["acceptance"], "properties": { "acceptance": { "const": "passed" } } },
+            "then": { "properties": { "status": { "const": "completed" } } }
           }
         ]
       },
-      "ObservedEnvironment": {
-        "description": "What was actually observed, which may differ from the contract. Record deviations rather than hiding them.",
+      "EngineResult": {
+        "description": "Results for one baseline or candidate engine, measured serially on the same device.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "hardware_model",
-          "os_version",
-          "toolchain",
-          "power_mode",
-          "thermal_observations",
-          "exclusive_gpu",
-          "cpu_fallback_observed",
-          "offloading_observed",
-          "ssd_streaming_observed",
-          "multi_host_participation_observed",
-          "deviations_from_contract"
-        ],
+        "required": ["role", "engine_name", "runtime_revision", "artifacts", "commands", "settings", "repetitions", "metrics", "resources", "quality"],
         "properties": {
-          "hardware_model": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "os_version": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "toolchain": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "power_mode": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "thermal_observations": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "exclusive_gpu": {
-            "type": "boolean"
-          },
-          "cpu_fallback_observed": {
-            "type": "boolean"
-          },
-          "offloading_observed": {
-            "type": "boolean"
-          },
-          "ssd_streaming_observed": {
-            "type": "boolean"
-          },
-          "multi_host_participation_observed": {
-            "type": "boolean"
-          },
-          "deviations_from_contract": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
-          }
-        }
-      },
-      "RuntimeIdentity": {
-        "description": "A checkout commit does not prove the deployed executable's identity, so deployed artifacts are hashed and verified.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "source_revision",
-          "deployed_runtime_revision",
-          "artifacts",
-          "identity_verification"
-        ],
-        "properties": {
-          "source_revision": {
-            "$ref": "#/components/schemas/CommitOrUnavailable"
-          },
-          "deployed_runtime_revision": {
-            "$ref": "#/components/schemas/CommitOrUnavailable"
-          },
+          "role": { "enum": ["baseline", "candidate"] },
+          "engine_name": { "$ref": "#/components/schemas/Text" },
+          "runtime_revision": { "$ref": "#/components/schemas/CommitOrUnavailable" },
           "artifacts": {
+            "description": "Hashes of the deployed executables and kernels. A checkout commit does not prove the deployed build.",
             "type": "array",
             "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/HashedArtifact"
-            }
+            "items": { "$ref": "#/components/schemas/HashedArtifact" }
           },
-          "identity_verification": {
-            "description": "How the running build was confirmed to match the hashed artifacts.",
-            "$ref": "#/components/schemas/Text"
-          }
-        }
-      },
-      "EffectiveSettings": {
-        "description": "Settings actually used, compared across engines in a matched track.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "weight_precision",
-          "activation_precision",
-          "kv_precision",
-          "recurrent_state_precision",
-          "speculation",
-          "caching",
-          "workload",
-          "resource_limits"
-        ],
-        "properties": {
-          "weight_precision": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "activation_precision": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "kv_precision": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "recurrent_state_precision": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "speculation": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "caching": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "workload": {
-            "$ref": "#/components/schemas/DeclaredText"
-          },
-          "resource_limits": {
-            "$ref": "#/components/schemas/DeclaredText"
-          }
-        }
-      },
-      "EngineMeasurement": {
-        "description": "All measurements for one baseline or candidate engine. Engines are measured serially on the same device.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "role",
-          "engine_name",
-          "runtime",
-          "settings",
-          "commands",
-          "configuration_sha256",
-          "repetitions",
-          "aggregate",
-          "quality"
-        ],
-        "properties": {
-          "role": {
-            "enum": [
-              "baseline",
-              "candidate"
-            ]
-          },
-          "engine_name": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "runtime": {
-            "$ref": "#/components/schemas/RuntimeIdentity"
-          },
+          "commands": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/Text" } },
           "settings": {
-            "$ref": "#/components/schemas/EffectiveSettings"
-          },
-          "commands": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
-          },
-          "configuration_sha256": {
-            "$ref": "#/components/schemas/Sha256"
+            "description": "Settings actually used, such as precision, speculation, caching, and memory limits.",
+            "$ref": "#/components/schemas/ScalarSettings"
           },
           "repetitions": {
             "description": "Every cold-load, warm-up, and formal repetition, including failures.",
             "type": "array",
             "minItems": 1,
             "items": {
-              "$ref": "#/components/schemas/Repetition"
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["phase", "outcome"],
+              "properties": {
+                "phase": { "enum": ["cold-load", "warm-up", "formal"] },
+                "outcome": { "enum": ["succeeded", "failed", "timed-out", "interrupted"] },
+                "failure_description": { "$ref": "#/components/schemas/Text" }
+              },
+              "allOf": [
+                {
+                  "if": { "required": ["outcome"], "properties": { "outcome": { "enum": ["failed", "timed-out", "interrupted"] } } },
+                  "then": { "required": ["failure_description"] }
+                }
+              ]
             }
           },
-          "aggregate": {
-            "$ref": "#/components/schemas/AggregateMetrics"
+          "metrics": { "$ref": "#/components/schemas/Metrics" },
+          "resources": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["peak_memory_gib", "swap_out_delta_bytes"],
+            "properties": {
+              "peak_memory_gib": { "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
+              "swap_out_delta_bytes": {
+                "description": "Whole-machine swap-out delta over bracketed boundaries. It is not attributed to a process without evidence.",
+                "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
+              }
+            }
           },
           "quality": {
-            "$ref": "#/components/schemas/QualityResults"
+            "description": "Numerical correctness and application-level task checks are separate gates. A task assertion pass is not model pass@1 and not numerical equivalence.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["numerical_status", "application"],
+            "properties": {
+              "numerical_status": { "enum": ["passed", "failed", "not-run"] },
+              "application": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["passed", "total", "negative_control_verified", "restricted_environment"],
+                "properties": {
+                  "passed": { "type": "integer", "minimum": 0 },
+                  "total": {
+                    "description": "Denominator including timeouts and errors.",
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "negative_control_verified": { "type": "boolean" },
+                  "restricted_environment": {
+                    "description": "True only if generated programs ran without network or credentials and with bounded resources.",
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
           }
         }
       },
-      "Repetition": {
+      "Metrics": {
+        "description": "Run-level summaries. Per-request native timings, token counts, cache hits, and request IDs stay in the referenced per-request evidence.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "index",
-          "phase",
-          "outcome",
-          "requests",
-          "application_duration",
-          "resources"
+          "formal_repetitions", "preliminary", "prefill", "decode", "client_ttft_median_seconds",
+          "application_duration_seconds", "requests_reconciled", "per_request_evidence"
         ],
         "properties": {
-          "index": {
-            "type": "integer",
-            "minimum": 1
+          "formal_repetitions": { "type": "integer", "minimum": 0 },
+          "preliminary": { "description": "A single cohort is preliminary evidence, not a stability study.", "type": "boolean" },
+          "prefill": { "anyOf": [{ "$ref": "#/components/schemas/ThroughputAggregate" }, { "$ref": "#/components/schemas/NotObtained" }] },
+          "decode": { "anyOf": [{ "$ref": "#/components/schemas/ThroughputAggregate" }, { "$ref": "#/components/schemas/NotObtained" }] },
+          "client_ttft_median_seconds": {
+            "description": "Monotonic time from dispatch to the first valid text or tool output, from a single observer clock.",
+            "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
           },
-          "phase": {
-            "description": "Cold load and compilation, warm-up, and steady-state formal rounds are kept separate.",
-            "enum": [
-              "cold-load",
-              "warm-up",
-              "formal"
-            ]
+          "application_duration_seconds": {
+            "description": "Full task or cohort time, separate from GPU work.",
+            "anyOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
           },
-          "outcome": {
-            "enum": [
-              "succeeded",
-              "failed",
-              "timed-out",
-              "interrupted"
-            ]
+          "requests_reconciled": {
+            "description": "Request counts and token totals match the evaluation harness. Metrics are not complete until they do.",
+            "type": "boolean"
           },
-          "failure_description": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "requests": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequestMeasurement"
-            }
-          },
-          "application_duration": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ApplicationDuration"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "resources": {
-            "$ref": "#/components/schemas/ResourceObservation"
-          }
+          "per_request_evidence": { "$ref": "#/components/schemas/EvidenceRef" }
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "outcome"
-              ],
-              "properties": {
-                "outcome": {
-                  "enum": [
-                    "failed",
-                    "timed-out",
-                    "interrupted"
-                  ]
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "failure_description"
-              ]
-            }
-          }
-        ]
-      },
-      "RequestMeasurement": {
-        "description": "Per-request native timings and client observations. Interactive workloads may issue different requests on different engines, so retain trajectories and token totals.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "request_id",
-          "outcome",
-          "input_tokens",
-          "cached_input_tokens",
-          "output_tokens",
-          "prefill",
-          "decode",
-          "client_ttft"
-        ],
-        "properties": {
-          "request_id": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "task_id": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "outcome": {
-            "enum": [
-              "succeeded",
-              "failed",
-              "timed-out",
-              "cancelled"
-            ]
-          },
-          "input_tokens": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "cached_input_tokens": {
-            "description": "Cache hits are identified separately and excluded from processed prefill tokens.",
-            "type": "integer",
-            "minimum": 0
-          },
-          "output_tokens": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "prefill": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PrefillTiming"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "decode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DecodeTiming"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "client_ttft": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ClientTtft"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          }
-        }
-      },
-      "PrefillTiming": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "processed_input_tokens",
-          "seconds",
-          "includes_queueing",
-          "includes_transfer",
-          "includes_state_import"
-        ],
-        "properties": {
-          "processed_input_tokens": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "seconds": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "includes_queueing": {
-            "type": "boolean"
-          },
-          "includes_transfer": {
-            "type": "boolean"
-          },
-          "includes_state_import": {
-            "type": "boolean"
-          }
-        }
-      },
-      "DecodeTiming": {
-        "description": "Decode throughput uses N-1 generation intervals over first-to-last token time, so a request with fewer than two output tokens has no such throughput and records Not obtained instead. Native command-level or speculative multi-token metrics are a separate definition and must never be relabeled N-1.",
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "definition",
-              "output_tokens",
-              "first_to_last_token_seconds"
-            ],
-            "properties": {
-              "definition": {
-                "const": "n-minus-1-intervals"
-              },
-              "output_tokens": {
-                "type": "integer",
-                "minimum": 2
-              },
-              "first_to_last_token_seconds": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              }
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "definition",
-              "tokens",
-              "seconds",
-              "native_definition"
-            ],
-            "properties": {
-              "definition": {
-                "enum": [
-                  "native-command-timing",
-                  "native-speculative-multi-token"
-                ]
-              },
-              "tokens": {
-                "type": "integer",
-                "minimum": 1
-              },
-              "seconds": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "native_definition": {
-                "$ref": "#/components/schemas/Text"
-              }
-            }
-          }
-        ]
-      },
-      "ClientTtft": {
-        "description": "Monotonic time from request dispatch to the first valid text or tool output. Role-only, heartbeat, and usage events do not count. Cross-host timestamps are not subtracted unless calibrated.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "seconds",
-          "clock",
-          "observer",
-          "first_event_kind",
-          "proxy_boundary",
-          "observation_overhead"
-        ],
-        "properties": {
-          "seconds": {
-            "type": "number",
-            "minimum": 0
-          },
-          "clock": {
-            "const": "monotonic"
-          },
-          "observer": {
-            "description": "The single observer whose clock produced both endpoints.",
-            "$ref": "#/components/schemas/Text"
-          },
-          "first_event_kind": {
-            "enum": [
-              "text",
-              "tool-output"
-            ]
-          },
-          "proxy_boundary": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "observation_overhead": {
-            "$ref": "#/components/schemas/Text"
-          }
-        }
-      },
-      "ApplicationDuration": {
-        "description": "Full task or cohort time, separate from GPU work.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "scope",
-          "seconds",
-          "request_count",
-          "input_tokens_total",
-          "output_tokens_total",
-          "trajectory_retained"
-        ],
-        "properties": {
-          "scope": {
-            "enum": [
-              "task",
-              "cohort"
-            ]
-          },
-          "seconds": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "request_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "input_tokens_total": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "output_tokens_total": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "trajectory_retained": {
-            "type": "boolean"
-          }
-        }
-      },
-      "ResourceObservation": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "memory_definition",
-          "sampling_interval_seconds",
-          "peak_memory_gib",
-          "memory_pressure",
-          "swap_out_delta_bytes",
-          "swap_scope",
-          "swap_attributed_to_process",
-          "power_thermal",
-          "failures"
-        ],
-        "properties": {
-          "memory_definition": {
-            "description": "What the sampled memory number measures, such as allocation or footprint.",
-            "$ref": "#/components/schemas/Text"
-          },
-          "sampling_interval_seconds": {
-            "anyOf": [
-              {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "peak_memory_gib": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "memory_pressure": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "swap_out_delta_bytes": {
-            "description": "Whole-machine swap-out delta over bracketed boundaries.",
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "swap_scope": {
-            "const": "whole-machine"
-          },
-          "swap_attributed_to_process": {
-            "description": "Whole-machine paging is not attributed to a process without evidence.",
-            "type": "boolean"
-          },
-          "swap_attribution_evidence": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "power_thermal": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "failures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": [
-                "swap_attributed_to_process"
-              ],
-              "properties": {
-                "swap_attributed_to_process": {
-                  "const": true
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "swap_attribution_evidence"
-              ]
-            }
+            "if": { "required": ["formal_repetitions"], "properties": { "formal_repetitions": { "maximum": 1 } } },
+            "then": { "properties": { "preliminary": { "const": true } } }
           }
         ]
       },
       "ThroughputAggregate": {
-        "description": "Aggregate throughput is the ratio of sums, never the arithmetic mean of per-request speeds. The reported value must equal total_tokens divided by total_seconds; JSON Schema cannot check that arithmetic.",
+        "description": "Throughput as a ratio of sums, never the mean of per-request speeds. The value must equal total_tokens divided by total_seconds; JSON Schema cannot check that arithmetic.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "basis",
-          "aggregation",
-          "total_tokens",
-          "total_seconds",
-          "tokens_per_second"
-        ],
+        "required": ["basis", "total_tokens", "total_seconds", "tokens_per_second"],
         "properties": {
           "basis": {
-            "description": "processed-input-tokens is prefill. The other values are decode definitions that are never mixed in one aggregate.",
-            "enum": [
-              "processed-input-tokens",
-              "n-minus-1-intervals",
-              "native-command-timing",
-              "native-speculative-multi-token"
-            ]
+            "description": "Decode definitions are never mixed. For n-minus-1-intervals, total_tokens is the sum of N-1 over requests with at least two output tokens. Native command-level metrics are never relabeled N-1.",
+            "enum": ["processed-input-tokens", "n-minus-1-intervals", "native-command-timing", "native-speculative-multi-token"]
           },
-          "aggregation": {
-            "const": "ratio-of-sums"
-          },
-          "total_tokens": {
-            "description": "For n-minus-1-intervals, the sum of N-1 over requests with at least two output tokens.",
-            "type": "integer",
-            "minimum": 0
-          },
-          "total_seconds": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "tokens_per_second": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          }
-        }
-      },
-      "MetricCoverage": {
-        "description": "Request counts and token totals reconciled with the evaluation harness. Metrics are not reported as complete until they reconcile.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "harness_request_count",
-          "native_timing_request_count",
-          "client_observation_request_count",
-          "token_totals_reconciled",
-          "complete"
-        ],
-        "properties": {
-          "harness_request_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "native_timing_request_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "client_observation_request_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "token_totals_reconciled": {
-            "type": "boolean"
-          },
-          "complete": {
-            "type": "boolean"
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": [
-                "complete"
-              ],
-              "properties": {
-                "complete": {
-                  "const": true
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "token_totals_reconciled": {
-                  "const": true
-                }
-              }
-            }
-          }
-        ]
-      },
-      "AggregateMetrics": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "formal_repetition_count",
-          "preliminary",
-          "variability_across_repetitions",
-          "prefill",
-          "decode",
-          "client_ttft_median_seconds",
-          "coverage"
-        ],
-        "properties": {
-          "formal_repetition_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "preliminary": {
-            "description": "A single cohort is preliminary evidence, not a stability study.",
-            "type": "boolean"
-          },
-          "variability_across_repetitions": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "prefill": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ThroughputAggregate"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "decode": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ThroughputAggregate"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "client_ttft_median_seconds": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/MetricCoverage"
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": [
-                "formal_repetition_count"
-              ],
-              "properties": {
-                "formal_repetition_count": {
-                  "maximum": 1
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "preliminary": {
-                  "const": true
-                }
-              }
-            }
-          }
-        ]
-      },
-      "QualityResults": {
-        "description": "Numerical correctness and application-level task checks are separate gates. A task assertion pass is not model pass@1 and not numerical equivalence.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "numerical",
-          "application"
-        ],
-        "properties": {
-          "numerical": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "status",
-              "oracle",
-              "representative_inputs"
-            ],
-            "properties": {
-              "status": {
-                "enum": [
-                  "passed",
-                  "failed",
-                  "not-run"
-                ]
-              },
-              "oracle": {
-                "$ref": "#/components/schemas/Text"
-              },
-              "representative_inputs": {
-                "description": "Short and long inputs checked against the independent reference.",
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                  "$ref": "#/components/schemas/Text"
-                }
-              },
-              "first_difference": {
-                "description": "First differing logits or state, when it can be localized.",
-                "$ref": "#/components/schemas/Text"
-              }
-            }
-          },
-          "application": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "passed",
-              "failed",
-              "timed_out",
-              "errored",
-              "total",
-              "negative_control_verified",
-              "network_access",
-              "credentials_present",
-              "resource_bounds"
-            ],
-            "properties": {
-              "passed": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "failed": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "timed_out": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "errored": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "total": {
-                "description": "Denominator including timeouts and errors. Must equal the sum of the four outcome counts.",
-                "type": "integer",
-                "minimum": 1
-              },
-              "negative_control_verified": {
-                "type": "boolean"
-              },
-              "network_access": {
-                "description": "Generated programs should run without network. True records a deviation.",
-                "type": "boolean"
-              },
-              "credentials_present": {
-                "description": "Generated programs should run without credentials. True records a deviation.",
-                "type": "boolean"
-              },
-              "resource_bounds": {
-                "$ref": "#/components/schemas/Text"
-              },
-              "deviations": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Text"
-                }
-              }
-            },
-            "allOf": [
-              {
-                "if": {
-                  "anyOf": [
-                    {
-                      "required": [
-                        "network_access"
-                      ],
-                      "properties": {
-                        "network_access": {
-                          "const": true
-                        }
-                      }
-                    },
-                    {
-                      "required": [
-                        "credentials_present"
-                      ],
-                      "properties": {
-                        "credentials_present": {
-                          "const": true
-                        }
-                      }
-                    }
-                  ]
-                },
-                "then": {
-                  "required": [
-                    "deviations"
-                  ],
-                  "properties": {
-                    "deviations": {
-                      "minItems": 1
-                    }
-                  }
-                }
-              }
-            ]
-          }
+          "total_tokens": { "type": "integer", "minimum": 0 },
+          "total_seconds": { "type": "number", "exclusiveMinimum": 0 },
+          "tokens_per_second": { "type": "number", "minimum": 0 }
         }
       },
       "ComparisonRecord": {
-        "description": "One baseline-versus-candidate comparison for one metric. A speedup ratio is allowed only when metric definitions are compatible, and a controlled-engine claim needs a matched track and matched settings. Ratios of incompatible native timing metrics are not speedups.",
+        "description": "One baseline-versus-candidate comparison for one metric. A speedup ratio needs compatible metric definitions, and on the matched track also matched settings. Ratios of incompatible native timing metrics are not speedups.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "track",
-          "metric",
-          "baseline_engine",
-          "candidate_engine",
-          "baseline_value",
-          "candidate_value",
-          "definitions_compatible",
-          "matched_settings",
-          "differences",
-          "interpretation"
+          "track", "metric", "baseline_engine", "candidate_engine", "baseline_value", "candidate_value",
+          "definitions_compatible", "matched_settings", "differences"
         ],
         "properties": {
-          "track": {
-            "$ref": "#/components/schemas/ComparisonTrack"
-          },
-          "metric": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "baseline_engine": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "candidate_engine": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "baseline_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "candidate_value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "$ref": "#/components/schemas/NotObtained"
-              }
-            ]
-          },
-          "definitions_compatible": {
-            "type": "boolean"
-          },
-          "matched_settings": {
-            "type": "boolean"
-          },
+          "track": { "$ref": "#/components/schemas/ComparisonTrack" },
+          "metric": { "$ref": "#/components/schemas/Text" },
+          "baseline_engine": { "$ref": "#/components/schemas/Text" },
+          "candidate_engine": { "$ref": "#/components/schemas/Text" },
+          "baseline_value": { "anyOf": [{ "type": "number" }, { "$ref": "#/components/schemas/NotObtained" }] },
+          "candidate_value": { "anyOf": [{ "type": "number" }, { "$ref": "#/components/schemas/NotObtained" }] },
+          "definitions_compatible": { "type": "boolean" },
+          "matched_settings": { "type": "boolean" },
           "differences": {
             "description": "Every disclosed difference in precision, workload, caching, speculation, memory limits, and timing boundaries.",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
+            "items": { "$ref": "#/components/schemas/Text" }
           },
-          "speedup_ratio": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "interpretation": {
-            "enum": [
-              "controlled-engine-comparison",
-              "complete-system-comparison",
-              "not-comparable"
-            ]
-          }
+          "speedup_ratio": { "type": "number", "exclusiveMinimum": 0 }
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "definitions_compatible"
-              ],
-              "properties": {
-                "definitions_compatible": {
-                  "const": false
-                }
-              }
-            },
-            "then": {
-              "not": {
-                "required": [
-                  "speedup_ratio"
-                ]
-              },
-              "properties": {
-                "interpretation": {
-                  "const": "not-comparable"
-                }
-              }
-            }
+            "if": { "required": ["definitions_compatible"], "properties": { "definitions_compatible": { "const": false } } },
+            "then": { "not": { "required": ["speedup_ratio"] } }
           },
           {
             "if": {
-              "required": [
-                "interpretation"
-              ],
-              "properties": {
-                "interpretation": {
-                  "const": "controlled-engine-comparison"
-                }
-              }
+              "required": ["track", "speedup_ratio"],
+              "properties": { "track": { "const": "matched-configuration" } }
             },
-            "then": {
-              "properties": {
-                "track": {
-                  "const": "matched-configuration"
-                },
-                "matched_settings": {
-                  "const": true
-                },
-                "definitions_compatible": {
-                  "const": true
-                }
-              }
-            }
+            "then": { "properties": { "matched_settings": { "const": true } } }
           }
         ]
       },
@@ -2725,270 +712,58 @@
         "description": "A bounded claim. Without sufficient baseline coverage, use best-among-tested or competitive-with, not bounded-sota.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "claim_type",
-          "device",
-          "model",
-          "workload",
-          "metric",
-          "quality_resource_envelope",
-          "comparison_engines",
-          "date",
-          "uncertainty",
-          "baseline_coverage_sufficient"
-        ],
+        "required": ["claim_type", "bounds", "comparison_engines", "date", "uncertainty", "baseline_coverage_sufficient"],
         "properties": {
-          "claim_type": {
-            "enum": [
-              "bounded-sota",
-              "best-among-tested",
-              "competitive-with"
-            ]
-          },
-          "device": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "model": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "workload": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "metric": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "quality_resource_envelope": {
+          "claim_type": { "enum": ["bounded-sota", "best-among-tested", "competitive-with"] },
+          "bounds": {
+            "description": "The device, model, workload, metric, and quality and resource envelope the claim covers.",
             "$ref": "#/components/schemas/Text"
           },
           "comparison_engines": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": {
-              "$ref": "#/components/schemas/Text"
-            }
+            "items": { "$ref": "#/components/schemas/Text" }
           },
-          "date": {
-            "type": "string",
-            "format": "date"
-          },
-          "uncertainty": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "baseline_coverage_sufficient": {
-            "type": "boolean"
-          },
-          "named_baseline": {
-            "$ref": "#/components/schemas/Text"
-          }
+          "date": { "type": "string", "format": "date" },
+          "uncertainty": { "$ref": "#/components/schemas/Text" },
+          "baseline_coverage_sufficient": { "type": "boolean" },
+          "named_baseline": { "$ref": "#/components/schemas/Text" }
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "claim_type"
-              ],
-              "properties": {
-                "claim_type": {
-                  "const": "bounded-sota"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "baseline_coverage_sufficient": {
-                  "const": true
-                }
-              }
-            }
+            "if": { "required": ["claim_type"], "properties": { "claim_type": { "const": "bounded-sota" } } },
+            "then": { "properties": { "baseline_coverage_sufficient": { "const": true } } }
           },
           {
-            "if": {
-              "required": [
-                "claim_type"
-              ],
-              "properties": {
-                "claim_type": {
-                  "const": "competitive-with"
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "named_baseline"
-              ]
-            }
+            "if": { "required": ["claim_type"], "properties": { "claim_type": { "const": "competitive-with" } } },
+            "then": { "required": ["named_baseline"] }
           }
         ]
       },
       "HumanIntervention": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "timestamp",
-          "kind",
-          "purpose"
-        ],
+        "required": ["timestamp", "kind", "purpose"],
         "properties": {
-          "timestamp": {
-            "$ref": "#/components/schemas/Timestamp"
-          },
-          "kind": {
-            "enum": [
-              "task-setup",
-              "implementation-hint",
-              "debugging",
-              "code-edit",
-              "environment-repair",
-              "approval"
-            ]
-          },
-          "purpose": {
-            "$ref": "#/components/schemas/Text"
-          }
+          "timestamp": { "$ref": "#/components/schemas/Timestamp" },
+          "kind": { "enum": ["task-setup", "implementation-hint", "debugging", "code-edit", "environment-repair", "approval"] },
+          "purpose": { "$ref": "#/components/schemas/Text" }
         }
-      },
-      "AutonomyRecord": {
-        "description": "Human help and cost. Unavailable historical data stays Unavailable, never inferred as zero or autonomous.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "human_interventions",
-          "builder_tokens",
-          "api_cost",
-          "elapsed_hours",
-          "experiments_attempted",
-          "hardware_hours"
-        ],
-        "properties": {
-          "human_interventions": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/HumanIntervention"
-                }
-              },
-              {
-                "$ref": "#/components/schemas/Unavailable"
-              }
-            ]
-          },
-          "builder_tokens": {
-            "$ref": "#/components/schemas/IntegerOrUnavailable"
-          },
-          "api_cost": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "$ref": "#/components/schemas/NotApplicable"
-              },
-              {
-                "$ref": "#/components/schemas/Unavailable"
-              }
-            ]
-          },
-          "elapsed_hours": {
-            "$ref": "#/components/schemas/NumberOrUnavailable"
-          },
-          "experiments_attempted": {
-            "$ref": "#/components/schemas/IntegerOrUnavailable"
-          },
-          "hardware_hours": {
-            "$ref": "#/components/schemas/NumberOrUnavailable"
-          }
-        }
-      },
-      "RecursiveImprovement": {
-        "description": "Recursive improvement needs a measured subsequent engine revision with correctness retained.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "status"
-        ],
-        "properties": {
-          "status": {
-            "enum": [
-              "not-claimed",
-              "demonstrated"
-            ]
-          },
-          "subsequent_engine_revision": {
-            "$ref": "#/components/schemas/GitCommitSha"
-          },
-          "correctness_retained": {
-            "type": "boolean"
-          },
-          "measurement_evidence": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/EvidenceRef"
-            }
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "const": "demonstrated"
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "subsequent_engine_revision",
-                "correctness_retained",
-                "measurement_evidence"
-              ],
-              "properties": {
-                "correctness_retained": {
-                  "const": true
-                }
-              }
-            }
-          }
-        ]
       },
       "SelfHostingRecord": {
-        "description": "Self-hosting requires the builder's inference to move onto the generated engine. Improving an engine while still using an unrelated hosted builder is engine construction, not self-hosting.",
+        "description": "Self-hosting requires the builder's inference to move onto the generated engine. Improving an engine while still using an unrelated hosted builder is engine construction, not self-hosting. Recursive improvement additionally needs a measured subsequent engine revision with correctness retained, recorded as a comparison.",
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "properties": {
-          "status": {
-            "enum": [
-              "not-in-scope",
-              "not-demonstrated",
-              "demonstrated"
-            ]
-          },
-          "initial_builder_inference_location": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "routing_control": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "transition_point": {
-            "$ref": "#/components/schemas/Timestamp"
-          },
-          "builder_identity_matches_target": {
-            "type": "boolean"
-          },
+          "status": { "enum": ["not-in-scope", "not-demonstrated", "demonstrated"] },
+          "transition_point": { "$ref": "#/components/schemas/Timestamp" },
+          "builder_identity_matches_target": { "type": "boolean" },
           "generated_runtime_artifacts": {
             "type": "array",
             "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/HashedArtifact"
-            }
+            "items": { "$ref": "#/components/schemas/HashedArtifact" }
           },
           "harness_endpoint_routing": {
             "description": "The actual endpoint routing observed after the transition.",
@@ -2998,156 +773,22 @@
             "description": "Development steps executed through the generated engine. A successful chat alone is not enough.",
             "type": "array",
             "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/EvidenceRef"
-            }
+            "items": { "$ref": "#/components/schemas/EvidenceRef" }
           },
           "external_recovery_used": {
             "description": "True means the run was not uninterrupted self-hosting.",
             "type": "boolean"
-          },
-          "external_recovery_description": {
-            "$ref": "#/components/schemas/Text"
-          },
-          "recursive_improvement": {
-            "$ref": "#/components/schemas/RecursiveImprovement"
           }
         },
         "allOf": [
           {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "const": "demonstrated"
-                }
-              }
-            },
+            "if": { "required": ["status"], "properties": { "status": { "const": "demonstrated" } } },
             "then": {
               "required": [
-                "initial_builder_inference_location",
-                "routing_control",
-                "transition_point",
-                "builder_identity_matches_target",
-                "generated_runtime_artifacts",
-                "harness_endpoint_routing",
-                "subsequent_development_evidence",
-                "external_recovery_used"
+                "transition_point", "builder_identity_matches_target", "generated_runtime_artifacts",
+                "harness_endpoint_routing", "subsequent_development_evidence", "external_recovery_used"
               ],
-              "properties": {
-                "builder_identity_matches_target": {
-                  "const": true
-                }
-              }
-            }
-          },
-          {
-            "if": {
-              "required": [
-                "external_recovery_used"
-              ],
-              "properties": {
-                "external_recovery_used": {
-                  "const": true
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "external_recovery_description"
-              ]
-            }
-          },
-          {
-            "if": {
-              "required": [
-                "recursive_improvement"
-              ],
-              "properties": {
-                "recursive_improvement": {
-                  "required": [
-                    "status"
-                  ],
-                  "properties": {
-                    "status": {
-                      "const": "demonstrated"
-                    }
-                  }
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "status": {
-                  "const": "demonstrated"
-                }
-              }
-            }
-          }
-        ]
-      },
-      "Disposition": {
-        "description": "Results publication and code adoption are separate decisions. Neither implies experimental success, and merging needs explicit authorization.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "implementation_pull_request",
-          "results_pull_request",
-          "adoption_decision"
-        ],
-        "properties": {
-          "implementation_pull_request": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uri"
-              },
-              {
-                "$ref": "#/components/schemas/NotApplicable"
-              }
-            ]
-          },
-          "results_pull_request": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uri"
-              },
-              {
-                "$ref": "#/components/schemas/NotApplicable"
-              }
-            ]
-          },
-          "adoption_decision": {
-            "enum": [
-              "not-decided",
-              "adopted",
-              "rejected"
-            ]
-          },
-          "merge_authorization": {
-            "description": "Where the explicit authorization to merge is recorded.",
-            "$ref": "#/components/schemas/Text"
-          }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": [
-                "adoption_decision"
-              ],
-              "properties": {
-                "adoption_decision": {
-                  "const": "adopted"
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "merge_authorization"
-              ]
+              "properties": { "builder_identity_matches_target": { "const": true } }
             }
           }
         ]
