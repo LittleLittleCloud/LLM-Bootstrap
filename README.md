@@ -2,7 +2,7 @@
 
 **Can an LLM build its own inference engine?**
 
-LLM Bootstrap is a skills plugin for agents that build inference engines, packaged for both **Agent Plugins 1.0** and **Claude Code plugins**. Both formats load the same three skills and bundled experiment resources. Each experiment fixes a **hardware + target model + agent harness + workload** configuration, supplies the skills and a measurable goal, and studies whether an LLM can build an engine competitive with the strongest verified baselines on that specific platform.
+LLM Bootstrap is a skills plugin for agents that build inference engines, packaged for both **Agent Plugins 1.0** and **Claude Code plugins**. Both formats load the same skill and bundled experiment resources. Each experiment fixes a **hardware + target model + agent harness + workload** configuration, supplies the skills and a measurable goal, and studies whether an LLM can build an engine competitive with the strongest verified baselines on that specific platform.
 
 The engine may specialize aggressively for the chosen hardware and model. General-purpose engine coverage is not the objective. Platform-specific state-of-the-art performance is the research target, not an established result.
 
@@ -28,10 +28,7 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [.claude-plugin/plugin.json](.claude-plugin/plugin.json) | Claude Code manifest using the same skills and resources. |
 | [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) | Single-plugin marketplace for installation and updates. |
 | `site/` (not part of the plugin package) | Static leaderboard with multi-dimensional filters and a trend dashboard, currently on synthetic demo data. Preview with `python3 -m http.server -d site`; deployment to GitHub Pages is a manual workflow. |
-| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end with explicit gates between stages. |
-| [skills/bootstrap-plan](skills/bootstrap-plan/SKILL.md) | Freeze the experiment contract and baseline comparison before implementation. |
-| [skills/bootstrap-build](skills/bootstrap-build/SKILL.md) | Build and optimize the engine through correctness checks and profiling. |
-| [skills/bootstrap-evaluate](skills/bootstrap-evaluate/SKILL.md) | Evaluate complete runs and report performance, quality, resources, and autonomy. |
+| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | The single skill: run a new or derived experiment end to end. Its `references/` hold the planning, build, and evaluation stages. |
 | [docs/experiment-protocol.md](docs/experiment-protocol.md) | Shared experiment definitions and claim requirements. |
 | [docs/evaluation-protocol.md](docs/evaluation-protocol.md) | Repository-owned evaluation, correctness gates, and measurement definitions. |
 | [evaluations/](evaluations/engine-api-conformance/evaluation.json) | Evaluation definitions and scripts owned by this repository. `engine-api-conformance` is released; `humaneval-20-pi` is a draft without scripts. |
@@ -52,7 +49,7 @@ The plugin contains agent instructions and experiment templates, not executable 
 
 **Claude Code:** add `LittleLittleCloud/LLM-Bootstrap` with `/plugin marketplace add`, then install `llm-bootstrap@llm-bootstrap-marketplace` with `/plugin install`. For an unpublished local checkout, start Claude Code with `claude --plugin-dir /absolute/path/to/LLM-Bootstrap` instead.
 
-Remote installation uses the published revision, not unpushed local changes. See [the plugin guide](docs/plugins.md) for complete commands, prerequisites, and verification. Start a fresh session in your **experiment project**, not the plugin cache. Invoke `bootstrap-plan` from the client's skill menu; in Claude Code it is `/llm-bootstrap:bootstrap-plan`. `bootstrap-build` and `bootstrap-evaluate` follow the same naming pattern.
+Remote installation uses the published revision, not unpushed local changes. See [the plugin guide](docs/plugins.md) for complete commands, prerequisites, and verification. Start a fresh session in your **experiment project**, not the plugin cache. Invoke `bootstrap-experiment-sop` from the client's skill menu; in Claude Code it is `/llm-bootstrap:bootstrap-experiment-sop`.
 
 Other harnesses may consume the skills directly if they preserve the entire repository layout. Copying only the skill files loses their shared resources. No Pi plugin auto-discovery integration is claimed here.
 
@@ -64,7 +61,7 @@ While a contract is being written, unresolved fields stay `null` and `status` is
 
 Supply a task such as:
 
-> Use bootstrap-experiment-sop to start a new experiment: copy the report template into a new experiment directory in my project workspace, then write and freeze the contract there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, use bootstrap-build and bootstrap-evaluate to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
+> Use bootstrap-experiment-sop to start a new experiment: copy the report template into a new experiment directory in my project workspace, then write and freeze the contract there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, follow its build and evaluation stages to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
 
 ### 3. Build, measure, and retain evidence
 

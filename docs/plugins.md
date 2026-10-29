@@ -11,14 +11,11 @@ The repository root is the plugin root for both formats. No generation step, dup
 
 The portable manifest intentionally contains metadata only: Agent Plugins 1.0 does not allow top-level skill paths, agents, commands, or hooks. The Claude manifest does not need a custom skills path either. Both manifests keep their name, version, and shared metadata identical. The [.claude-plugin/marketplace.json](../.claude-plugin/marketplace.json) catalog lists this entire root as `./`, so installation retains the shared resources. This is a Claude-compatible marketplace, not a marketplace format defined by Agent Plugins 1.0.
 
-The package ships these skills:
+The package ships one skill:
 
 | Skill | Purpose | Claude invocation |
 | --- | --- | --- |
-| [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
-| [bootstrap-plan](../skills/bootstrap-plan/SKILL.md) | Define and freeze the experiment contract. | `/llm-bootstrap:bootstrap-plan` |
-| [bootstrap-build](../skills/bootstrap-build/SKILL.md) | Implement, validate, and profile the engine. | `/llm-bootstrap:bootstrap-build` |
-| [bootstrap-evaluate](../skills/bootstrap-evaluate/SKILL.md) | Measure and report against the frozen contract. | `/llm-bootstrap:bootstrap-evaluate` |
+| [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end: plan, build, evaluate, and report, with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
 
 Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [contract resolver](../schema/resolve-contract.mjs) and the [contract check](../schema/check-experiment.mjs) built on it, which the experiment SOP asks the agent to run, and the Python evaluation scripts under [evaluations/](../evaluations/engine-api-conformance/evaluation.json), which need Python 3.9 or newer and nothing else. Nothing runs them automatically, and the evaluation scripts verify their own hashes before running. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
 
@@ -30,7 +27,7 @@ Use a client that supports Agent Plugins 1.0. In VS Code:
 2. Run **Chat: Install Plugin from Source** in the Command Palette.
 3. Enter `https://github.com/LittleLittleCloud/LLM-Bootstrap.git`, or the absolute path of a local checkout for unpublished changes.
 4. Confirm the plugin is enabled for the intended harness and workspace in the Agent Customizations editor.
-5. Start a fresh chat and confirm all four skills appear. Invoke `bootstrap-plan` for a planning-only task before authorizing an experiment.
+5. Start a fresh chat and confirm the skill appears. Invoke `bootstrap-experiment-sop` for a planning-only task before authorizing an experiment.
 
 For live local development without installing a copy, add your checkout to the user setting `chat.pluginLocations`:
 
@@ -69,7 +66,7 @@ claude plugin marketplace add /absolute/path/to/LLM-Bootstrap
 claude plugin install llm-bootstrap@llm-bootstrap-marketplace
 ```
 
-Use `/plugin` to confirm that the plugin is enabled, start a fresh session as needed, and invoke `/llm-bootstrap:bootstrap-plan`. The skill should read the bundled protocol and templates, ask for unresolved essential configuration, and leave the installed package unchanged. Do not interpret skill discovery as a completed engine experiment.
+Use `/plugin` to confirm that the plugin is enabled, start a fresh session as needed, and invoke `/llm-bootstrap:bootstrap-experiment-sop`. The skill should read the bundled protocol and templates, ask for unresolved essential configuration, and leave the installed package unchanged. Do not interpret skill discovery as a completed engine experiment.
 
 ## Bundled resources and workspace outputs
 

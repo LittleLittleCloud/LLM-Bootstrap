@@ -1,11 +1,11 @@
 ---
 name: bootstrap-experiment-sop
-description: Run an LLM Bootstrap experiment end to end, either a new experiment or an improvement derived from an existing one. Sequences bootstrap-plan, bootstrap-build, and bootstrap-evaluate with explicit gates, the contract check command, and the experiment record.
+description: Run an LLM Bootstrap experiment end to end, either a new experiment or an improvement derived from an existing one. Plans and freezes the contract, builds a specialized inference engine, evaluates it against the pinned evaluation, and reports with feedback, using explicit stage gates and a contract check command.
 ---
 
 # Experiment SOP
 
-Read [the experiment protocol](../../docs/experiment-protocol.md) and [the evaluation protocol](../../docs/evaluation-protocol.md). This skill sequences the experiment and enforces the gates between stages; the stage work stays in bootstrap-plan, bootstrap-build, and bootstrap-evaluate. Do not restate or relax their rules here.
+Read [the experiment protocol](../../docs/experiment-protocol.md) and [the evaluation protocol](../../docs/evaluation-protocol.md). This skill sequences the experiment and enforces the gates between stages. The stage work is in [the planning reference](references/plan.md), [the build reference](references/build.md), and [the evaluation reference](references/evaluate.md); do not relax their rules here.
 
 Resolve bundled links relative to this SKILL.md file, not the current working directory. The plugin root is two directories above this file. Treat the installed plugin as read-only: create contracts, engine code, records, and evidence in the user's selected project workspace, never in the plugin installation/cache. Do not rely on the plugin repository's AGENTS.md being loaded by the host.
 
@@ -26,10 +26,10 @@ Each gate must hold before the next stage starts. If it does not, stop and say w
 
 | Stage | Work | Gate to leave the stage |
 | --- | --- | --- |
-| 1. Define | Mode-specific steps; use bootstrap-plan for contract content. | The check command reports no problems, the status is `frozen`, and no field is unresolved. |
+| 1. Define | Mode-specific steps; [the planning reference](references/plan.md) for contract content. | The check command reports no problems, the status is `frozen`, and no field is unresolved. |
 | 2. Freeze | Commit the contract on a codex/ branch and record its commit. | The contract commit exists before any engine work. Amendments are new revisions with a reason. |
-| 3. Build | bootstrap-build in a separate engine workspace. | The engine runs and passes the contract's numerical checks. |
-| 4. Evaluate | bootstrap-evaluate with the pinned evaluation, conformance gate first. | The conformance gate passes before any performance measurement. |
+| 3. Build | [The build reference](references/build.md), in a separate engine workspace. | The engine runs and passes the contract's numerical checks. |
+| 4. Evaluate | [The evaluation reference](references/evaluate.md) with the pinned evaluation, conformance gate first. | The conformance gate passes before any performance measurement. |
 | 5. Report | Fill the report, including its feedback section, and a run record; open a separate results PR. | Every acceptance criterion is marked passed, failed, or open, and the feedback section is filled in. |
 
 Keep implementation and results in separate changes. Publishing results does not imply acceptance and does not authorize a merge. Costly runs and operating-system changes need the user's authorization even when the contract names them in scope.

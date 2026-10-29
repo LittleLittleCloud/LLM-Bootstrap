@@ -50,7 +50,7 @@ function frozenContract() {
     status: 'frozen',
     description: 'Synthetic fixture for schema tests; not an experiment.',
     skills_revision: commit('1'),
-    builder_instruction_hashes: [{ name: 'skills/bootstrap-plan/SKILL.md', sha256: sha('a') }],
+    builder_instruction_hashes: [{ name: 'skills/bootstrap-experiment-sop/SKILL.md', sha256: sha('a') }],
     contract_frozen_at: when,
     scope: 'Synthetic engine construction only; no operating-system changes; fixture authorizes nothing.',
   });
