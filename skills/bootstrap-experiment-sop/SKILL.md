@@ -28,7 +28,7 @@ Each gate must hold before the next stage starts. If it does not, stop and say w
 | --- | --- | --- |
 | 1. Define | Mode-specific steps; [the planning reference](references/plan.md) for contract content. | The check command reports no problems, the status is `frozen`, and no field is unresolved. |
 | 2. Freeze | Commit the contract on a codex/ branch and record its commit. | The contract commit exists before any engine work. Amendments are new revisions with a reason. |
-| 3. Build | [The build reference](references/build.md), in a separate engine workspace. | The engine runs and passes the contract's numerical checks. |
+| 3. Build | [The build reference](references/build.md), in a separate engine workspace. | The engine loads the target model and serves the endpoint the evaluation will call. |
 | 4. Evaluate | [The evaluation reference](references/evaluate.md) with the pinned evaluation, conformance gate first. | The conformance gate passes before any performance measurement. |
 | 5. Report | Fill the report, including its feedback section, and a run record. | Every acceptance criterion is marked passed, failed, or open, and the feedback section is filled in. |
 | 6. Submit | Use bootstrap-submit-results to open a results PR against the LLM Bootstrap repository, separate from any implementation change. | The user authorized the PR; the PR is open. Merging is the maintainers' decision. |

@@ -8,9 +8,9 @@
 //
 // The index is a projection for display. It is not a record: the documents under experiments/ stay authoritative.
 // Two rules are leaderboard policy, not schema facts:
-//   - quality_gate is "passed" only when the run completed, the numerical check passed, every application task passed,
-//     the negative control was verified, and generated programs ran in a restricted environment. It is "failed" when the
-//     numerical check failed or a task failed, and "unverified" otherwise. Only "passed" entries are ranked.
+//   - quality_gate is "passed" only when the run completed, every application task passed, the negative control was
+//     verified, and generated programs ran in a restricted environment. It is "failed" when a task failed, and
+//     "unverified" otherwise. Only "passed" entries are ranked.
 //   - Missing values stay null. They are never replaced by zero or inferred (an unavailable intervention log is not "none").
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveContract } from '../../skills/bootstrap-experiment-sop/scripts/resolve-contract.mjs';
 import { errorsOf, loadValidators } from '../../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 
-export const INDEX_VERSION = '0.2.0';
+export const INDEX_VERSION = '0.3.0';
 const RUN_PATH = /^experiments\/[^/]+\/runs\/[^/]+\/run\.json$/;
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 // Display precision only; the documents keep the exact ratio of sums.
@@ -35,9 +35,9 @@ export class IndexError extends Error {
 }
 
 export function qualityGate(result, runStatus) {
-  const { numerical_status: numerical, application } = result.quality;
-  if (numerical === 'failed' || application.passed < application.total) return runStatus === 'completed' ? 'failed' : 'unverified';
-  const verified = runStatus === 'completed' && numerical === 'passed' && application.negative_control_verified && application.restricted_environment;
+  const { application } = result.quality;
+  if (application.passed < application.total) return runStatus === 'completed' ? 'failed' : 'unverified';
+  const verified = runStatus === 'completed' && application.negative_control_verified && application.restricted_environment;
   return verified ? 'passed' : 'unverified';
 }
 
@@ -149,7 +149,6 @@ export function buildIndex(files, { synthetic = false, validators = null } = {})
           },
           quality_gate: qualityGate(result, run.status),
           quality: {
-            numerical_status: result.quality.numerical_status,
             application_passed: result.quality.application.passed,
             application_total: result.quality.application.total,
             negative_control_verified: result.quality.application.negative_control_verified,

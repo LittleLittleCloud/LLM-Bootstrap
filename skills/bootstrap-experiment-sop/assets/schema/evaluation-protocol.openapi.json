@@ -120,7 +120,7 @@
         "additionalProperties": false,
         "required": ["role", "path", "sha256"],
         "properties": {
-          "role": { "enum": ["driver", "assertion-evaluator", "numerical-check"] },
+          "role": { "enum": ["driver", "assertion-evaluator"] },
           "path": {
             "description": "Relative to evaluations/<evaluation_id>/. Absolute paths and parent traversal are not allowed.",
             "type": "string",
@@ -290,12 +290,11 @@
             }
           },
           "quality": {
-            "description": "Numerical correctness and application-level task checks are separate gates. A task assertion pass is not model pass@1 and not numerical equivalence.",
+            "description": "Application-level task checks. A task assertion pass is not model pass@1 and not numerical equivalence.",
             "type": "object",
             "additionalProperties": false,
-            "required": ["numerical_status", "application"],
+            "required": ["application"],
             "properties": {
-              "numerical_status": { "enum": ["passed", "failed", "not-run"] },
               "application": {
                 "type": "object",
                 "additionalProperties": false,

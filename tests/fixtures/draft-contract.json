@@ -49,8 +49,7 @@
       "sha256": null
     },
     "warmup_plan": null,
-    "formal_repetitions": null,
-    "numerical_oracle_and_tolerances": null
+    "formal_repetitions": null
   },
   "implementation": {
     "starting_scaffold": null,
@@ -68,7 +67,7 @@
   "goal": {
     "primary_metric": null,
     "performance_thresholds": null,
-    "quality_gate": "20/20 official task assertions plus separately defined numerical/state checks",
+    "quality_gate": "20/20 official task assertions",
     "resource_limits": null,
     "self_hosting_in_scope": false
   },

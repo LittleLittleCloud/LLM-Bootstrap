@@ -24,7 +24,7 @@ const entry = (overrides = {}) => {
     entry_id: `r${counter}/candidate/eng`, run_id: `r${counter}`, experiment_id: 'e1', derived_from: null, date: '2026-07-01', role: 'candidate',
     comparison_track: 'matched-configuration', engine: { name: 'eng', revision: 'a'.repeat(40) }, hardware: 'hw1', target_model: 'm1',
     weights: 'q4', builder: 'b1', harness: 'h 1', evaluation: 'ev1', metrics: metrics(), quality_gate: 'passed',
-    quality: { numerical_status: 'passed', application_passed: 20, application_total: 20, negative_control_verified: true },
+    quality: { application_passed: 20, application_total: 20, negative_control_verified: true },
     autonomy: { human_interventions: 1, hardware_hours: 1, builder_tokens: 1e6, elapsed_hours: 2, self_hosting_status: 'not-in-scope', external_recovery_used: null },
     deviations: [], acceptance: 'unverified', run_status: 'completed', evidence: [], source: { run: 'x', result: 'y' }, ...overrides,
   };

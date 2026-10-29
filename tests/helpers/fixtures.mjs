@@ -42,10 +42,6 @@ export function frozenContract() {
   Object.assign(contract.evaluation, {
     warmup_plan: 'one warm-up round',
     formal_repetitions: 3,
-    numerical_oracle_and_tolerances: {
-      oracle: 'synthetic reference',
-      tolerances: [{ quantity: 'logits', error_metric: 'max-abs-error', threshold: 0.01 }],
-    },
   });
   Object.assign(contract.implementation, {
     starting_scaffold: 'empty directory; no code reuse',
@@ -108,7 +104,6 @@ export function syntheticResult() {
     },
     resources: { peak_memory_gib: 'Not obtained', swap_out_delta_bytes: 'Not obtained' },
     quality: {
-      numerical_status: 'not-run',
       application: { passed: 1, total: 1, negative_control_verified: true, restricted_environment: true },
     },
   };

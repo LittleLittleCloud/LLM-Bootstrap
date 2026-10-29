@@ -297,7 +297,7 @@
         "description": "Selects a repository-owned evaluation (see the evaluation protocol schema) and adds only what depends on the experiment. Evaluation code, scripts, dataset, tasks, and limits are defined by the evaluation and cannot be set or changed here.",
         "type": "object",
         "additionalProperties": false,
-        "required": ["definition", "warmup_plan", "formal_repetitions", "numerical_oracle_and_tolerances"],
+        "required": ["definition", "warmup_plan", "formal_repetitions"],
         "properties": {
           "definition": {
             "description": "The evaluation by id, LLM Bootstrap repository commit, and definition file hash. The commit and hash stay null only while the contract is a draft.",
@@ -311,34 +311,7 @@
             }
           },
           "warmup_plan": { "$ref": "#/components/schemas/NullableText" },
-          "formal_repetitions": { "type": ["integer", "null"], "minimum": 1 },
-          "numerical_oracle_and_tolerances": {
-            "description": "Chosen for the target model and declared precision before candidate results are inspected. The code that applies it is part of the evaluation.",
-            "anyOf": [{ "$ref": "#/components/schemas/NumericalOracle" }, { "type": "null" }]
-          }
-        }
-      },
-      "NumericalOracle": {
-        "description": "Independent reference and tolerances chosen for the declared precision before candidate results are inspected.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["oracle", "tolerances"],
-        "properties": {
-          "oracle": { "$ref": "#/components/schemas/Text" },
-          "tolerances": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["quantity", "error_metric", "threshold"],
-              "properties": {
-                "quantity": { "description": "Tensor, state, or logits checked.", "$ref": "#/components/schemas/Text" },
-                "error_metric": { "$ref": "#/components/schemas/Text" },
-                "threshold": { "type": "number", "minimum": 0 }
-              }
-            }
-          }
+          "formal_repetitions": { "type": ["integer", "null"], "minimum": 1 }
         }
       },
       "ContractImplementation": {

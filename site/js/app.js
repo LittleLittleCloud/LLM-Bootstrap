@@ -233,7 +233,7 @@ function renderLeaderboard(collapsed) {
       h('td', {}, run.hardware, h('span', { class: 'sub' }, `${run.target_model} (${run.weights}) \u00b7 ${run.evaluation}`)),
       h('td', {}, run.builder ?? '\u2014', h('span', { class: 'sub' }, run.harness)),
       metrics.map(key => h('td', { class: `num${key === state.metric ? ' hot' : ''}` }, formatValue(key, METRICS[key].read(run), false), sub(key))),
-      h('td', { class: `gate ${gate[0]}`, title: `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks, numerical check ${run.quality.numerical_status}` },
+      h('td', { class: `gate ${gate[0]}`, title: `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks` },
         `${gate[1]} ${run.quality.application_passed}/${run.quality.application_total}`),
       h('td', { class: 'date' }, run.date));
   });
@@ -320,7 +320,7 @@ function openDetail(run) {
     ['Prefill timing basis', run.metrics.prefill_basis ? BASIS_LABEL[run.metrics.prefill_basis] : 'not obtained'],
     ['Formal repetitions', `${run.metrics.formal_repetitions}${run.metrics.preliminary ? ' (preliminary)' : ''}`],
     ['Requests reconciled', run.metrics.requests_reconciled ? 'yes' : 'no'],
-    ['Quality gate', `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks, numerical check ${run.quality.numerical_status}, negative control ${run.quality.negative_control_verified ? 'verified' : 'not verified'}`],
+    ['Quality gate', `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks, negative control ${run.quality.negative_control_verified ? 'verified' : 'not verified'}`],
     ['Builder tokens', count(run.autonomy.builder_tokens)], ['Elapsed hours', count(run.autonomy.elapsed_hours)],
     ['Self-hosting', `${run.autonomy.self_hosting_status}${run.autonomy.external_recovery_used ? ' (external recovery used)' : ''}`],
     ['Deviations', run.deviations.length ? run.deviations.join('; ') : 'none recorded'],
