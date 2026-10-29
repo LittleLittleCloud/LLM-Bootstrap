@@ -1,6 +1,6 @@
 import {
   FACETS, GROUPS, METRICS, collapse, deriveDeltas, defaultState, facetCounts, filterRuns, formatValue, frontier,
-  hashToState, largestCohort, lineageRoots, mixedConditions, orderRows, rankRuns, stateToHash, summarize, trendSeries,
+  hashToState, largestCohort, lineageRoots, mixedConditions, orderRows, rankRuns, stateToHash, summarize, trendSeries, unrankedReason,
 } from './model.js';
 import { lineChart, marker, styleFor } from './chart.js';
 
@@ -21,29 +21,40 @@ const h = (tag, attrs = {}, ...children) => {
 let runs = [];
 let state = hashToState(location.hash);
 let shown = 25;
+let synthetic = false;
 const hiddenSeries = new Set();
 const PAGE = 25;
 
+// The index built from real experiment records wins over the synthetic demo index when both exist.
+async function fetchIndex() {
+  for (const url of ['data/leaderboard.json', 'data/leaderboard.mock.json']) {
+    const response = await fetch(url);
+    if (response.ok) return response.json();
+  }
+  throw new Error('no leaderboard index was found');
+}
+
 async function load() {
+  let data;
   try {
-    const response = await fetch('data/runs.mock.json');
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    runs = (await response.json()).runs;
+    data = await fetchIndex();
+    runs = data.entries;
+    synthetic = data.synthetic === true;
   } catch (error) {
     $('panel-leaderboard').replaceChildren(h('p', { class: 'empty-state' },
       `Could not load the run data (${error.message}). Serve this folder over HTTP instead of opening the file directly.`));
     return;
   }
-  if (runs.some(run => run.synthetic)) {
+  if (synthetic) {
     $('banner').hidden = false;
     $('banner').textContent = 'Demo with synthetic data. Every number on this page is made up and says nothing about any real engine, model, or hardware.';
   }
   $('metric').replaceChildren(...Object.entries(METRICS).map(([key, spec]) => h('option', { value: key }, `${spec.label} (${spec.better} is better)`)));
   $('group').replaceChildren(...Object.entries(GROUPS).map(([key, label]) => h('option', { value: key }, label)));
   bind();
-  const wanted = new URLSearchParams(location.hash.slice(1)).get('run');
+  const wanted = new URLSearchParams(location.hash.slice(1)).get('entry');
   update();
-  const linked = runs.find(run => run.run_id === wanted);
+  const linked = runs.find(run => run.entry_id === wanted);
   if (linked) openDetail(linked);
 }
 
@@ -52,7 +63,7 @@ function bind() {
   $('query').addEventListener('input', set('query', input => input.value));
   $('from').addEventListener('change', set('from', input => input.value));
   $('to').addEventListener('change', set('to', input => input.value));
-  $('failed').addEventListener('change', set('includeFailed', input => input.checked));
+  $('failed').addEventListener('change', set('includeNotPassed', input => input.checked));
   $('selfhosted').addEventListener('change', set('selfHosting', input => input.checked));
   $('metric').addEventListener('change', event => { state = { ...state, metric: event.target.value, sort: 'rank' }; update(); });
   $('view').addEventListener('change', set('view', input => input.value));
@@ -92,7 +103,7 @@ function syncControls() {
   if ($('query').value !== state.query) $('query').value = state.query;
   $('from').value = state.from;
   $('to').value = state.to;
-  $('failed').checked = state.includeFailed;
+  $('failed').checked = state.includeNotPassed;
   $('selfhosted').checked = state.selfHosting;
   $('metric').value = state.metric;
   $('view').value = state.view;
@@ -143,33 +154,38 @@ function toggle(key, value, on) {
 }
 
 function renderNotice(rows, subject) {
-  const mixed = mixedConditions(rows);
+  const mixed = mixedConditions(rows, state.metric);
   const notice = $('notice');
   notice.hidden = !mixed.length;
   if (!mixed.length) return;
   notice.replaceChildren(
     `This view mixes ${mixed.map(item => `${item.count} ${item.name} values`).join(', ')}. ${subject} across different conditions are not a controlled comparison.`,
     h('button', { type: 'button', class: 'link', onclick: () => {
-      state = { ...state, filters: largestCohort(filterRuns(runs, state)) };
+      state = { ...state, filters: largestCohort(filterRuns(runs, state), state.metric) };
       update();
     } }, 'Compare only the largest cohort'));
 }
 
 function renderCards() {
   const spec = METRICS[state.metric];
-  const summary = summarize(filterRuns(runs, { ...state, includeFailed: true }), state.metric);
+  const summary = summarize(filterRuns(runs, { ...state, includeNotPassed: true }), state.metric);
   const card = (key, value, sub) => h('div', { class: 'card' }, h('div', { class: 'k' }, key), h('div', { class: 'v' }, value), h('div', { class: 's' }, sub));
   $('cards').replaceChildren(
     card('Runs in view', String(summary.runs), `${summary.experiments} experiments`),
     card(`Best ${spec.label}`, formatValue(state.metric, summary.best && spec.read(summary.best)),
       summary.best ? `${summary.best.experiment_id} · ${summary.best.engine.name}` : 'No run passed the quality gate'),
     card(`Median ${spec.label}`, formatValue(state.metric, summary.median), 'Runs that passed the quality gate'),
-    card('Quality gate pass rate', summary.passRate == null ? '—' : `${Math.round(summary.passRate * 100)}%`, `${summary.failed} failed`),
+    card('Quality gate pass rate', summary.passRate == null ? '—' : `${Math.round(summary.passRate * 100)}%`, `${summary.notPassed} not passed`),
     card('Human interventions', summary.medianInterventions == null ? '—' : String(summary.medianInterventions), `median per run · ${summary.selfHosted} self-hosted experiments`),
   );
 }
 
-const CORE = ['decode_tok_s', 'ttft_ms_p50', 'peak_memory_gib', 'human_interventions'];
+const CORE = ['decode_tok_s', 'client_ttft_median_s', 'peak_memory_gib', 'human_interventions'];
+const BASIS_LABEL = {
+  'n-minus-1-intervals': 'N−1 intervals', 'native-command-timing': 'native command', 'native-speculative-multi-token': 'native speculative',
+  'processed-input-tokens': 'input tokens',
+};
+const BASIS_KEY = { decode_tok_s: 'decode_basis', prefill_tok_s: 'prefill_basis' };
 const heading = key => `${METRICS[key].label}${METRICS[key].unit && !METRICS[key].label.includes(METRICS[key].unit) ? ` (${METRICS[key].unit})` : ''}`;
 
 function renderLeaderboard(collapsed) {
@@ -199,21 +215,26 @@ function renderLeaderboard(collapsed) {
 
   const body = rows.slice(0, shown).map(run => {
     const rank = ranks.get(run);
-    const failed = run.quality_gate !== 'passed';
+    const reason = unrankedReason(run, state.metric);
+    const gate = { passed: ['good', '\u2713'], failed: ['bad', '\u2717'], unverified: ['', '?'] }[run.quality_gate];
+    const sub = key => (BASIS_KEY[key] && run.metrics[BASIS_KEY[key]] ? h('span', { class: 'sub' }, BASIS_LABEL[run.metrics[BASIS_KEY[key]]]) : null);
     return h('tr', { class: rank ? '' : 'unranked', onclick: () => openDetail(run) },
-      h('td', { class: 'rank', title: rank ? null : 'Failed the quality gate, so it is not ranked' }, rank ? String(rank) : '—'),
+      h('td', { class: 'rank', title: reason }, rank ? String(rank) : '\u2014'),
       h('td', { class: 'exp' },
         h('button', { type: 'button', class: 'link', onclick: event => { event.stopPropagation(); openDetail(run); } }, run.experiment_id),
         h('span', { class: 'badges' },
           run.role === 'baseline' ? h('span', { class: 'badge' }, 'baseline') : null,
-          run.comparison_track !== 'matched' ? h('span', { class: 'badge' }, run.comparison_track) : null,
-          run.autonomy.self_hosting ? h('span', { class: 'badge' }, 'self-hosted') : null,
-          run.synthetic ? h('span', { class: 'badge mock' }, 'mock') : null),
-        h('span', { class: 'sub' }, `${run.engine.name} · ${run.engine.revision.slice(0, 7)}${run.derived_from ? ` · derived from ${run.derived_from}` : ''}`)),
-      h('td', {}, run.hardware, h('span', { class: 'sub' }, `${run.target_model} · ${run.evaluation}`)),
-      h('td', {}, run.builder, h('span', { class: 'sub' }, run.harness)),
-      metrics.map(key => h('td', { class: `num${key === state.metric ? ' hot' : ''}` }, formatValue(key, METRICS[key].read(run), false))),
-      h('td', { class: `gate ${failed ? 'bad' : 'good'}`, title: `${run.quality.task_pass}/${run.quality.task_total} tasks` }, `${failed ? '✗' : '✓'} ${run.quality.task_pass}/${run.quality.task_total}`),
+          run.comparison_track !== 'matched-configuration' ? h('span', { class: 'badge' }, 'best-permitted') : null,
+          run.autonomy.self_hosting_status === 'demonstrated' ? h('span', { class: 'badge' }, 'self-hosted') : null,
+          run.metrics.preliminary ? h('span', { class: 'badge', title: 'A single cohort is preliminary evidence' }, 'preliminary') : null,
+          run.deviations.length ? h('span', { class: 'badge', title: run.deviations.join('; ') }, 'deviations') : null,
+          synthetic ? h('span', { class: 'badge mock' }, 'mock') : null),
+        h('span', { class: 'sub' }, `${run.engine.name}${run.engine.revision ? ` \u00b7 ${run.engine.revision.slice(0, 7)}` : ''}${run.derived_from ? ` \u00b7 derived from ${run.derived_from}` : ''}`)),
+      h('td', {}, run.hardware, h('span', { class: 'sub' }, `${run.target_model} (${run.weights}) \u00b7 ${run.evaluation}`)),
+      h('td', {}, run.builder ?? '\u2014', h('span', { class: 'sub' }, run.harness)),
+      metrics.map(key => h('td', { class: `num${key === state.metric ? ' hot' : ''}` }, formatValue(key, METRICS[key].read(run), false), sub(key))),
+      h('td', { class: `gate ${gate[0]}`, title: `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks, numerical check ${run.quality.numerical_status}` },
+        `${gate[1]} ${run.quality.application_passed}/${run.quality.application_total}`),
       h('td', { class: 'date' }, run.date));
   });
 
@@ -242,7 +263,7 @@ function renderTrends(filtered) {
     } }, swatch(item), `${item.label} (${item.points.length})`))));
   const notes = [
     state.frontier ? 'The dashed line is the best passing result so far.' : null,
-    state.includeFailed ? 'Hollow markers failed the quality gate.' : null,
+    state.includeNotPassed ? 'Hollow markers did not pass the quality gate.' : null,
     hidden ? `${hidden} smaller groups are not shown; narrow the filters or change the grouping.` : null,
   ].filter(Boolean).join(' ');
   $('panel-trends').replaceChildren(
@@ -283,21 +304,33 @@ function openDetail(run) {
   const parents = new Map(runs.map(item => [item.experiment_id, item.derived_from]));
   const chain = [run.experiment_id];
   while (parents.get(chain[0]) && chain.length < 20) chain.unshift(parents.get(chain[0]));
+  const count = value => (value == null ? 'not recorded' : String(value));
+  const evidence = h('ul', {}, run.evidence.map(item => h('li', {},
+    item.access === 'public' && item.url.startsWith('https://')
+      ? h('a', { href: item.url, target: '_blank', rel: 'noopener noreferrer' }, item.description) : item.description,
+    ` (${item.access})`)));
   const rows = [
-    ['Experiment', run.experiment_id], ['Lineage', chain.join(' → ')], ['Role and track', `${run.role}, ${run.comparison_track}`],
-    ['Date', run.date], ['Engine', `${run.engine.name} (${run.engine.backend})`], ['Revision', run.engine.revision],
-    ['Hardware', run.hardware], ['Target model', run.target_model], ['Builder LLM', run.builder], ['Harness', run.harness],
-    ['Evaluation', run.evaluation],
+    ['Experiment', run.experiment_id], ['Lineage', chain.join(' \u2192 ')], ['Run', `${run.run_id} (${run.run_status}, acceptance ${run.acceptance})`],
+    ['Role and track', `${run.role}, ${run.comparison_track}`], ['Date', run.date],
+    ['Engine', run.engine.name], ['Runtime revision', run.engine.revision ?? 'unavailable'],
+    ['Hardware', run.hardware], ['Target model', `${run.target_model} (${run.weights})`], ['Builder LLM', run.builder ?? 'n/a (baseline)'],
+    ['Development harness', run.harness], ['Evaluation', run.evaluation],
     ...Object.keys(METRICS).map(key => [METRICS[key].label, formatValue(key, METRICS[key].read(run))]),
-    ['Quality gate', `${run.quality_gate}: ${run.quality.task_pass}/${run.quality.task_total} tasks, max abs error ${run.quality.numerical_max_abs_error}`],
-    ['Builder tokens', `${run.autonomy.builder_tokens_m} M`], ['Self-hosting', run.autonomy.self_hosting ? 'yes' : 'no'],
-    ['Evidence', run.evidence],
+    ['Decode timing basis', run.metrics.decode_basis ? BASIS_LABEL[run.metrics.decode_basis] : 'not obtained'],
+    ['Prefill timing basis', run.metrics.prefill_basis ? BASIS_LABEL[run.metrics.prefill_basis] : 'not obtained'],
+    ['Formal repetitions', `${run.metrics.formal_repetitions}${run.metrics.preliminary ? ' (preliminary)' : ''}`],
+    ['Requests reconciled', run.metrics.requests_reconciled ? 'yes' : 'no'],
+    ['Quality gate', `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks, numerical check ${run.quality.numerical_status}, negative control ${run.quality.negative_control_verified ? 'verified' : 'not verified'}`],
+    ['Builder tokens', count(run.autonomy.builder_tokens)], ['Elapsed hours', count(run.autonomy.elapsed_hours)],
+    ['Self-hosting', `${run.autonomy.self_hosting_status}${run.autonomy.external_recovery_used ? ' (external recovery used)' : ''}`],
+    ['Deviations', run.deviations.length ? run.deviations.join('; ') : 'none recorded'],
+    ['Source', `${run.source.run}`],
   ];
   const dialog = $('detail');
   dialog.replaceChildren(
-    h('h2', { id: 'detail-title' }, run.run_id),
-    run.synthetic ? h('p', {}, h('span', { class: 'badge mock' }, 'Synthetic data')) : null,
-    h('dl', {}, rows.flatMap(([key, value]) => [h('dt', {}, key), h('dd', {}, String(value))])),
+    h('h2', { id: 'detail-title' }, run.entry_id),
+    synthetic ? h('p', {}, h('span', { class: 'badge mock' }, 'Synthetic data')) : null,
+    h('dl', {}, rows.flatMap(([key, value]) => [h('dt', {}, key), h('dd', {}, String(value))]), h('dt', {}, 'Evidence'), h('dd', {}, evidence)),
     h('div', { class: 'dialog-actions' }, h('button', { type: 'button', onclick: () => dialog.close() }, 'Close')));
   dialog.showModal();
 }
