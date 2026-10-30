@@ -1,0 +1,119 @@
+{
+  "evaluation": {
+    "evaluation_id": "humaneval-20-pi",
+    "revision": "9b71eb126c862a8c185272e5b68a26a55e953cb9",
+    "sha256": "933285b68d72f20497ce7cd6c5d8d53856f76aa50bb06b4c16bf187e34623ae9"
+  },
+  "role": "candidate",
+  "engine_name": "bootstrap-dotnet-metal-fp8-32k",
+  "environment": {
+    "hardware_model": "Apple M5 Pro; 20 GPU cores; 48 GiB unified memory",
+    "os_version": "macOS-26.6.2-arm64-arm-64bit",
+    "toolchain": ".NET SDK 10.0.100; .NET 10; clang 21; original FP32 Metal kernels; Pi 1.4.0; Docker 29.5.3",
+    "power_mode": "AC observed; configured powermode=2; no settings changed",
+    "thermal_observations": "Quantitative thermal sensors not instrumented; no thermal stability claim",
+    "exclusive_gpu": false,
+    "deviations_from_contract": []
+  },
+  "runtime_revision": "a2d03f89dd5caa0dbf3f80cd65e4cc86c7d41870",
+  "artifacts": [
+    {
+      "name": "Bootstrap.Engine.dll",
+      "sha256": "2b8ee2574d02a7f2b7e9e9e674da4fbd3734fec7a4b98cd0891f56c1773945f5"
+    },
+    {
+      "name": "libbootstrap_metal.dylib",
+      "sha256": "87ed6a0113616768bf9df3c92a9c70405cc900e21e98240b0395463fa2077840"
+    },
+    {
+      "name": "kernels.metal",
+      "sha256": "75cb9c5165f6b44fd30025b93758d830acccc7a4812900136b1deab54e32cd17"
+    }
+  ],
+  "commands": [
+    "/tmp/bootstrap-humaneval-eval-HQ7KZn/evaluations/humaneval-20-pi/scripts/humaneval.py --endpoint http://127.0.0.1:17863 --model qwen3.6-35b-a3b --engine-name bootstrap-dotnet-metal-fp8-32k --evaluation-revision 9b71eb126c862a8c185272e5b68a26a55e953cb9 --runtime-revision a2d03f89dd5caa0dbf3f80cd65e4cc86c7d41870 --artifact Bootstrap.Engine.dll=2b8ee2574d02a7f2b7e9e9e674da4fbd3734fec7a4b98cd0891f56c1773945f5 --artifact libbootstrap_metal.dylib=87ed6a0113616768bf9df3c92a9c70405cc900e21e98240b0395463fa2077840 --artifact kernels.metal=75cb9c5165f6b44fd30025b93758d830acccc7a4812900136b1deab54e32cd17 --role candidate --warmup 1 --repetitions 3 --pi /Users/littlecloud/.local/bin/pi --artifacts-dir /Users/littlecloud/repos/llm-bootstrap-qwen3.8-35b/experiments/2026-10-29-bootstrap-humaneval-001/evidence/candidate-001-artifacts --engine-command dotnet Bootstrap.Engine.dll serve --model-dir MODEL_DIR --port PORT --context-window 32768; official FP8/FP32; thinking off; greedy; profiler disabled --hardware-model Apple M5 Pro; 20 GPU cores; 48 GiB unified memory --toolchain .NET SDK 10.0.100; .NET 10; clang 21; original FP32 Metal kernels; Pi 1.4.0; Docker 29.5.3 --power-mode AC observed; configured powermode=2; no settings changed --thermal-observations Quantitative thermal sensors not instrumented; no thermal stability claim --memory-pid 5555 --output experiments/2026-10-29-bootstrap-humaneval-001/runs/2026-10-29-candidate-001/candidate-bootstrap-dotnet-metal-fp8.json",
+    "dotnet Bootstrap.Engine.dll serve --model-dir MODEL_DIR --port PORT --context-window 32768; official FP8/FP32; thinking off; greedy; profiler disabled"
+  ],
+  "settings": {
+    "api": "pi-agent-via-measuring-proxy-to-openai-chat-completions",
+    "harness": "Pi 1.4.0",
+    "thinking": "off",
+    "temperature": "harness default; Pi 1.4.0 has no sampling option",
+    "tools": "read,write,bash,edit",
+    "compaction": "disabled",
+    "retries": "disabled",
+    "tasks": "HumanEval/156,HumanEval/94,HumanEval/72,HumanEval/80,HumanEval/149,HumanEval/2,HumanEval/35,HumanEval/32,HumanEval/146,HumanEval/137,HumanEval/97,HumanEval/154,HumanEval/6,HumanEval/161,HumanEval/115,HumanEval/131,HumanEval/162,HumanEval/50,HumanEval/47,HumanEval/148",
+    "warmup_passes": 1,
+    "formal_passes": 3,
+    "context_window": 32768,
+    "max_output_tokens_per_request": 4096,
+    "timeout_seconds_per_task": 300,
+    "request_concurrency": 1,
+    "endpoint_scheme": "http",
+    "endpoint_host_class": "loopback",
+    "prefill_seconds_definition": "proxy time from dispatch to the first output chunk of each engine request; it includes the first sampled token",
+    "decode_definition": "usage.completion_tokens minus 1 divided by the time from the first to the last output chunk; it applies only while chunks are at least 0.9 per token",
+    "client_ttft_definition": "median over all engine requests of the proxy time to the first output chunk",
+    "application_duration_definition": "mean over succeeded passes of the summed Pi wall time of all tasks, from launch to exit; assertions are excluded",
+    "cache_policy_applied": "every task prompt begins with a unique session nonce; the second request of a task reuses the first one's prefix, and reported cached tokens are recorded, not required",
+    "assertion_sandbox": "one offline container per solution: no network, read-only root and mount, no capabilities, unprivileged user, bounded memory, processes, CPU, and 30 seconds",
+    "cached_tokens_reported": true,
+    "decode_chunk_token_ratio": 0.0052,
+    "decode_not_obtained_reason": "the engine sent 0.01 output chunks per token, below 0.90, so the N-1 interval definition does not apply",
+    "tasks_passed_per_repetition": "20,20,20",
+    "observed_requests_per_task": 4.35,
+    "observed_tool_calls_per_task": 3.35,
+    "invalid_syntax_solutions": 0,
+    "peak_memory_definition": "resident set size of PID 5555 sampled every 0.5 seconds during the formal passes; it may not include GPU memory"
+  },
+  "repetitions": [
+    {
+      "phase": "warm-up",
+      "outcome": "succeeded"
+    },
+    {
+      "phase": "formal",
+      "outcome": "succeeded"
+    },
+    {
+      "phase": "formal",
+      "outcome": "succeeded"
+    },
+    {
+      "phase": "formal",
+      "outcome": "succeeded"
+    }
+  ],
+  "metrics": {
+    "formal_repetitions": 3,
+    "preliminary": false,
+    "prefill": {
+      "basis": "processed-input-tokens",
+      "total_tokens": 596671,
+      "total_seconds": 2304.5387,
+      "tokens_per_second": 258.911251956845
+    },
+    "decode": "Not obtained",
+    "client_ttft_median_seconds": 8.001673875000051,
+    "application_duration_seconds": 775.006,
+    "requests_reconciled": true,
+    "per_request_evidence": {
+      "description": "Per-task outcomes, assertion statuses, and per-request timings and token counts; it holds no prompts, solutions, or model output",
+      "access": "local-only",
+      "sha256": "28239ff035e3ad77f2225db29d1926e799e5538a222dfb668fd7f28a974c08f2",
+      "access_limitation": "Kept next to the result document and not committed to the repository."
+    }
+  },
+  "resources": {
+    "peak_memory_gib": 2.181,
+    "swap_out_delta_bytes": 1257701376
+  },
+  "quality": {
+    "application": {
+      "passed": 60,
+      "total": 60,
+      "negative_control_verified": true,
+      "restricted_environment": true
+    }
+  }
+}
