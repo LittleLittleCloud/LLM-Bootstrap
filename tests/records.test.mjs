@@ -4,7 +4,7 @@ import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { buildIndex, loadRecordFiles } from '../tools/leaderboard/build-index.mjs';
+import { buildIndex, loadEvaluationIds, loadRecordFiles } from '../tools/leaderboard/build-index.mjs';
 import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -34,7 +34,14 @@ test('the accepted record files are exactly the documented ones', () => {
 test('committed experiment records validate and build into the leaderboard index', async () => {
   const validators = await loadValidators();
   assert.ok(validators, 'schema validation needs the dev dependencies (npm ci)');
-  buildIndex(loadRecordFiles(root), { validators });
+  const files = loadRecordFiles(root);
+  const index = buildIndex(files, { validators, evaluationIds: loadEvaluationIds(root) });
+  const runs = [...files.keys()].filter(path => /\/runs\/[^/]+\/run\.json$/.test(path));
+  const listed = new Set(index.entries.map(entry => entry.source.run));
+  for (const path of runs) {
+    const status = JSON.parse(files.get(path)).status;
+    if (['completed', 'interrupted'].includes(status)) assert.ok(listed.has(path) || index.retired_runs.includes(path), `${path} is neither listed nor retired`);
+  }
 });
 
 test('only accepted, small record files are committed, and every experiment has a contract and a report', { skip: tracked === null && 'not a Git checkout' }, () => {

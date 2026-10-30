@@ -133,6 +133,17 @@ test('missing metrics and an unavailable intervention log stay null, never zero'
   assert.equal(entry.autonomy.hardware_hours, null);
 });
 
+test('a run that pins a retired evaluation is named, not listed, and does not fail the build', () => {
+  const { files } = tree();
+  const current = buildIndex(files, { validators, evaluationIds: new Set(['synthetic-evaluation']) });
+  assert.equal(current.counts.entries, 3);
+  assert.deepEqual(current.retired_runs, []);
+  const retired = buildIndex(files, { validators, evaluationIds: new Set(['another-evaluation']) });
+  assert.equal(retired.counts.entries, 0);
+  assert.deepEqual(retired.retired_runs, ['experiments/exp-base/runs/run-1/run.json', 'experiments/exp-derived/runs/run-2/run.json']);
+  assert.equal('retired_runs' in buildIndex(files, { validators }), false, 'without a filter every run is listed');
+});
+
 test('drafts and runs still in progress are not listed', () => {
   const files = new Map();
   const hashes = addContracts(files);

@@ -14,6 +14,8 @@
 //     the baselines of the same run. A baseline defines that reference, so it passes on verification alone. It is "failed"
 //     when a candidate scores lower than that tolerance allows, and "unverified" otherwise. Only "passed" entries are ranked.
 //   - Missing values stay null. They are never replaced by zero or inferred (an unavailable intervention log is not "none").
+//   - A run that pins an evaluation which no longer exists in evaluations/ is history, not a failure: it stays in the repository,
+//     is not listed, and is named in retired_runs so it is never dropped silently.
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -55,9 +57,10 @@ export function qualityGate(result, runStatus, baselines = []) {
 
 const throughputOf = (result, workloadId, concurrency) => result.throughput.find(item => item.workload_id === workloadId && item.concurrency === concurrency);
 
-// files: Map of repository-relative POSIX path -> file text.
-export function buildIndex(files, { synthetic = false, validators = null } = {}) {
+// files: Map of repository-relative POSIX path -> file text. evaluationIds: ids of the evaluations that exist now, or null to list every run.
+export function buildIndex(files, { synthetic = false, validators = null, evaluationIds = null } = {}) {
   const problems = [];
+  const retired = [];
   const fail = message => { problems.push(message); };
   const read = path => {
     if (!files.has(path)) { fail(`missing file ${path}`); return null; }
@@ -116,6 +119,7 @@ export function buildIndex(files, { synthetic = false, validators = null } = {})
     if (!loaded) continue;
     const { contract, parent } = loaded;
     if (contract.status !== 'frozen') { fail(`${run.contract.path} is not frozen, so ${path} cannot be listed`); continue; }
+    if (evaluationIds && !evaluationIds.has(contract.evaluation.definition.evaluation_id)) { retired.push(path); continue; }
 
     const documents = [];
     for (const reference of run.evaluation_results) {
@@ -202,6 +206,7 @@ export function buildIndex(files, { synthetic = false, validators = null } = {})
   return {
     schema_version: INDEX_VERSION,
     synthetic,
+    ...(evaluationIds ? { retired_runs: retired } : {}),
     counts: {
       runs: new Set(entries.map(entry => entry.run_id)).size,
       experiments: new Set(entries.map(entry => entry.experiment_id)).size,
@@ -215,6 +220,18 @@ export function buildIndex(files, { synthetic = false, validators = null } = {})
 export function serializeIndex(index) {
   const { entries, ...head } = index;
   return `${JSON.stringify(head).slice(0, -1)},\n"entries":[\n${entries.map(entry => JSON.stringify(entry)).join(',\n')}\n]}\n`;
+}
+
+// Ids of the released evaluations under <root>/evaluations, or null when the directory does not exist (no filtering).
+export function loadEvaluationIds(root) {
+  const base = join(root, 'evaluations');
+  if (!existsSync(base)) return null;
+  const ids = new Set();
+  for (const name of readdirSync(base)) {
+    const path = join(base, name, 'evaluation.json');
+    if (existsSync(path) && JSON.parse(readFileSync(path, 'utf8')).status === 'released') ids.add(name);
+  }
+  return ids;
 }
 
 // Loads every JSON file under <root>/experiments into a Map keyed by repository-relative POSIX path.
@@ -244,7 +261,7 @@ function main(argv) {
       console.error('warning: ajv is not installed, so documents are not validated against the schemas');
     }
     try {
-      const index = buildIndex(loadRecordFiles(root), { synthetic: argv.includes('--synthetic'), validators });
+      const index = buildIndex(loadRecordFiles(root), { synthetic: argv.includes('--synthetic'), validators, evaluationIds: loadEvaluationIds(root) });
       writeFileSync(out, serializeIndex(index));
       console.log(`wrote ${index.counts.entries} entries from ${index.counts.runs} runs to ${out}`);
       return 0;
