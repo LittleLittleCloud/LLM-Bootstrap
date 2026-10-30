@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap evaluation protocol schemas",
-    "version": "0.3.0",
-    "summary": "Structural schemas for repository-owned evaluation definitions and result documents.",
-    "description": "Machine-readable core of references/evaluation-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a definition at evaluations/<id>/evaluation.json against EvaluationDefinition and a result document against EvaluationResult with any JSON Schema 2020-12 validator.\n\nEvaluations are owned by the LLM Bootstrap repository. Experiments select one by EvaluationReference and never carry or change evaluation code. The prose protocol and the skills remain authoritative. A passing validation shows only the required shape. It does not show that scripts exist or match their hashes (the repository tests check that), that measurements are correct, or that arithmetic is consistent. Primitive schemas shared with the experiment protocol schema are kept identical, and a test enforces that."
+    "version": "0.4.0",
+    "summary": "Structural schemas for repository-owned evaluation definitions and the flat record of each evaluation.",
+    "description": "Machine-readable core of references/evaluation-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a definition at evaluations/<id>/evaluation.json against EvaluationDefinition and a record at experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json against EvaluationResult with any JSON Schema 2020-12 validator.\n\nEvaluations are owned by the LLM Bootstrap repository. Experiments select one by reference and never carry or change evaluation code. EvaluationResult is flat: every field is a top-level key whose value is a scalar or an array of strings. Settings, per-workload throughput, and per-benchmark scores are key families (setting.*, throughput.<workload>.c<concurrency>.*, intelligence.<benchmark>.*) rather than nested objects.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only the required shape. It does not show that scripts exist or match their hashes (the repository tests check that), that measurements are correct, or that arithmetic is consistent. Primitive schemas shared with the experiment protocol schema are kept identical, and a test enforces that."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {},
@@ -17,35 +17,31 @@
         "type": "string",
         "pattern": "^[0-9a-f]{40}$"
       },
+      "Timestamp": { "description": "RFC 3339 timestamp with an explicit UTC offset.", "type": "string", "format": "date-time" },
       "NullableText": { "type": ["string", "null"], "pattern": "\\S" },
       "NullableSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
       "NullableCommit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
       "NotApplicable": {
-        "description": "Explicit declaration that a field does not apply to this experiment.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["not_applicable", "reason"],
-        "properties": {
-          "not_applicable": { "const": true },
-          "reason": { "$ref": "#/components/schemas/Text" }
-        }
+        "description": "Explicit declaration that a field does not apply, as text that gives the reason.",
+        "type": "string",
+        "pattern": "^Not applicable: \\S"
       },
       "Unavailable": {
-        "description": "A provider or historical detail that cannot be obtained. Never substitute a fabricated identifier.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["unavailable", "reason"],
-        "properties": {
-          "unavailable": { "const": true },
-          "reason": { "$ref": "#/components/schemas/Text" }
-        }
+        "description": "A provider or historical detail that cannot be obtained, as text that gives the reason. Never substitute a fabricated identifier.",
+        "type": "string",
+        "pattern": "^Unavailable: \\S"
       },
       "NotObtained": {
         "description": "Marker for a metric that was not measured. A missing metric is never zero.",
         "const": "Not obtained"
       },
+      "Digest": {
+        "description": "A named file, executable, kernel, or image with its content hash, written name=sha256.",
+        "type": "string",
+        "pattern": "^[^=\\s][^=]*=[0-9a-f]{64}$"
+      },
       "NoNullValues": {
-        "description": "Matches any JSON value containing no null at any depth. Used to require that a frozen contract has no unresolved fields.",
+        "description": "Matches any JSON value containing no null at any depth. Used to require that a released definition has no unresolved fields.",
         "anyOf": [
           { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/NoNullValues" } },
           { "type": "array", "items": { "$ref": "#/components/schemas/NoNullValues" } },
@@ -60,54 +56,6 @@
         "type": "object",
         "minProperties": 1,
         "additionalProperties": { "type": ["string", "number", "boolean"] }
-      },
-      "HashedArtifact": {
-        "description": "A named file, executable, kernel, image, or other artifact with its content hash.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "sha256"],
-        "properties": {
-          "name": { "$ref": "#/components/schemas/Text" },
-          "sha256": { "$ref": "#/components/schemas/Sha256" }
-        }
-      },
-      "EvidenceRef": {
-        "description": "Pointer to raw evidence. Local-only evidence is explicitly marked, carries a hash and an access limitation, and is never given a download URL.",
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["description", "access", "url", "sha256"],
-            "properties": {
-              "description": { "$ref": "#/components/schemas/Text" },
-              "access": { "const": "public" },
-              "url": { "type": "string", "format": "uri", "pattern": "^https://" },
-              "sha256": { "$ref": "#/components/schemas/Sha256" }
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["description", "access", "sha256", "access_limitation"],
-            "properties": {
-              "description": { "$ref": "#/components/schemas/Text" },
-              "access": { "const": "local-only" },
-              "sha256": { "$ref": "#/components/schemas/Sha256" },
-              "access_limitation": { "$ref": "#/components/schemas/Text" }
-            }
-          }
-        ]
-      },
-      "EvaluationReference": {
-        "description": "Pins an evaluation definition in the LLM Bootstrap repository by id, repository commit, and definition file hash.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["evaluation_id", "revision", "sha256"],
-        "properties": {
-          "evaluation_id": { "$ref": "#/components/schemas/EvaluationId" },
-          "revision": { "$ref": "#/components/schemas/GitCommitSha" },
-          "sha256": { "$ref": "#/components/schemas/Sha256" }
-        }
       },
       "EvaluationId": {
         "description": "Kebab-case id that equals the directory name under evaluations/.",
@@ -306,208 +254,177 @@
           }
         ]
       },
-      "EvaluationResult": {
-        "description": "The result document the pinned evaluation scripts emit for one baseline or candidate engine, measured serially on the same device. Do not edit it by hand.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["evaluation", "role", "engine_name", "environment", "runtime_revision", "artifacts", "commands", "settings", "repetitions", "metrics", "throughput", "resources", "quality"],
-        "properties": {
-          "evaluation": { "$ref": "#/components/schemas/EvaluationReference" },
-          "environment": {
-            "description": "What was actually observed, which may differ from the contract. Record deviations rather than hiding them.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["hardware_model", "os_version", "toolchain", "power_mode", "thermal_observations", "exclusive_gpu", "deviations_from_contract"],
-            "properties": {
-              "hardware_model": { "$ref": "#/components/schemas/Text" },
-              "os_version": { "$ref": "#/components/schemas/Text" },
-              "toolchain": { "$ref": "#/components/schemas/Text" },
-              "power_mode": { "$ref": "#/components/schemas/Text" },
-              "thermal_observations": { "$ref": "#/components/schemas/Text" },
-              "exclusive_gpu": { "type": "boolean" },
-              "deviations_from_contract": {
-                "description": "Include any CPU fallback, offloading, SSD streaming, or multi-host participation.",
-                "type": "array",
-                "items": { "$ref": "#/components/schemas/Text" }
-              }
-            }
-          },
-          "role": { "enum": ["baseline", "candidate"] },
-          "engine_name": { "$ref": "#/components/schemas/Text" },
-          "runtime_revision": { "$ref": "#/components/schemas/CommitOrUnavailable" },
-          "artifacts": {
-            "description": "Hashes of the deployed executables and kernels. A checkout commit does not prove the deployed build.",
-            "type": "array",
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/HashedArtifact" }
-          },
-          "commands": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/Text" } },
-          "settings": {
-            "description": "Settings actually used, such as precision, speculation, caching, and memory limits.",
-            "$ref": "#/components/schemas/ScalarSettings"
-          },
-          "repetitions": {
-            "description": "Every cold-load, warm-up, and formal repetition, including failures.",
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["phase", "outcome"],
-              "properties": {
-                "phase": { "enum": ["cold-load", "warm-up", "formal"] },
-                "outcome": { "enum": ["succeeded", "failed", "timed-out", "interrupted"] },
-                "failure_description": { "$ref": "#/components/schemas/Text" }
-              },
-              "allOf": [
-                {
-                  "if": { "required": ["outcome"], "properties": { "outcome": { "enum": ["failed", "timed-out", "interrupted"] } } },
-                  "then": { "required": ["failure_description"] }
-                }
-              ]
-            }
-          },
-          "metrics": { "$ref": "#/components/schemas/Metrics" },
-          "throughput": {
-            "description": "The throughput measurement of every workload level, the main result. The run-level metrics are the headline values of the single-stream workloads. Empty when the throughput part was not run.",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/ThroughputResult" }
-          },
-          "resources": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["peak_memory_gib", "swap_out_delta_bytes"],
-            "properties": {
-              "peak_memory_gib": { "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
-              "swap_out_delta_bytes": {
-                "description": "Whole-machine swap-out delta over bracketed boundaries. It is not attributed to a process without evidence.",
-                "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
-              }
-            }
-          },
-          "quality": {
-            "description": "Intelligence checks. Rule-scored benchmark results show that the engine still computes the model correctly. They are compared with a baseline engine of the same model, not with an absolute floor, and are not numerical equivalence.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["intelligence"],
-            "properties": {
-              "intelligence": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["benchmarks", "complete", "negative_control_verified", "restricted_environment"],
-                    "properties": {
-                      "benchmarks": {
-                        "type": "array",
-                        "minItems": 1,
-                        "items": {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": ["benchmark_id", "metric", "score", "num_samples", "stderr"],
-                          "properties": {
-                            "benchmark_id": { "$ref": "#/components/schemas/Text" },
-                            "metric": { "$ref": "#/components/schemas/Text" },
-                            "score": { "type": "number", "minimum": 0, "maximum": 1 },
-                            "num_samples": { "description": "The denominator, including samples the model failed to answer.", "type": "integer", "minimum": 1 },
-                            "stderr": { "description": "Standard error of a proportion, sqrt(score * (1 - score) / num_samples).", "type": "number", "minimum": 0 }
-                          }
-                        }
-                      },
-                      "complete": { "description": "Every benchmark in the pinned plan was scored on its expected samples.", "type": "boolean" },
-                      "negative_control_verified": { "type": "boolean" },
-                      "restricted_environment": {
-                        "description": "True only if the control showed that generated programs ran without network access and with bounded resources.",
-                        "type": "boolean"
-                      }
-                    }
-                  },
-                  { "$ref": "#/components/schemas/NotObtained" }
-                ]
-              }
-            }
-          }
-        }
+      "NumberOrNotObtained": {
+        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
       },
-      "Metrics": {
-        "description": "Run-level summaries. Per-request native timings, token counts, cache hits, and request IDs stay in the referenced per-request evidence.",
+      "NumberOrUnavailable": {
+        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/Unavailable" }]
+      },
+      "ThroughputBasis": {
+        "description": "Decode definitions are never mixed. For n-minus-1-intervals, tokens are the sum of N-1 over requests with at least two output tokens. Native command-level metrics are never relabeled N-1.",
+        "anyOf": [
+          { "enum": ["processed-input-tokens", "n-minus-1-intervals", "native-command-timing", "native-speculative-multi-token"] },
+          { "$ref": "#/components/schemas/NotObtained" }
+        ]
+      },
+      "EvaluationResult": {
+        "description": "The flat record one evaluation of one engine, measured serially on the same device. The pinned evaluation scripts emit it; do not edit it by hand. It is stored at experiments/<experiment_id>/evaluation/<YYYYMMDD-HHMMSS>.json, where the name is started_at in UTC. Every field is a top-level scalar or array of strings. Key families: setting.<name> (settings actually used, such as precision, speculation, caching, and memory limits); throughput.<workload>.c<concurrency>.<metric> (the measurement of every workload level, summed over the formal passes whose requests all met the workload's gates: every request succeeded, reached its target input length, and produced exactly its target output length; all rates are ratios of sums, never means of per-request speeds, and prefill and decode follow the definitions in the settings); intelligence.<benchmark>.<metric|score|num_samples|stderr> (rule-scored benchmark results that show the engine still computes the model correctly; they are compared with a baseline engine of the same model, not with an absolute floor, and are not numerical equivalence). A missing value is the string 'Not obtained', never zero. Per-request records stay in local-only evidence referenced by hash.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "formal_repetitions", "preliminary", "prefill", "decode", "client_ttft_median_seconds",
-          "requests_reconciled", "per_request_evidence"
+          "evaluation_id", "evaluation_revision", "evaluation_sha256", "experiment_id", "experiment_revision", "experiment_sha256", "started_at",
+          "role", "engine_name", "runtime_revision", "artifacts", "commands",
+          "environment_hardware_model", "environment_os_version", "environment_toolchain", "environment_power_mode",
+          "environment_thermal_observations", "environment_exclusive_gpu", "environment_deviations",
+          "warmup_passes", "formal_passes_succeeded", "formal_passes_failed", "failures", "preliminary",
+          "prefill_tokens_per_second", "prefill_basis", "decode_tokens_per_second", "decode_basis", "client_ttft_median_seconds", "requests_reconciled",
+          "peak_memory_gib", "swap_out_delta_bytes",
+          "intelligence_complete", "negative_control_verified", "restricted_environment",
+          "evidence_sha256", "evidence_access_limitation",
+          "human_interventions", "builder_tokens", "elapsed_hours", "hardware_hours", "self_hosting_status"
         ],
         "properties": {
-          "formal_repetitions": { "type": "integer", "minimum": 0 },
+          "evaluation_id": { "description": "The evaluation that ran, with the repository commit and definition hash that pin it.", "$ref": "#/components/schemas/EvaluationId" },
+          "evaluation_revision": { "$ref": "#/components/schemas/GitCommitSha" },
+          "evaluation_sha256": { "$ref": "#/components/schemas/Sha256" },
+          "experiment_id": { "description": "The experiment this record belongs to, with the commit and file hash of its experiment.json when the evaluation ran.", "$ref": "#/components/schemas/Text" },
+          "experiment_revision": { "$ref": "#/components/schemas/GitCommitSha" },
+          "experiment_sha256": { "$ref": "#/components/schemas/Sha256" },
+          "started_at": { "$ref": "#/components/schemas/Timestamp" },
+          "role": { "enum": ["baseline", "candidate"] },
+          "engine_name": { "$ref": "#/components/schemas/Text" },
+          "runtime_revision": { "description": "Full commit of the engine, or 'Unavailable: reason'.", "$ref": "#/components/schemas/CommitOrUnavailable" },
+          "artifacts": {
+            "description": "Hashes of the deployed executables and kernels, as name=sha256. A checkout commit does not prove the deployed build.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/Digest" }
+          },
+          "commands": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/Text" } },
+
+          "environment_hardware_model": { "description": "What was actually observed, which may differ from the experiment. Record deviations rather than hiding them.", "$ref": "#/components/schemas/Text" },
+          "environment_os_version": { "$ref": "#/components/schemas/Text" },
+          "environment_toolchain": { "$ref": "#/components/schemas/Text" },
+          "environment_power_mode": { "$ref": "#/components/schemas/Text" },
+          "environment_thermal_observations": { "$ref": "#/components/schemas/Text" },
+          "environment_exclusive_gpu": { "type": "boolean" },
+          "environment_deviations": {
+            "description": "Deviations from the experiment. Include any CPU fallback, offloading, SSD streaming, or multi-host participation.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Text" }
+          },
+
+          "warmup_passes": { "description": "Unmeasured warm-up passes over the throughput plan.", "type": "integer", "minimum": 0 },
+          "formal_passes_succeeded": { "type": "integer", "minimum": 0 },
+          "formal_passes_failed": { "description": "Formal passes, and the intelligence part, that failed, timed out, or were interrupted.", "type": "integer", "minimum": 0 },
+          "failures": {
+            "description": "One description for every warm-up or formal pass or part that did not succeed.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Text" }
+          },
           "preliminary": { "description": "A single cohort is preliminary evidence, not a stability study.", "type": "boolean" },
-          "prefill": { "anyOf": [{ "$ref": "#/components/schemas/ThroughputAggregate" }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "decode": { "anyOf": [{ "$ref": "#/components/schemas/ThroughputAggregate" }, { "$ref": "#/components/schemas/NotObtained" }] },
+
+          "prefill_tokens_per_second": { "description": "Headline: the single-stream 2k-prompt workload, processed input tokens over time to first token.", "$ref": "#/components/schemas/NumberOrNotObtained" },
+          "prefill_basis": { "$ref": "#/components/schemas/ThroughputBasis" },
+          "decode_tokens_per_second": { "description": "Headline: the single-stream 128-token-context workload, output tokens minus one over time per output token.", "$ref": "#/components/schemas/NumberOrNotObtained" },
+          "decode_basis": { "$ref": "#/components/schemas/ThroughputBasis" },
           "client_ttft_median_seconds": {
             "description": "The median time from dispatch to the first output token of the 2k-token prefill workload, as EvalScope measures it.",
-            "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
+            "$ref": "#/components/schemas/NumberOrNotObtained"
           },
           "requests_reconciled": {
             "description": "Every throughput request in the formal passes succeeded and reached its target input and output lengths. Metrics are not complete until they do.",
             "type": "boolean"
           },
-          "per_request_evidence": { "$ref": "#/components/schemas/EvidenceRef" }
+          "peak_memory_gib": { "$ref": "#/components/schemas/NumberOrNotObtained" },
+          "swap_out_delta_bytes": {
+            "description": "Whole-machine swap-out delta over bracketed boundaries. It is not attributed to a process without evidence.",
+            "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
+          },
+
+          "intelligence_complete": { "description": "Every benchmark in the pinned plan was scored on its expected samples.", "type": "boolean" },
+          "negative_control_verified": { "type": "boolean" },
+          "restricted_environment": {
+            "description": "True only if the control showed that generated programs ran without network access and with bounded resources.",
+            "type": "boolean"
+          },
+
+          "evidence_sha256": { "description": "Hash of the local-only per-request evidence file: EvalScope summaries, gate outcomes, and seeds, with no prompts or model output.", "$ref": "#/components/schemas/Sha256" },
+          "evidence_access_limitation": { "$ref": "#/components/schemas/Text" },
+
+          "human_interventions": { "description": "Count of human interventions so far, or 'Unavailable: reason'. Unavailable historical data is never inferred as none.", "$ref": "#/components/schemas/NumberOrUnavailable" },
+          "builder_tokens": { "$ref": "#/components/schemas/NumberOrUnavailable" },
+          "elapsed_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" },
+          "hardware_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" },
+
+          "self_hosting_status": {
+            "description": "Self-hosting requires the builder's inference to move onto the generated engine. Improving an engine while still using an unrelated hosted builder is engine construction, not self-hosting.",
+            "enum": ["not-in-scope", "not-demonstrated", "demonstrated"]
+          },
+          "self_hosting_transition_at": { "$ref": "#/components/schemas/Timestamp" },
+          "self_hosting_builder_matches_target": { "type": "boolean" },
+          "self_hosting_routing": { "description": "The actual harness endpoint routing observed after the transition.", "$ref": "#/components/schemas/Text" },
+          "self_hosting_external_recovery_used": { "description": "True means the run was not uninterrupted self-hosting.", "type": "boolean" },
+          "self_hosting_evidence_sha256": { "description": "Hash of local-only evidence of development steps executed through the generated engine. A successful chat alone is not enough.", "$ref": "#/components/schemas/Sha256" }
+        },
+        "patternProperties": {
+          "^setting\\.[A-Za-z0-9_.-]+$": { "type": ["string", "number", "boolean"] },
+          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.(prefill_tokens_per_second|decode_tokens_per_second|ttft_median_seconds|output_tokens_per_second|total_tokens_per_second|requests_per_second|pass_tokens_per_second_stddev)$": {
+            "$ref": "#/components/schemas/NumberOrNotObtained"
+          },
+          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.cache_hit_ratio$": {
+            "description": "Cached input tokens over input tokens as the engine reports them. Not obtained when the engine reports no cached tokens.",
+            "anyOf": [{ "type": "number", "minimum": 0, "maximum": 1 }, { "$ref": "#/components/schemas/NotObtained" }]
+          },
+          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.(requests|succeeded_requests)$": {
+            "description": "Formal requests dispatched, including failures, and those EvalScope counted as successful.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.(first_turn_ttft_seconds|subsequent_turn_ttft_seconds)$": {
+            "description": "Mean time to the first token of the cold first turn and of the later turns of a multi-turn workload.",
+            "type": "number",
+            "minimum": 0
+          },
+          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.pass_tokens_per_second$": {
+            "description": "The workload's headline tokens per second for each pass that met the gates.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "number", "minimum": 0 }
+          },
+          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.metric$": { "$ref": "#/components/schemas/Text" },
+          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.score$": { "type": "number", "minimum": 0, "maximum": 1 },
+          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.num_samples$": {
+            "description": "The denominator, including samples the model failed to answer.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.stderr$": {
+            "description": "Standard error of a proportion, sqrt(score * (1 - score) / num_samples).",
+            "type": "number",
+            "minimum": 0
+          }
         },
         "allOf": [
           {
-            "if": { "required": ["formal_repetitions"], "properties": { "formal_repetitions": { "maximum": 1 } } },
-            "then": { "properties": { "preliminary": { "const": true } } }
-          }
-        ]
-      },
-      "ThroughputAggregate": {
-        "description": "Throughput as a ratio of sums, never the mean of per-request speeds. The value must equal total_tokens divided by total_seconds; JSON Schema cannot check that arithmetic.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["basis", "total_tokens", "total_seconds", "tokens_per_second"],
-        "properties": {
-          "basis": {
-            "description": "Decode definitions are never mixed. For n-minus-1-intervals, total_tokens is the sum of N-1 over requests with at least two output tokens. Native command-level metrics are never relabeled N-1.",
-            "enum": ["processed-input-tokens", "n-minus-1-intervals", "native-command-timing", "native-speculative-multi-token"]
+            "if": { "required": ["formal_passes_failed"], "properties": { "formal_passes_failed": { "minimum": 1 } } },
+            "then": { "properties": { "failures": { "minItems": 1 } } }
           },
-          "total_tokens": { "type": "integer", "minimum": 0 },
-          "total_seconds": { "type": "number", "exclusiveMinimum": 0 },
-          "tokens_per_second": { "type": "number", "minimum": 0 }
-        }
-      },
-      "ThroughputResult": {
-        "description": "The measurement of one workload level, summed over the formal passes whose requests all met the workload's gates (every request succeeded, reached its target input length, and produced exactly its target output length). Prefill is processed input tokens over EvalScope's time to first token. Decode is output tokens minus one over its time per output token. Output and total throughput are tokens over the test duration. All are ratios of sums.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["workload_id", "kind", "concurrency", "input_tokens", "output_tokens", "requests", "succeeded_requests", "prefill", "decode", "ttft_median_seconds", "output_tokens_per_second", "total_tokens_per_second", "requests_per_second", "cache_hit_ratio"],
-        "properties": {
-          "workload_id": { "$ref": "#/components/schemas/Text" },
-          "kind": { "enum": ["prefill", "decode", "concurrency", "multi-turn"] },
-          "concurrency": { "description": "Closed-loop concurrent requests, or conversations for a multi-turn workload.", "type": "integer", "minimum": 1 },
-          "input_tokens": { "description": "Target prompt tokens. For a multi-turn workload, the tokens added by each turn.", "type": "integer", "minimum": 1 },
-          "output_tokens": { "type": "integer", "minimum": 1 },
-          "requests": { "description": "Formal requests dispatched, including failures.", "type": "integer", "minimum": 0 },
-          "succeeded_requests": { "type": "integer", "minimum": 0 },
-          "prefill": { "anyOf": [{ "$ref": "#/components/schemas/ThroughputAggregate" }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "decode": { "anyOf": [{ "$ref": "#/components/schemas/ThroughputAggregate" }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "ttft_median_seconds": { "description": "Median over passes of the per-pass median time to the first token.", "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "output_tokens_per_second": { "description": "Aggregate output tokens over the test duration, including ramp-up and ramp-down.", "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "total_tokens_per_second": { "description": "Input plus output tokens over the test duration.", "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "requests_per_second": { "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "cache_hit_ratio": { "description": "Cached input tokens over input tokens as the engine reports them. Not obtained when the engine reports no cached tokens.", "anyOf": [{ "type": "number", "minimum": 0, "maximum": 1 }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "first_turn_ttft_seconds": { "description": "Mean time to the first token of the cold first turn of a multi-turn workload.", "type": "number", "minimum": 0 },
-          "subsequent_turn_ttft_seconds": { "description": "Mean time to the first token of the later turns, which can hit the prefix cache.", "type": "number", "minimum": 0 },
-          "variability": {
-            "description": "The workload's headline tokens per second for each pass that met the gates, and their sample standard deviation.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["metric", "values", "sample_stddev"],
-            "properties": {
-              "metric": { "$ref": "#/components/schemas/Text" },
-              "values": { "type": "array", "minItems": 1, "items": { "type": "number", "minimum": 0 } },
-              "sample_stddev": { "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] }
+          {
+            "if": { "required": ["formal_passes_succeeded"], "properties": { "formal_passes_succeeded": { "maximum": 1 } } },
+            "then": { "properties": { "preliminary": { "const": true } } }
+          },
+          {
+            "if": { "required": ["self_hosting_status"], "properties": { "self_hosting_status": { "const": "demonstrated" } } },
+            "then": {
+              "required": [
+                "self_hosting_transition_at", "self_hosting_builder_matches_target", "self_hosting_routing",
+                "self_hosting_external_recovery_used", "self_hosting_evidence_sha256"
+              ],
+              "properties": { "self_hosting_builder_matches_target": { "const": true } }
             }
           }
-        }
+        ]
       }
     }
   }

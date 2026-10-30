@@ -2,150 +2,107 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-export const draftContract = JSON.parse(readFileSync(fileURLToPath(new URL('../fixtures/draft-contract.json', import.meta.url)), 'utf8'));
+export const draftExperiment = JSON.parse(readFileSync(fileURLToPath(new URL('../fixtures/draft-experiment.json', import.meta.url)), 'utf8'));
 
 export const sha = char => char.repeat(64);
 export const commit = char => char.repeat(40);
 export const when = '2026-10-28T00:00:00+08:00';
-export const notApplicable = reason => ({ not_applicable: true, reason });
-export const unavailable = reason => ({ unavailable: true, reason });
+export const startedAt = '2026-10-28T08:00:00Z';
+export const stamp = '20261028-080000';
 
-export function frozenContract() {
-  const contract = structuredClone(draftContract);
-  Object.assign(contract, {
+export function frozenExperiment() {
+  return {
+    ...draftExperiment,
     experiment_id: 'synthetic-schema-fixture',
     status: 'frozen',
     description: 'Synthetic fixture for schema tests; not an experiment.',
     skills_revision: commit('1'),
-    builder_instruction_hashes: [{ name: 'skills/bootstrap-experiment-sop/SKILL.md', sha256: sha('a') }],
+    builder_instruction_sha256: [`skills/bootstrap-experiment-sop/SKILL.md=${sha('a')}`],
     contract_frozen_at: when,
     scope: 'Synthetic engine construction only; no operating-system changes; fixture authorizes nothing.',
-  });
-  Object.assign(contract.hardware, { os_version: 'synthetic-os 1', toolchain: 'synthetic-toolchain 1' });
-  Object.assign(contract.target_model, {
-    file_hash_manifest: [{ name: 'model-00001.safetensors', sha256: sha('b') }],
-    tokenizer_hash: sha('c'),
-    chat_template_hash: sha('d'),
-    activation_precision: 'bf16',
-    speculative_draft: notApplicable('Speculative decoding is disabled.'),
-  });
-  Object.assign(contract.builder, {
-    model: 'synthetic-builder',
-    provider: unavailable('Provider exposes no identifier.'),
-    revision_or_exposed_identifier: unavailable('Provider exposes no revision.'),
-    initial_inference_location: 'hosted',
-    sampling_settings: { temperature: 0 },
-    network_and_source_access: 'none',
-  });
-  contract.development_harness.revision_or_package_hash = unavailable('No package hash.');
-  contract.evaluation.definition = { ...evaluationReference };
-  Object.assign(contract.evaluation, {
-    warmup_plan: 'one warm-up round',
-    formal_repetitions: 3,
-  });
-  Object.assign(contract.implementation, {
-    starting_scaffold: 'empty directory; no code reuse',
-    language_and_backend: 'synthetic',
-    allowed_libraries: [],
-    baseline_source_inspection_allowed: false,
-  });
-  Object.assign(contract.baselines, {
-    selection_date: '2026-10-28',
-    selection_method: 'synthetic; no alternatives left unevaluated',
-    engines_and_revisions: [{ name: 'synthetic-baseline', revision: commit('2') }],
-  });
-  Object.assign(contract.goal, {
-    primary_metric: 'decode throughput, N-1 intervals over first-to-last token time',
-    performance_thresholds: [{ metric: 'decode throughput', comparator: 'at-least', threshold: 1, unit: 'tok/s' }],
-    resource_limits: { max_memory_footprint_gib: 40, max_swap_out_delta_gib: 0 },
-  });
-  Object.assign(contract.budget, {
-    wall_clock_hours: 1,
-    builder_tokens: 1000,
-    api_cost_limit: notApplicable('Local only.'),
-    hardware_hours: 1,
-    stopping_rule: 'synthetic',
-  });
-  return contract;
+    hardware_os_version: 'synthetic-os 1',
+    hardware_toolchain: 'synthetic-toolchain 1',
+    target_files: [`model-00001.safetensors=${sha('b')}`],
+    target_tokenizer_sha256: sha('c'),
+    target_chat_template_sha256: sha('d'),
+    target_activation_precision: 'bf16',
+    target_speculative_draft: 'Not applicable: Speculative decoding is disabled.',
+    builder_model: 'synthetic-builder',
+    builder_provider: 'Unavailable: Provider exposes no identifier.',
+    builder_revision: 'Unavailable: Provider exposes no revision.',
+    builder_inference_location: 'hosted',
+    builder_sampling: 'temperature=0',
+    builder_network_and_source_access: 'none',
+    harness_revision: 'Unavailable: No package hash.',
+    ...evaluationReference,
+    evaluation_warmup_plan: 'one warm-up round',
+    evaluation_formal_repetitions: 3,
+    implementation_starting_scaffold: 'empty directory; no code reuse',
+    implementation_language_and_backend: 'synthetic',
+    implementation_allowed_libraries: [],
+    implementation_baseline_source_inspection_allowed: false,
+    baseline_selection_date: '2026-10-28',
+    baseline_selection_method: 'synthetic; no alternatives left unevaluated',
+    baseline_engines: [`synthetic-baseline=${commit('2')}`],
+    goal_primary_metric: 'decode throughput, N-1 intervals over first-to-last token time',
+    goal_thresholds: ['decode_tokens_per_second >= 1', 'peak_memory_gib <= 40', 'swap_out_delta_bytes <= 0'],
+    budget_wall_clock_hours: 1,
+    budget_builder_tokens: 1000,
+    budget_api_cost_limit: 'Not applicable: Local only.',
+    budget_hardware_hours: 1,
+    budget_stopping_rule: 'synthetic',
+  };
 }
 
-export const evaluationReference = { evaluation_id: 'synthetic-evaluation', revision: commit('3'), sha256: sha('c') };
-export const evidenceFixture = { description: 'synthetic', access: 'local-only', sha256: sha('8'), access_limitation: 'synthetic' };
+export const evaluationReference = { evaluation_id: 'synthetic-evaluation', evaluation_revision: commit('3'), evaluation_sha256: sha('c') };
 
-export function syntheticResult() {
+export function syntheticResult(started = startedAt) {
   const detail = 'synthetic';
   return {
-    evaluation: evaluationReference,
+    ...evaluationReference,
+    experiment_id: 'synthetic-schema-fixture',
+    experiment_revision: commit('4'),
+    experiment_sha256: sha('f'),
+    started_at: started,
     role: 'candidate',
     engine_name: 'synthetic-engine',
-    environment: {
-      hardware_model: detail,
-      os_version: detail,
-      toolchain: detail,
-      power_mode: detail,
-      thermal_observations: detail,
-      exclusive_gpu: true,
-      deviations_from_contract: [],
-    },
-    runtime_revision: unavailable('Not exposed by the runtime.'),
-    artifacts: [{ name: 'synthetic-engine', sha256: sha('e') }],
+    runtime_revision: 'Unavailable: Not exposed by the runtime.',
+    artifacts: [`synthetic-engine=${sha('e')}`],
     commands: ['synthetic-run'],
-    settings: { weight_precision: detail },
-    repetitions: [{ phase: 'formal', outcome: 'succeeded' }],
-    metrics: {
-      formal_repetitions: 3,
-      preliminary: false,
-      prefill: { basis: 'processed-input-tokens', total_tokens: 100, total_seconds: 1, tokens_per_second: 100 },
-      decode: { basis: 'n-minus-1-intervals', total_tokens: 9, total_seconds: 1, tokens_per_second: 9 },
-      client_ttft_median_seconds: 'Not obtained',
-      requests_reconciled: true,
-      per_request_evidence: evidenceFixture,
-    },
-    throughput: [],
-    resources: { peak_memory_gib: 'Not obtained', swap_out_delta_bytes: 'Not obtained' },
-    quality: {
-      intelligence: {
-        benchmarks: [{ benchmark_id: 'synthetic', metric: 'accuracy/mean', score: 1, num_samples: 10, stderr: 0 }],
-        complete: true,
-        negative_control_verified: true,
-        restricted_environment: true,
-      },
-    },
+    environment_hardware_model: detail,
+    environment_os_version: detail,
+    environment_toolchain: detail,
+    environment_power_mode: detail,
+    environment_thermal_observations: detail,
+    environment_exclusive_gpu: true,
+    environment_deviations: [],
+    'setting.weight_precision': detail,
+    warmup_passes: 0,
+    formal_passes_succeeded: 3,
+    formal_passes_failed: 0,
+    failures: [],
+    preliminary: false,
+    prefill_tokens_per_second: 100,
+    prefill_basis: 'processed-input-tokens',
+    decode_tokens_per_second: 9,
+    decode_basis: 'n-minus-1-intervals',
+    client_ttft_median_seconds: 'Not obtained',
+    requests_reconciled: true,
+    peak_memory_gib: 'Not obtained',
+    swap_out_delta_bytes: 'Not obtained',
+    'intelligence.synthetic.metric': 'accuracy/mean',
+    'intelligence.synthetic.score': 1,
+    'intelligence.synthetic.num_samples': 10,
+    'intelligence.synthetic.stderr': 0,
+    intelligence_complete: true,
+    negative_control_verified: true,
+    restricted_environment: true,
+    evidence_sha256: sha('8'),
+    evidence_access_limitation: 'Kept next to the record and not committed.',
+    human_interventions: 'Unavailable: Synthetic fixture.',
+    builder_tokens: 'Unavailable: Synthetic fixture.',
+    elapsed_hours: 'Unavailable: Synthetic fixture.',
+    hardware_hours: 'Unavailable: Synthetic fixture.',
+    self_hosting_status: 'not-in-scope',
   };
 }
-
-export function syntheticRun() {
-  const detail = 'synthetic';
-  return {
-    run_id: 'synthetic-schema-fixture',
-    status: 'completed',
-    acceptance: 'unverified',
-    contract: { path: 'contract.json', revision: commit('4'), sha256: sha('f') },
-    skills_revision: commit('1'),
-    started_at: when,
-    ended_at: when,
-    evaluation_results: [{ role: 'candidate', engine_name: 'synthetic-engine', path: 'results/candidate.json', sha256: sha('d') }],
-    comparisons: [{
-      track: 'matched-configuration',
-      metric: 'decode throughput',
-      baseline_engine: 'synthetic-baseline',
-      candidate_engine: 'synthetic-engine',
-      baseline_value: 'Not obtained',
-      candidate_value: 'Not obtained',
-      definitions_compatible: false,
-      matched_settings: false,
-      differences: [detail],
-    }],
-    claims: [],
-    human_interventions: unavailable('Synthetic fixture.'),
-    cost: {
-      builder_tokens: unavailable('Synthetic fixture.'),
-      elapsed_hours: unavailable('Synthetic fixture.'),
-      hardware_hours: unavailable('Synthetic fixture.'),
-    },
-    self_hosting: { status: 'not-in-scope' },
-    evidence: [evidenceFixture],
-    interpretation: 'Synthetic schema fixture; not a measurement.',
-  };
-}
-

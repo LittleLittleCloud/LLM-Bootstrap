@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap experiment protocol schemas",
-    "version": "0.4.0",
-    "summary": "Lean structural schemas for experiment contracts and run records.",
-    "description": "Machine-readable core of references/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a contract against ExperimentContract and a run record against ExperimentRun with any JSON Schema 2020-12 validator.\n\nThe schemas keep only the fields needed to reproduce an experiment and to stop unsupported claims. Evaluation is a separate protocol with its own schema (evaluation-protocol.openapi.json); a contract only selects a repository-owned evaluation by reference, and a run record lists the pinned result documents it produced. The prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It does not show that measurements are correct, that arithmetic is consistent (for example, that tokens_per_second equals total_tokens divided by total_seconds), or that the procedure was followed. It is not evidence of SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. A contract with status frozen forbids null anywhere. A field that cannot apply is declared with a NotApplicable object, and an unobtainable provider or historical detail with an Unavailable object. Run records preserve unmeasured values as the literal \"Not obtained\", never zero. The schemas constrain claims but still allow honest recording of deviations and failures."
+    "version": "0.5.0",
+    "summary": "Flat schema for experiments/<experiment-id>/experiment.json.",
+    "description": "Machine-readable core of references/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate experiments/<experiment-id>/experiment.json against Experiment, or against DerivedExperiment before resolving it (scripts/resolve-experiment.mjs) and validating the result as Experiment, with any JSON Schema 2020-12 validator.\n\nEvery field is a top-level key whose value is a scalar or an array of strings. There are no nested objects: a group is a key prefix (hardware_, target_, builder_, harness_, evaluation_, implementation_, baseline, goal_, budget_), a list of pairs is an array of name=value strings, and a conditional declaration is a string that starts with 'Not applicable: ' or 'Unavailable: ' and gives the reason.\n\nThe record of each evaluation is a separate flat document, experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json, defined by EvaluationResult in evaluation-protocol.openapi.json. An experiment only selects a repository-owned evaluation by reference.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It is not evidence of correct measurements, a followed procedure, SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. An experiment with status frozen forbids null in any field."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {},
@@ -22,612 +22,228 @@
       "NullableSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
       "NullableCommit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
       "NotApplicable": {
-        "description": "Explicit declaration that a field does not apply to this experiment.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["not_applicable", "reason"],
-        "properties": {
-          "not_applicable": { "const": true },
-          "reason": { "$ref": "#/components/schemas/Text" }
-        }
+        "description": "Explicit declaration that a field does not apply, as text that gives the reason.",
+        "type": "string",
+        "pattern": "^Not applicable: \\S"
       },
       "Unavailable": {
-        "description": "A provider or historical detail that cannot be obtained. Never substitute a fabricated identifier.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["unavailable", "reason"],
-        "properties": {
-          "unavailable": { "const": true },
-          "reason": { "$ref": "#/components/schemas/Text" }
-        }
+        "description": "A provider or historical detail that cannot be obtained, as text that gives the reason. Never substitute a fabricated identifier.",
+        "type": "string",
+        "pattern": "^Unavailable: \\S"
       },
       "NotObtained": {
         "description": "Marker for a metric that was not measured. A missing metric is never zero.",
         "const": "Not obtained"
       },
-      "NoNullValues": {
-        "description": "Matches any JSON value containing no null at any depth. Used to require that a frozen contract has no unresolved fields.",
-        "anyOf": [
-          { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/NoNullValues" } },
-          { "type": "array", "items": { "$ref": "#/components/schemas/NoNullValues" } },
-          { "type": ["string", "number", "boolean"] }
-        ]
-      },
-      "ResolvableText": {
-        "description": "Text, an explicit not-applicable declaration, or null while the contract is a draft.",
-        "anyOf": [
-          { "$ref": "#/components/schemas/Text" },
-          { "$ref": "#/components/schemas/NotApplicable" },
-          { "type": "null" }
-        ]
-      },
-      "ResolvableNumber": {
-        "anyOf": [
-          { "type": "number", "minimum": 0 },
-          { "$ref": "#/components/schemas/NotApplicable" },
-          { "type": "null" }
-        ]
-      },
-      "ProviderText": {
-        "description": "Builder or harness identity detail. Mark unavailable provider details instead of fabricating an immutable identifier.",
-        "anyOf": [
-          { "$ref": "#/components/schemas/Text" },
-          { "$ref": "#/components/schemas/Unavailable" },
-          { "type": "null" }
-        ]
-      },
-      "NumberOrUnavailable": {
-        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/Unavailable" }]
-      },
-      "ScalarSettings": {
-        "description": "Settings as scalar key-value pairs, such as sampling parameters or the precision, speculation, and caching settings used.",
-        "type": "object",
-        "minProperties": 1,
-        "additionalProperties": { "type": ["string", "number", "boolean"] }
-      },
-      "HashedArtifact": {
-        "description": "A named file, executable, kernel, image, or other artifact with its content hash.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "sha256"],
-        "properties": {
-          "name": { "$ref": "#/components/schemas/Text" },
-          "sha256": { "$ref": "#/components/schemas/Sha256" }
-        }
-      },
-      "EvidenceRef": {
-        "description": "Pointer to raw evidence. Local-only evidence is explicitly marked, carries a hash and an access limitation, and is never given a download URL.",
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["description", "access", "url", "sha256"],
-            "properties": {
-              "description": { "$ref": "#/components/schemas/Text" },
-              "access": { "const": "public" },
-              "url": { "type": "string", "format": "uri", "pattern": "^https://" },
-              "sha256": { "$ref": "#/components/schemas/Sha256" }
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["description", "access", "sha256", "access_limitation"],
-            "properties": {
-              "description": { "$ref": "#/components/schemas/Text" },
-              "access": { "const": "local-only" },
-              "sha256": { "$ref": "#/components/schemas/Sha256" },
-              "access_limitation": { "$ref": "#/components/schemas/Text" }
-            }
-          }
-        ]
+      "Digest": {
+        "description": "A named file, executable, kernel, or image with its content hash, written name=sha256.",
+        "type": "string",
+        "pattern": "^[^=\\s][^=]*=[0-9a-f]{64}$"
       },
 
-      "ExperimentContract": {
-        "description": "The frozen experiment contract. Draft files keep unresolved fields as null; status frozen requires every field to be resolved or declared not applicable. An amendment is a new revision that names the revision it amends and why.",
+      "EngineRevision": {
+        "description": "A baseline engine with the full commit that was evaluated, written name=commit.",
+        "type": "string",
+        "pattern": "^[^=\\s][^=]*=[0-9a-f]{40}$"
+      },
+      "Threshold": {
+        "description": "A performance or resource threshold on a metric of EvaluationResult, written 'metric >= value' or 'metric <= value'. Units are those of the metric name.",
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]* (>=|<=) [0-9]+(\\.[0-9]+)?$"
+      },
+      "NumberOrNotApplicable": {
+        "description": "A non-negative number, a not-applicable declaration, or null while the experiment is a draft.",
+        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotApplicable" }, { "type": "null" }]
+      },
+      "ComparisonTrack": {
+        "description": "A matched-configuration track compares engines at matched precision, workload, caching, speculation, and resources. A best-permitted-configuration track compares complete systems inside a fixed quality and resource envelope, disclosing every difference.",
+        "enum": ["matched-configuration", "best-permitted-configuration"]
+      },
+      "NoNullFields": {
+        "description": "An object none of whose fields is null. Used to require that a frozen experiment has no unresolved field.",
+        "type": "object",
+        "patternProperties": { "^": { "not": { "type": "null" } } }
+      },
+
+      "Experiment": {
+        "description": "The experiment, frozen before implementation. A draft keeps unresolved fields as null; status frozen requires every field to be resolved or declared not applicable. A submitted experiment.json is never edited; an amendment is a new experiment that names the amended revision and the reason.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "experiment_id", "status", "description", "skills_revision", "builder_instruction_hashes",
-          "contract_frozen_at", "scope", "hardware", "target_model", "builder", "development_harness",
-          "evaluation", "implementation", "baselines", "goal", "budget"
+          "experiment_id", "status", "description", "skills_revision", "builder_instruction_sha256", "contract_frozen_at", "scope",
+          "hardware_platform", "hardware_gpu_cores", "hardware_memory_gib", "hardware_os_version", "hardware_toolchain", "hardware_power",
+          "hardware_gpu_memory_limit", "hardware_exclusive_gpu",
+          "target_repository", "target_revision", "target_files", "target_tokenizer_sha256", "target_chat_template_sha256", "target_weights",
+          "target_activation_precision", "target_kv_precision", "target_recurrent_state_precision", "target_speculative_decoding", "target_speculative_draft",
+          "builder_model", "builder_provider", "builder_revision", "builder_inference_location", "builder_sampling", "builder_network_and_source_access",
+          "harness_name", "harness_version", "harness_revision",
+          "evaluation_id", "evaluation_revision", "evaluation_sha256", "evaluation_warmup_plan", "evaluation_formal_repetitions",
+          "implementation_starting_scaffold", "implementation_language_and_backend", "implementation_allowed_libraries",
+          "implementation_baseline_source_inspection_allowed", "implementation_existing_engine_backend_allowed",
+          "baseline_selection_date", "baseline_selection_method", "baseline_engines", "baseline_comparison_track",
+          "goal_primary_metric", "goal_thresholds", "goal_quality_gate", "goal_self_hosting_in_scope",
+          "budget_wall_clock_hours", "budget_builder_tokens", "budget_api_cost_limit", "budget_hardware_hours", "budget_stopping_rule"
         ],
         "properties": {
-          "experiment_id": { "$ref": "#/components/schemas/Text" },
+          "experiment_id": { "description": "Equals the directory name under experiments/.", "$ref": "#/components/schemas/Text" },
           "status": { "enum": ["draft-not-run", "frozen"] },
           "description": { "$ref": "#/components/schemas/Text" },
           "skills_revision": {
             "description": "Full commit of the skill repository supplied to the builder. A later skill revision defines a new treatment.",
             "$ref": "#/components/schemas/NullableCommit"
           },
-          "builder_instruction_hashes": {
-            "description": "Hashes of the exact instruction files provided to the builder.",
+          "builder_instruction_sha256": {
+            "description": "Hashes of the exact instruction files provided to the builder, as path=sha256.",
             "type": ["array", "null"],
             "minItems": 1,
-            "items": { "$ref": "#/components/schemas/HashedArtifact" }
+            "items": { "$ref": "#/components/schemas/Digest" }
           },
           "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
-          "amends": { "$ref": "#/components/schemas/ContractAmendment" },
+          "amends_revision": { "description": "Full commit of the experiment this one amends.", "$ref": "#/components/schemas/GitCommitSha" },
+          "amends_reason": { "$ref": "#/components/schemas/Text" },
           "scope": {
             "description": "What the experiment covers, which operating-system changes are permitted (none is a valid statement), and the user authorization that governs execution. Plugin installation authorizes nothing.",
-            "$ref": "#/components/schemas/ResolvableText"
-          },
-          "hardware": { "$ref": "#/components/schemas/ContractHardware" },
-          "target_model": { "$ref": "#/components/schemas/ContractTargetModel" },
-          "builder": { "$ref": "#/components/schemas/ContractBuilder" },
-          "development_harness": { "$ref": "#/components/schemas/ContractDevelopmentHarness" },
-          "evaluation": { "$ref": "#/components/schemas/ContractEvaluation" },
-          "implementation": { "$ref": "#/components/schemas/ContractImplementation" },
-          "baselines": { "$ref": "#/components/schemas/ContractBaselines" },
-          "goal": { "$ref": "#/components/schemas/ContractGoal" },
-          "budget": { "$ref": "#/components/schemas/ContractBudget" }
-        },
-        "allOf": [
-          {
-            "if": { "required": ["status"], "properties": { "status": { "const": "frozen" } } },
-            "then": {
-              "$ref": "#/components/schemas/NoNullValues",
-              "properties": { "baselines": { "properties": { "engines_and_revisions": { "minItems": 1 } } } }
-            }
-          }
-        ]
-      },
-      "ContractAmendment": {
-        "description": "Present only on an amendment. It never redefines an earlier run.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["revision", "reason"],
-        "properties": {
-          "revision": { "$ref": "#/components/schemas/GitCommitSha" },
-          "reason": { "$ref": "#/components/schemas/Text" }
-        }
-      },
-      "ContractReference": {
-        "description": "Pins a contract file by path, full commit, and file hash.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["path", "revision", "sha256"],
-        "properties": {
-          "path": { "$ref": "#/components/schemas/Text" },
-          "revision": { "$ref": "#/components/schemas/GitCommitSha" },
-          "sha256": { "$ref": "#/components/schemas/Sha256" }
-        }
-      },
-      "DerivedExperimentContract": {
-        "description": "A contract that inherits a base contract and overrides parts of it. Resolve it to an effective contract (see scripts/resolve-contract.mjs), then validate that result as ExperimentContract. The target model cannot be overridden, so a derived experiment always runs the base's target model; a different model needs a new base experiment. This schema checks the envelope only. Unknown or misspelled override keys are rejected when the effective contract is validated.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["experiment_id", "status", "description", "contract_frozen_at", "extends", "overrides"],
-        "properties": {
-          "experiment_id": { "$ref": "#/components/schemas/Text" },
-          "status": { "enum": ["draft-not-run", "frozen"] },
-          "description": { "$ref": "#/components/schemas/Text" },
-          "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
-          "amends": { "$ref": "#/components/schemas/ContractAmendment" },
-          "extends": {
-            "description": "The base contract, pinned by path relative to this file, full commit, and file hash. The base may itself be derived.",
-            "$ref": "#/components/schemas/ContractReference"
-          },
-          "overrides": {
-            "description": "Deep-merged onto the base: objects merge by key, while arrays, scalars, and null replace the base value. Identity fields and the target model are never overridden; they are declared here or inherited unchanged.",
-            "type": "object",
-            "propertyNames": {
-              "not": { "enum": ["target_model", "experiment_id", "status", "description", "contract_frozen_at", "amends"] }
-            }
-          }
-        }
-      },
-      "ContractHardware": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["platform", "gpu_cores", "memory_gib", "os_version", "toolchain", "power", "gpu_memory_limit", "exclusive_gpu"],
-        "properties": {
-          "platform": { "$ref": "#/components/schemas/NullableText" },
-          "gpu_cores": { "type": ["integer", "null"], "minimum": 1 },
-          "memory_gib": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-          "os_version": { "$ref": "#/components/schemas/NullableText" },
-          "toolchain": { "description": "Compiler and runtime versions.", "$ref": "#/components/schemas/NullableText" },
-          "power": { "$ref": "#/components/schemas/NullableText" },
-          "gpu_memory_limit": { "$ref": "#/components/schemas/NullableText" },
-          "exclusive_gpu": { "type": ["boolean", "null"] }
-        }
-      },
-      "ContractTargetModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "repository", "revision", "file_hash_manifest", "tokenizer_hash", "chat_template_hash", "weights",
-          "activation_precision", "kv_precision", "recurrent_state_precision", "speculative_decoding", "speculative_draft"
-        ],
-        "properties": {
-          "repository": { "$ref": "#/components/schemas/NullableText" },
-          "revision": { "$ref": "#/components/schemas/NullableCommit" },
-          "file_hash_manifest": {
-            "type": ["array", "null"],
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/HashedArtifact" }
-          },
-          "tokenizer_hash": { "$ref": "#/components/schemas/NullableSha256" },
-          "chat_template_hash": { "$ref": "#/components/schemas/NullableSha256" },
-          "weights": { "description": "Quantization method and group size with weight precision.", "$ref": "#/components/schemas/NullableText" },
-          "activation_precision": { "$ref": "#/components/schemas/NullableText" },
-          "kv_precision": { "$ref": "#/components/schemas/NullableText" },
-          "recurrent_state_precision": { "$ref": "#/components/schemas/ResolvableText" },
-          "speculative_decoding": { "type": ["boolean", "null"] },
-          "speculative_draft": {
-            "description": "Draft model identity and settings. Required unless speculative decoding is disabled.",
-            "$ref": "#/components/schemas/ResolvableText"
-          }
-        },
-        "allOf": [
-          {
-            "if": { "required": ["speculative_decoding"], "properties": { "speculative_decoding": { "const": true } } },
-            "then": { "properties": { "speculative_draft": { "not": { "$ref": "#/components/schemas/NotApplicable" } } } }
-          }
-        ]
-      },
-      "ContractBuilder": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["model", "provider", "revision_or_exposed_identifier", "initial_inference_location", "sampling_settings", "network_and_source_access"],
-        "properties": {
-          "model": { "$ref": "#/components/schemas/NullableText" },
-          "provider": { "$ref": "#/components/schemas/ProviderText" },
-          "revision_or_exposed_identifier": { "$ref": "#/components/schemas/ProviderText" },
-          "initial_inference_location": {
-            "description": "Where the builder's initial inference runs.",
             "$ref": "#/components/schemas/NullableText"
           },
-          "sampling_settings": { "anyOf": [{ "$ref": "#/components/schemas/ScalarSettings" }, { "type": "null" }] },
-          "network_and_source_access": { "$ref": "#/components/schemas/NullableText" }
-        }
-      },
-      "ContractDevelopmentHarness": {
-        "description": "The harness that drives engine development. Keep it distinct from the evaluation driver even when both use the same product.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "version", "revision_or_package_hash"],
-        "properties": {
-          "name": { "$ref": "#/components/schemas/NullableText" },
-          "version": { "$ref": "#/components/schemas/NullableText" },
-          "revision_or_package_hash": { "$ref": "#/components/schemas/ProviderText" }
-        }
-      },
-      "ContractEvaluation": {
-        "description": "Selects a repository-owned evaluation (see the evaluation protocol schema) and adds only what depends on the experiment. Evaluation code, scripts, dataset, tasks, and limits are defined by the evaluation and cannot be set or changed here.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["definition", "warmup_plan", "formal_repetitions"],
-        "properties": {
-          "definition": {
-            "description": "The evaluation by id, LLM Bootstrap repository commit, and definition file hash. The commit and hash stay null only while the contract is a draft.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["evaluation_id", "revision", "sha256"],
-            "properties": {
-              "evaluation_id": { "$ref": "#/components/schemas/Text" },
-              "revision": { "$ref": "#/components/schemas/NullableCommit" },
-              "sha256": { "$ref": "#/components/schemas/NullableSha256" }
-            }
+
+          "hardware_platform": { "$ref": "#/components/schemas/NullableText" },
+          "hardware_gpu_cores": { "type": ["integer", "null"], "minimum": 1 },
+          "hardware_memory_gib": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "hardware_os_version": { "$ref": "#/components/schemas/NullableText" },
+          "hardware_toolchain": { "description": "Compiler and runtime versions.", "$ref": "#/components/schemas/NullableText" },
+          "hardware_power": { "$ref": "#/components/schemas/NullableText" },
+          "hardware_gpu_memory_limit": { "$ref": "#/components/schemas/NullableText" },
+          "hardware_exclusive_gpu": { "type": ["boolean", "null"] },
+
+          "target_repository": { "$ref": "#/components/schemas/NullableText" },
+          "target_revision": { "$ref": "#/components/schemas/NullableCommit" },
+          "target_files": {
+            "description": "Hashes of the weight files, as name=sha256.",
+            "type": ["array", "null"],
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/Digest" }
           },
-          "warmup_plan": { "$ref": "#/components/schemas/NullableText" },
-          "formal_repetitions": { "type": ["integer", "null"], "minimum": 1 }
-        }
-      },
-      "ContractImplementation": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "starting_scaffold", "language_and_backend", "allowed_libraries",
-          "baseline_source_inspection_allowed", "existing_engine_backend_allowed"
-        ],
-        "properties": {
-          "starting_scaffold": {
+          "target_tokenizer_sha256": { "$ref": "#/components/schemas/NullableSha256" },
+          "target_chat_template_sha256": { "$ref": "#/components/schemas/NullableSha256" },
+          "target_weights": { "description": "Quantization method and group size with weight precision.", "$ref": "#/components/schemas/NullableText" },
+          "target_activation_precision": { "$ref": "#/components/schemas/NullableText" },
+          "target_kv_precision": { "$ref": "#/components/schemas/NullableText" },
+          "target_recurrent_state_precision": { "$ref": "#/components/schemas/NullableText" },
+          "target_speculative_decoding": { "type": ["boolean", "null"] },
+          "target_speculative_draft": {
+            "description": "Draft model identity and settings. Required unless speculative decoding is disabled; then 'Not applicable: reason'.",
+            "$ref": "#/components/schemas/NullableText"
+          },
+
+          "builder_model": { "$ref": "#/components/schemas/NullableText" },
+          "builder_provider": { "description": "Or 'Unavailable: reason'.", "$ref": "#/components/schemas/NullableText" },
+          "builder_revision": { "description": "The provider-exposed revision or identifier, or 'Unavailable: reason'.", "$ref": "#/components/schemas/NullableText" },
+          "builder_inference_location": { "description": "Where the builder's initial inference runs.", "$ref": "#/components/schemas/NullableText" },
+          "builder_sampling": { "description": "Decoding settings, for example 'temperature=0.2, top_p=0.95'.", "$ref": "#/components/schemas/NullableText" },
+          "builder_network_and_source_access": { "$ref": "#/components/schemas/NullableText" },
+
+          "harness_name": {
+            "description": "The harness that drives engine development. Keep it distinct from the evaluation driver even when both use the same product.",
+            "$ref": "#/components/schemas/NullableText"
+          },
+          "harness_version": { "$ref": "#/components/schemas/NullableText" },
+          "harness_revision": { "description": "Revision or package hash, or 'Unavailable: reason'.", "$ref": "#/components/schemas/NullableText" },
+
+          "evaluation_id": { "description": "A repository-owned evaluation. Its code, scripts, dataset, tasks, and limits cannot be set or changed here.", "$ref": "#/components/schemas/Text" },
+          "evaluation_revision": { "description": "LLM Bootstrap repository commit of the evaluation. Null only while the experiment is a draft.", "$ref": "#/components/schemas/NullableCommit" },
+          "evaluation_sha256": { "description": "Hash of the evaluation definition file at that commit.", "$ref": "#/components/schemas/NullableSha256" },
+          "evaluation_warmup_plan": { "$ref": "#/components/schemas/NullableText" },
+          "evaluation_formal_repetitions": { "type": ["integer", "null"], "minimum": 1 },
+
+          "implementation_starting_scaffold": {
             "description": "Starting engine or scaffold with its revision, and any permitted code reuse.",
             "$ref": "#/components/schemas/NullableText"
           },
-          "language_and_backend": { "$ref": "#/components/schemas/NullableText" },
-          "allowed_libraries": {
+          "implementation_language_and_backend": { "$ref": "#/components/schemas/NullableText" },
+          "implementation_allowed_libraries": {
             "description": "An empty array means no third-party implementation dependency is allowed.",
             "type": ["array", "null"],
             "uniqueItems": true,
             "items": { "$ref": "#/components/schemas/Text" }
           },
-          "baseline_source_inspection_allowed": { "type": ["boolean", "null"] },
-          "existing_engine_backend_allowed": {
+          "implementation_baseline_source_inspection_allowed": { "type": ["boolean", "null"] },
+          "implementation_existing_engine_backend_allowed": {
             "description": "Wrapping a baseline engine does not demonstrate building an inference backend.",
             "type": ["boolean", "null"]
-          }
-        }
-      },
-      "ComparisonTrack": {
-        "description": "A matched-configuration track compares engines at matched precision, workload, caching, speculation, and resources. A best-permitted-configuration track compares complete systems inside a fixed quality and resource envelope, disclosing every difference.",
-        "enum": ["matched-configuration", "best-permitted-configuration"]
-      },
-      "ContractBaselines": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["selection_date", "selection_method", "engines_and_revisions", "comparison_track"],
-        "properties": {
-          "selection_date": { "type": ["string", "null"], "format": "date" },
-          "selection_method": {
+          },
+
+          "baseline_selection_date": { "type": ["string", "null"], "format": "date" },
+          "baseline_selection_method": {
             "description": "How the candidate set was chosen from dated primary sources, and which plausible alternatives could not be evaluated.",
             "$ref": "#/components/schemas/NullableText"
           },
-          "engines_and_revisions": {
+          "baseline_engines": {
+            "description": "Baseline engines with the evaluated commit, as name=commit. A frozen experiment names at least one.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["name", "revision"],
-              "properties": {
-                "name": { "$ref": "#/components/schemas/Text" },
-                "revision": { "$ref": "#/components/schemas/GitCommitSha" }
-              }
-            }
+            "items": { "$ref": "#/components/schemas/EngineRevision" }
           },
-          "comparison_track": { "$ref": "#/components/schemas/ComparisonTrack" }
-        }
-      },
-      "ContractGoal": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["primary_metric", "performance_thresholds", "quality_gate", "resource_limits", "self_hosting_in_scope"],
-        "properties": {
-          "primary_metric": {
+          "baseline_comparison_track": { "$ref": "#/components/schemas/ComparisonTrack" },
+
+          "goal_primary_metric": {
             "description": "Define which metric competitive refers to before tuning, including timing boundaries. Native command-level metrics are not interchangeable with N-1 interval metrics.",
             "$ref": "#/components/schemas/NullableText"
           },
-          "performance_thresholds": {
+          "goal_thresholds": {
+            "description": "Acceptance thresholds on metrics of EvaluationResult, including resource limits such as 'peak_memory_gib <= 40' and 'swap_out_delta_bytes <= 0'. Relaxing them silently to pass is not allowed.",
             "type": ["array", "null"],
             "minItems": 1,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["metric", "comparator", "threshold", "unit"],
-              "properties": {
-                "metric": { "$ref": "#/components/schemas/Text" },
-                "comparator": { "enum": ["at-least", "at-most"] },
-                "threshold": { "type": "number" },
-                "unit": { "$ref": "#/components/schemas/Text" }
-              }
-            }
+            "items": { "$ref": "#/components/schemas/Threshold" }
           },
-          "quality_gate": {
-            "description": "Correctness gates and permitted quality loss.",
-            "$ref": "#/components/schemas/NullableText"
-          },
-          "resource_limits": { "anyOf": [{ "$ref": "#/components/schemas/ResourceLimits" }, { "type": "null" }] },
-          "self_hosting_in_scope": { "type": ["boolean", "null"] }
-        }
-      },
-      "ResourceLimits": {
-        "description": "Memory and swap constraints. Relaxing them silently to pass is not allowed.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["max_memory_footprint_gib", "max_swap_out_delta_gib"],
-        "properties": {
-          "max_memory_footprint_gib": { "$ref": "#/components/schemas/ResolvableNumber" },
-          "max_swap_out_delta_gib": {
-            "description": "Whole-machine swap-out delta over bracketed boundaries.",
-            "$ref": "#/components/schemas/ResolvableNumber"
-          }
-        }
-      },
-      "ContractBudget": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["wall_clock_hours", "builder_tokens", "api_cost_limit", "hardware_hours", "stopping_rule"],
-        "properties": {
-          "wall_clock_hours": { "$ref": "#/components/schemas/ResolvableNumber" },
-          "builder_tokens": { "$ref": "#/components/schemas/ResolvableNumber" },
-          "api_cost_limit": { "description": "Amount with currency, or not applicable.", "$ref": "#/components/schemas/ResolvableText" },
-          "hardware_hours": { "$ref": "#/components/schemas/ResolvableNumber" },
-          "stopping_rule": { "$ref": "#/components/schemas/NullableText" }
-        }
-      },
+          "goal_quality_gate": { "description": "Correctness gates and permitted quality loss.", "$ref": "#/components/schemas/NullableText" },
+          "goal_self_hosting_in_scope": { "type": ["boolean", "null"] },
 
-      "ExperimentRun": {
-        "description": "One run record. Failed, interrupted, neutral, and successful attempts are all recorded; corrections are appended without overwriting original observations.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "run_id", "status", "acceptance", "contract", "skills_revision", "started_at", "ended_at",
-          "evaluation_results", "comparisons", "claims", "human_interventions", "cost", "self_hosting", "evidence", "interpretation"
-        ],
-        "properties": {
-          "run_id": { "$ref": "#/components/schemas/Text" },
-          "status": { "enum": ["draft", "running", "completed", "interrupted"] },
-          "acceptance": { "description": "Unverified until every frozen target is evaluated.", "enum": ["unverified", "passed", "failed"] },
-          "contract": {
-            "description": "The frozen contract a run executes; for a derived experiment, the derived contract file. A later revision is a different reference.",
-            "$ref": "#/components/schemas/ContractReference"
-          },
-          "skills_revision": { "$ref": "#/components/schemas/GitCommitSha" },
-          "started_at": { "type": ["string", "null"], "format": "date-time" },
-          "ended_at": { "type": ["string", "null"], "format": "date-time" },
-          "evaluation_results": {
-            "description": "Result documents emitted by the pinned evaluation scripts, one per engine. Each validates as EvaluationResult in the evaluation protocol schema and cites the same evaluation reference as the contract.",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["role", "engine_name", "path", "sha256"],
-              "properties": {
-                "role": { "enum": ["baseline", "candidate"] },
-                "engine_name": { "$ref": "#/components/schemas/Text" },
-                "path": { "$ref": "#/components/schemas/Text" },
-                "sha256": { "$ref": "#/components/schemas/Sha256" }
-              }
-            }
-          },
-          "comparisons": { "type": "array", "items": { "$ref": "#/components/schemas/ComparisonRecord" } },
-          "claims": { "type": "array", "items": { "$ref": "#/components/schemas/PerformanceClaim" } },
-          "human_interventions": {
-            "description": "Every intervention. Unavailable historical data stays Unavailable, never inferred as none.",
-            "anyOf": [
-              { "type": "array", "items": { "$ref": "#/components/schemas/HumanIntervention" } },
-              { "$ref": "#/components/schemas/Unavailable" }
-            ]
-          },
-          "cost": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["builder_tokens", "elapsed_hours", "hardware_hours"],
-            "properties": {
-              "builder_tokens": { "$ref": "#/components/schemas/NumberOrUnavailable" },
-              "elapsed_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" },
-              "hardware_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" }
-            }
-          },
-          "self_hosting": { "$ref": "#/components/schemas/SelfHostingRecord" },
-          "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/EvidenceRef" } },
-          "interpretation": {
-            "description": "Comparable conditions, limits of attribution, unresolved concerns, and gaps to each frozen target.",
-            "$ref": "#/components/schemas/Text"
-          }
+          "budget_wall_clock_hours": { "$ref": "#/components/schemas/NumberOrNotApplicable" },
+          "budget_builder_tokens": { "$ref": "#/components/schemas/NumberOrNotApplicable" },
+          "budget_api_cost_limit": { "description": "Amount with currency, or 'Not applicable: reason'.", "$ref": "#/components/schemas/NullableText" },
+          "budget_hardware_hours": { "$ref": "#/components/schemas/NumberOrNotApplicable" },
+          "budget_stopping_rule": { "$ref": "#/components/schemas/NullableText" }
+        },
+        "dependentRequired": {
+          "amends_revision": ["amends_reason"],
+          "amends_reason": ["amends_revision"]
         },
         "allOf": [
           {
-            "if": { "required": ["status"], "properties": { "status": { "enum": ["running", "completed", "interrupted"] } } },
-            "then": { "properties": { "started_at": { "type": "string" } } }
-          },
-          {
-            "if": { "required": ["status"], "properties": { "status": { "enum": ["completed", "interrupted"] } } },
-            "then": { "properties": { "ended_at": { "type": "string" } } }
-          },
-          {
-            "if": { "required": ["status"], "properties": { "status": { "const": "completed" } } },
-            "then": { "properties": { "evaluation_results": { "minItems": 1 } } }
-          },
-          {
-            "if": { "required": ["acceptance"], "properties": { "acceptance": { "const": "passed" } } },
-            "then": { "properties": { "status": { "const": "completed" } } }
-          }
-        ]
-      },
-      "ComparisonRecord": {
-        "description": "One baseline-versus-candidate comparison for one metric. A speedup ratio needs compatible metric definitions, and on the matched track also matched settings. Ratios of incompatible native timing metrics are not speedups.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "track", "metric", "baseline_engine", "candidate_engine", "baseline_value", "candidate_value",
-          "definitions_compatible", "matched_settings", "differences"
-        ],
-        "properties": {
-          "track": { "$ref": "#/components/schemas/ComparisonTrack" },
-          "metric": { "$ref": "#/components/schemas/Text" },
-          "baseline_engine": { "$ref": "#/components/schemas/Text" },
-          "candidate_engine": { "$ref": "#/components/schemas/Text" },
-          "baseline_value": { "anyOf": [{ "type": "number" }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "candidate_value": { "anyOf": [{ "type": "number" }, { "$ref": "#/components/schemas/NotObtained" }] },
-          "definitions_compatible": { "type": "boolean" },
-          "matched_settings": { "type": "boolean" },
-          "differences": {
-            "description": "Every disclosed difference in precision, workload, caching, speculation, memory limits, and timing boundaries.",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Text" }
-          },
-          "speedup_ratio": { "type": "number", "exclusiveMinimum": 0 }
-        },
-        "allOf": [
-          {
-            "if": { "required": ["definitions_compatible"], "properties": { "definitions_compatible": { "const": false } } },
-            "then": { "not": { "required": ["speedup_ratio"] } }
-          },
-          {
-            "if": {
-              "required": ["track", "speedup_ratio"],
-              "properties": { "track": { "const": "matched-configuration" } }
-            },
-            "then": { "properties": { "matched_settings": { "const": true } } }
-          }
-        ]
-      },
-      "PerformanceClaim": {
-        "description": "A bounded claim. Without sufficient baseline coverage, use best-among-tested or competitive-with, not bounded-sota.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["claim_type", "bounds", "comparison_engines", "date", "uncertainty", "baseline_coverage_sufficient"],
-        "properties": {
-          "claim_type": { "enum": ["bounded-sota", "best-among-tested", "competitive-with"] },
-          "bounds": {
-            "description": "The device, model, workload, metric, and quality and resource envelope the claim covers.",
-            "$ref": "#/components/schemas/Text"
-          },
-          "comparison_engines": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": { "$ref": "#/components/schemas/Text" }
-          },
-          "date": { "type": "string", "format": "date" },
-          "uncertainty": { "$ref": "#/components/schemas/Text" },
-          "baseline_coverage_sufficient": { "type": "boolean" },
-          "named_baseline": { "$ref": "#/components/schemas/Text" }
-        },
-        "allOf": [
-          {
-            "if": { "required": ["claim_type"], "properties": { "claim_type": { "const": "bounded-sota" } } },
-            "then": { "properties": { "baseline_coverage_sufficient": { "const": true } } }
-          },
-          {
-            "if": { "required": ["claim_type"], "properties": { "claim_type": { "const": "competitive-with" } } },
-            "then": { "required": ["named_baseline"] }
-          }
-        ]
-      },
-      "HumanIntervention": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["timestamp", "kind", "purpose"],
-        "properties": {
-          "timestamp": { "$ref": "#/components/schemas/Timestamp" },
-          "kind": { "enum": ["task-setup", "implementation-hint", "debugging", "code-edit", "environment-repair", "approval"] },
-          "purpose": { "$ref": "#/components/schemas/Text" }
-        }
-      },
-      "SelfHostingRecord": {
-        "description": "Self-hosting requires the builder's inference to move onto the generated engine. Improving an engine while still using an unrelated hosted builder is engine construction, not self-hosting. Recursive improvement additionally needs a measured subsequent engine revision with correctness retained, recorded as a comparison.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["status"],
-        "properties": {
-          "status": { "enum": ["not-in-scope", "not-demonstrated", "demonstrated"] },
-          "transition_point": { "$ref": "#/components/schemas/Timestamp" },
-          "builder_identity_matches_target": { "type": "boolean" },
-          "generated_runtime_artifacts": {
-            "type": "array",
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/HashedArtifact" }
-          },
-          "harness_endpoint_routing": {
-            "description": "The actual endpoint routing observed after the transition.",
-            "$ref": "#/components/schemas/Text"
-          },
-          "subsequent_development_evidence": {
-            "description": "Development steps executed through the generated engine. A successful chat alone is not enough.",
-            "type": "array",
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/EvidenceRef" }
-          },
-          "external_recovery_used": {
-            "description": "True means the run was not uninterrupted self-hosting.",
-            "type": "boolean"
-          }
-        },
-        "allOf": [
-          {
-            "if": { "required": ["status"], "properties": { "status": { "const": "demonstrated" } } },
+            "if": { "required": ["status"], "properties": { "status": { "const": "frozen" } } },
             "then": {
-              "required": [
-                "transition_point", "builder_identity_matches_target", "generated_runtime_artifacts",
-                "harness_endpoint_routing", "subsequent_development_evidence", "external_recovery_used"
-              ],
-              "properties": { "builder_identity_matches_target": { "const": true } }
+              "$ref": "#/components/schemas/NoNullFields",
+              "properties": { "baseline_engines": { "minItems": 1 } }
             }
+          },
+          {
+            "if": { "required": ["target_speculative_decoding"], "properties": { "target_speculative_decoding": { "const": true } } },
+            "then": { "properties": { "target_speculative_draft": { "not": { "$ref": "#/components/schemas/NotApplicable" } } } }
           }
         ]
+      },
+      "DerivedExperiment": {
+        "description": "An experiment that inherits a base experiment and overrides some of its fields. Because the document is flat, an override is a field of the same name, which replaces the base value. Resolve it (scripts/resolve-experiment.mjs), then validate the result as Experiment. The target model cannot be overridden, so a derived experiment always runs the base's target model; a different model needs a new base experiment. This schema checks the envelope only. Unknown or misspelled override fields are rejected when the effective experiment is validated.",
+        "type": "object",
+        "required": ["experiment_id", "status", "description", "contract_frozen_at", "extends_path", "extends_revision", "extends_sha256"],
+        "propertyNames": { "not": { "pattern": "^target_" } },
+        "properties": {
+          "experiment_id": { "$ref": "#/components/schemas/Text" },
+          "status": { "enum": ["draft-not-run", "frozen"] },
+          "description": { "$ref": "#/components/schemas/Text" },
+          "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
+          "amends_revision": { "$ref": "#/components/schemas/GitCommitSha" },
+          "amends_reason": { "$ref": "#/components/schemas/Text" },
+          "extends_path": {
+            "description": "The base experiment.json, relative to this file. The base may itself be derived.",
+            "$ref": "#/components/schemas/Text"
+          },
+          "extends_revision": { "description": "Full commit of the base.", "$ref": "#/components/schemas/GitCommitSha" },
+          "extends_sha256": { "description": "Hash of the base file.", "$ref": "#/components/schemas/Sha256" }
+        },
+        "dependentRequired": {
+          "amends_revision": ["amends_reason"],
+          "amends_reason": ["amends_revision"]
+        }
       }
     }
   }

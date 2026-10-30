@@ -6,11 +6,9 @@ import { basename, join, relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Validator } from '@seriousme/openapi-schema-validator';
-import { resolveContract, resolveContractFile } from '../skills/bootstrap-experiment-sop/scripts/resolve-contract.mjs';
+import { resolveExperiment, resolveExperimentFile } from '../skills/bootstrap-experiment-sop/scripts/resolve-experiment.mjs';
 import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
-import {
-  commit, draftContract as example, evaluationReference, evidenceFixture, frozenContract, notApplicable, sha, syntheticResult, syntheticRun, unavailable, when,
-} from './helpers/fixtures.mjs';
+import { commit, draftExperiment as example, frozenExperiment, sha, syntheticResult, when } from './helpers/fixtures.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = path => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
@@ -48,83 +46,117 @@ test('both OpenAPI documents pass the official OpenAPI 3.1 schema', async () => 
 
 test('primitive schemas shared by both protocols are identical', () => {
   const shared = Object.keys(spec.components.schemas).filter(name => name in evaluationSpec.components.schemas);
-  assert.ok(shared.length >= 12, `only ${shared.length} shared schemas`);
+  assert.ok(shared.length >= 11, `only ${shared.length} shared schemas`);
   for (const name of shared) assert.deepEqual(evaluationSpec.components.schemas[name], spec.components.schemas[name], name);
 });
 
-test('the draft fixture validates as a draft contract but not as a frozen one', () => {
-  accepts('ExperimentContract', example);
-  rejects('ExperimentContract', { ...example, status: 'frozen' }, 'unresolved nulls must not freeze');
+// The value types a field can take, following references; an object or an array of arrays or objects would be nested data.
+function valueTypes(schema, components, seen = new Set()) {
+  if (schema.$ref) {
+    const name = schema.$ref.split('/').pop();
+    if (seen.has(name)) return [];
+    return valueTypes(components[name], components, new Set([...seen, name]));
+  }
+  const nested = [...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(item => valueTypes(item, components, seen));
+  const own = [].concat(schema.type ?? []).flatMap(type => (type === 'array'
+    ? ['array', ...(schema.items ? valueTypes(schema.items, components, seen).map(item => `item:${item}`) : [])]
+    : [type]));
+  return [...own, ...nested];
+}
+
+test('the experiment and evaluation record schemas are flat: no field holds an object or a nested array', () => {
+  for (const [document, names] of [[spec, ['Experiment', 'DerivedExperiment']], [evaluationSpec, ['EvaluationResult']]]) {
+    const components = document.components.schemas;
+    for (const name of names) {
+      const fields = { ...components[name].properties, ...components[name].patternProperties };
+      assert.ok(Object.keys(fields).length > 30 || name === 'DerivedExperiment', `${name} declares its fields`);
+      for (const [key, schema] of Object.entries(fields)) {
+        const nested = valueTypes(schema, components).filter(type => ['object', 'item:object', 'item:array'].includes(type));
+        assert.deepEqual(nested, [], `${name}.${key} is nested`);
+      }
+    }
+  }
 });
 
-test('a fully resolved contract can be frozen and unresolved or invalid fields are rejected', () => {
-  const frozen = frozenContract();
-  accepts('ExperimentContract', frozen);
-  accepts('ExperimentContract', mutate(frozen, c => { c.amends = { revision: commit('5'), reason: 'synthetic' }; }));
-  rejects('ExperimentContract', mutate(frozen, c => { c.hardware.os_version = null; }), 'null in frozen contract');
-  rejects('ExperimentContract', mutate(frozen, c => { c.skills_revision = 'abc1234'; }), 'abbreviated SHA');
-  rejects('ExperimentContract', mutate(frozen, c => { c.baselines.engines_and_revisions = []; }), 'no baselines');
-  rejects('ExperimentContract', mutate(frozen, c => { c.hardware.typo_field = 1; }), 'unknown property');
-  rejects('ExperimentContract', mutate(frozen, c => { c.target_model.speculative_decoding = true; }), 'draft not declared');
-  rejects('ExperimentContract', mutate(frozen, c => { c.target_model.tokenizer_hash = notApplicable('x'); }), 'identity hash cannot be N/A');
-  rejects('ExperimentContract', mutate(frozen, c => { c.evaluation.definition.sha256 = null; }), 'frozen evaluation must be pinned');
-  rejects('ExperimentContract', mutate(frozen, c => { c.evaluation.scripts = [{ role: 'driver', path: 'run.sh', sha256: sha('1') }]; }), 'a contract cannot carry evaluation scripts');
-  rejects('ExperimentContract', mutate(frozen, c => { c.evaluation.task_ids = ['task-1']; }), 'a contract cannot define the workload');
+test('the draft fixture validates as a draft experiment but not as a frozen one', () => {
+  accepts('Experiment', example);
+  rejects('Experiment', { ...example, status: 'frozen' }, 'unresolved nulls must not freeze');
 });
 
-test('a synthetic run record validates and status, comparison, and claim rules reject unsupported records', () => {
-  const run = syntheticRun();
-  accepts('ExperimentRun', run);
-
-  rejects('ExperimentRun', mutate(run, r => { r.acceptance = 'passed'; r.status = 'running'; }), 'passed needs completed');
-  rejects('ExperimentRun', mutate(run, r => { r.ended_at = null; }), 'completed needs an end');
-  rejects('ExperimentRun', mutate(run, r => { r.evidence = []; }), 'evidence required');
-  rejects('ExperimentRun', mutate(run, r => { r.evaluation_results = []; }), 'completed needs a result document');
-  rejects('ExperimentRun', mutate(run, r => { r.evaluation_results[0].sha256 = 'abc'; }), 'result documents are pinned by hash');
-  rejects('ExperimentRun', mutate(run, r => { r.engines = []; }), 'results live in evaluation result documents');
-
-  rejects('ExperimentRun', mutate(run, r => {
-    Object.assign(r.comparisons[0], { matched_settings: true, speedup_ratio: 2 });
-  }), 'no speedup for incompatible metrics');
-  rejects('ExperimentRun', mutate(run, r => {
-    Object.assign(r.comparisons[0], { definitions_compatible: true, speedup_ratio: 2 });
-  }), 'matched track speedup needs matched settings');
-  accepts('ExperimentRun', mutate(run, r => {
-    Object.assign(r.comparisons[0], {
-      baseline_value: 10,
-      candidate_value: 20,
-      definitions_compatible: true,
-      matched_settings: true,
-      speedup_ratio: 2,
-    });
-  }));
-
-  const claim = {
-    claim_type: 'best-among-tested',
-    bounds: 'synthetic device, model, workload, metric, and envelope',
-    comparison_engines: ['synthetic-baseline'],
-    date: '2026-10-28',
-    uncertainty: 'synthetic',
-    baseline_coverage_sufficient: false,
-  };
-  accepts('PerformanceClaim', claim);
-  rejects('PerformanceClaim', { ...claim, claim_type: 'bounded-sota' }, 'bounded SOTA needs baseline coverage');
-  rejects('PerformanceClaim', { ...claim, claim_type: 'competitive-with' }, 'competitive-with needs a named baseline');
-  accepts('PerformanceClaim', { ...claim, claim_type: 'bounded-sota', baseline_coverage_sufficient: true });
+test('a fully resolved experiment can be frozen and unresolved or invalid fields are rejected', () => {
+  const frozen = frozenExperiment();
+  accepts('Experiment', frozen);
+  accepts('Experiment', { ...frozen, amends_revision: commit('5'), amends_reason: 'synthetic' });
+  rejects('Experiment', { ...frozen, amends_revision: commit('5') }, 'an amendment names its reason');
+  rejects('Experiment', { ...frozen, hardware_os_version: null }, 'null in a frozen experiment');
+  rejects('Experiment', { ...frozen, skills_revision: 'abc1234' }, 'abbreviated SHA');
+  rejects('Experiment', { ...frozen, baseline_engines: [] }, 'no baselines');
+  rejects('Experiment', { ...frozen, baseline_engines: ['synthetic-baseline'] }, 'a baseline names its commit');
+  rejects('Experiment', { ...frozen, typo_field: 1 }, 'unknown field');
+  rejects('Experiment', { ...frozen, hardware: { platform: 'x' } }, 'groups are key prefixes, not objects');
+  rejects('Experiment', { ...frozen, hardware_platform: { name: 'x' } }, 'a field holds no object');
+  rejects('Experiment', { ...frozen, target_speculative_decoding: true }, 'draft not declared');
+  rejects('Experiment', { ...frozen, target_tokenizer_sha256: 'Not applicable: x' }, 'identity hash cannot be N/A');
+  rejects('Experiment', { ...frozen, evaluation_sha256: null }, 'frozen evaluation must be pinned');
+  rejects('Experiment', { ...frozen, goal_thresholds: ['decode throughput at least 1'] }, 'a threshold is metric, comparator, value');
+  rejects('Experiment', { ...frozen, goal_thresholds: [] }, 'at least one threshold');
+  rejects('Experiment', { ...frozen, evaluation_scripts: ['run.sh'] }, 'an experiment cannot carry evaluation scripts');
+  rejects('Experiment', { ...frozen, evaluation_task_ids: ['task-1'] }, 'an experiment cannot define the workload');
+  accepts('Experiment', { ...frozen, target_speculative_decoding: true, target_speculative_draft: 'draft-model q4, 4 tokens' });
 });
 
-test('an evaluation result validates and metric, evidence, and repetition rules reject unsupported results', () => {
+test('an evaluation record validates and metric, key-family, and pass rules reject unsupported records', () => {
   const result = syntheticResult();
   acceptsEvaluation('EvaluationResult', result);
+  acceptsEvaluation('EvaluationResult', {
+    ...result,
+    'throughput.decode.in128.out256.c1.decode_tokens_per_second': 200,
+    'throughput.decode.in128.out256.c1.requests': 4,
+    'throughput.decode.in128.out256.c1.cache_hit_ratio': 'Not obtained',
+    'throughput.decode.in128.out256.c1.pass_tokens_per_second': [199, 201],
+    'throughput.multi-turn.in8k.t5.c1.first_turn_ttft_seconds': 0.9,
+  });
+  acceptsEvaluation('EvaluationResult', { ...result, prefill_tokens_per_second: 'Not obtained', prefill_basis: 'Not obtained' });
 
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.evaluation.revision = null; }), 'result must pin its evaluation');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { delete r.evaluation; }), 'result must cite its evaluation');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.prefill = 0; }), 'missing metric is not zero');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.decode.basis = 'arithmetic-mean'; }), 'unknown decode basis');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.formal_repetitions = 1; }), 'single cohort is preliminary');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.repetitions[0].outcome = 'failed'; }), 'failure needs description');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.artifacts = []; }), 'runtime identity needs hashes');
-  rejectsEvaluation('EvaluationResult', mutate(result, r => { r.metrics.per_request_evidence.url = 'https://example.invalid/log'; }), 'local-only evidence has no URL');
+  for (const key of Object.keys(result).filter(name => name.startsWith('evaluation_') || name.startsWith('experiment_'))) {
+    rejectsEvaluation('EvaluationResult', mutate(result, r => { delete r[key]; }), `${key} pins the record`);
+  }
+  rejectsEvaluation('EvaluationResult', { ...result, evaluation_revision: null }, 'a record pins its evaluation');
+  rejectsEvaluation('EvaluationResult', { ...result, prefill_tokens_per_second: null }, 'a missing metric is Not obtained');
+  rejectsEvaluation('EvaluationResult', { ...result, prefill_tokens_per_second: 'n/a' }, 'a missing metric is Not obtained');
+  rejectsEvaluation('EvaluationResult', { ...result, decode_basis: 'arithmetic-mean' }, 'unknown decode basis');
+  rejectsEvaluation('EvaluationResult', { ...result, formal_passes_succeeded: 1 }, 'a single cohort is preliminary');
+  rejectsEvaluation('EvaluationResult', { ...result, formal_passes_failed: 1 }, 'a failure needs a description');
+  acceptsEvaluation('EvaluationResult', { ...result, formal_passes_failed: 1, failures: ['formal pass 2 failed: timed out'] });
+  rejectsEvaluation('EvaluationResult', { ...result, artifacts: [] }, 'runtime identity needs hashes');
+  rejectsEvaluation('EvaluationResult', { ...result, artifacts: ['synthetic-engine'] }, 'an artifact names its hash');
+  rejectsEvaluation('EvaluationResult', { ...result, evidence_sha256: 'abc' }, 'evidence is referenced by hash');
+  rejectsEvaluation('EvaluationResult', { ...result, environment: { hardware_model: 'x' } }, 'groups are key prefixes, not objects');
+  rejectsEvaluation('EvaluationResult', { ...result, 'setting.nested': { a: 1 } }, 'a setting is a scalar');
+  rejectsEvaluation('EvaluationResult', { ...result, 'settings.weight_precision': 'x' }, 'only setting.* keys are settings');
+  rejectsEvaluation('EvaluationResult', { ...result, 'throughput.decode.in128.out256.c0.requests': 4 }, 'concurrency starts at 1');
+  rejectsEvaluation('EvaluationResult', { ...result, 'throughput.decode.in128.out256.c1.requests': 1.5 }, 'a request count is an integer');
+  rejectsEvaluation('EvaluationResult', { ...result, 'throughput.decode.in128.out256.c1.speed': 1 }, 'unknown throughput metric');
+  rejectsEvaluation('EvaluationResult', { ...result, 'intelligence.synthetic.score': 2 }, 'a score is a proportion');
+  rejectsEvaluation('EvaluationResult', { ...result, 'intelligence.synthetic.num_samples': 0 }, 'a benchmark scores at least one sample');
+  rejectsEvaluation('EvaluationResult', { ...result, extra: 1 }, 'unknown field');
+});
+
+test('self-hosting claims need transition evidence and builder/target identity', () => {
+  const result = syntheticResult();
+  acceptsEvaluation('EvaluationResult', { ...result, self_hosting_status: 'not-demonstrated' });
+  rejectsEvaluation('EvaluationResult', { ...result, self_hosting_status: 'demonstrated' }, 'no evidence');
+  const demonstrated = {
+    ...result,
+    self_hosting_status: 'demonstrated',
+    self_hosting_transition_at: when,
+    self_hosting_builder_matches_target: true,
+    self_hosting_routing: 'synthetic',
+    self_hosting_external_recovery_used: false,
+    self_hosting_evidence_sha256: sha('7'),
+  };
+  acceptsEvaluation('EvaluationResult', demonstrated);
+  rejectsEvaluation('EvaluationResult', { ...demonstrated, self_hosting_builder_matches_target: false }, 'identity must match');
 });
 
 const releasedDefinition = scriptHash => ({
@@ -161,7 +193,7 @@ test('repository evaluation definitions are valid, own their directory, and matc
   const names = readdirSync(base, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name);
   assert.ok(names.length > 0);
   for (const name of names) checkEvaluationDir(join(base, name));
-  assert.ok(names.includes(example.evaluation.definition.evaluation_id), 'the draft fixture selects a repository evaluation');
+  assert.ok(names.includes(example.evaluation_id), 'the draft fixture selects a repository evaluation');
 });
 
 test('a released evaluation needs a driver, no unresolved fields, contained paths, and verified scripts', () => {
@@ -195,79 +227,65 @@ test('a released evaluation needs a driver, no unresolved fields, contained path
   }
 });
 
-test('self-hosting claims need transition evidence and builder/target identity', () => {
-  accepts('SelfHostingRecord', { status: 'not-demonstrated' });
-  rejects('SelfHostingRecord', { status: 'demonstrated' }, 'no evidence');
-  const demonstrated = {
-    status: 'demonstrated',
-    transition_point: when,
-    builder_identity_matches_target: true,
-    generated_runtime_artifacts: [{ name: 'synthetic-engine', sha256: sha('e') }],
-    harness_endpoint_routing: 'synthetic',
-    subsequent_development_evidence: [{ description: 'synthetic', access: 'local-only', sha256: sha('7'), access_limitation: 'synthetic' }],
-    external_recovery_used: false,
-  };
-  accepts('SelfHostingRecord', demonstrated);
-  rejects('SelfHostingRecord', { ...demonstrated, builder_identity_matches_target: false }, 'identity must match');
-});
-
 const derivedFrom = (overrides, extra = {}) => ({
   experiment_id: 'synthetic-derived',
   status: 'frozen',
   description: 'Synthetic derived fixture; not an experiment.',
   contract_frozen_at: when,
-  extends: { path: 'base.json', revision: commit('6'), sha256: sha('9') },
-  overrides,
+  extends_path: 'base.json',
+  extends_revision: commit('6'),
+  extends_sha256: sha('9'),
+  ...overrides,
   ...extra,
 });
 
-test('a derived contract inherits its base, overrides all but the target model, and resolves to a valid contract', () => {
-  const base = frozenContract();
-  const thresholds = [{ metric: 'prefill throughput', comparator: 'at-least', threshold: 2, unit: 'tok/s' }];
+test('a derived experiment inherits its base, overrides all but the target model, and resolves to a valid experiment', () => {
+  const base = frozenExperiment();
   const derived = derivedFrom({
     skills_revision: commit('7'),
-    hardware: { power: 'Battery' },
-    goal: { performance_thresholds: thresholds },
-    baselines: { engines_and_revisions: [{ name: 'other-baseline', revision: commit('8') }] },
+    hardware_power: 'Battery',
+    goal_thresholds: ['prefill_tokens_per_second >= 2'],
+    baseline_engines: [`other-baseline=${commit('8')}`],
   });
-  accepts('DerivedExperimentContract', derived);
+  accepts('DerivedExperiment', derived);
 
-  const effective = resolveContract(derived, base);
-  accepts('ExperimentContract', effective);
-  assert.deepEqual(effective.target_model, base.target_model);
+  const effective = resolveExperiment(derived, base);
+  accepts('Experiment', effective);
+  for (const key of Object.keys(base).filter(name => name.startsWith('target_'))) assert.deepEqual(effective[key], base[key], key);
   assert.equal(effective.experiment_id, 'synthetic-derived');
   assert.equal(effective.skills_revision, commit('7'));
-  assert.equal(effective.hardware.power, 'Battery');
-  assert.equal(effective.hardware.platform, base.hardware.platform);
-  assert.deepEqual(effective.goal.performance_thresholds, thresholds);
-  assert.equal(effective.goal.primary_metric, base.goal.primary_metric);
-  assert.deepEqual(effective.baselines.engines_and_revisions, [{ name: 'other-baseline', revision: commit('8') }]);
-  assert.equal(base.hardware.power, example.hardware.power, 'the base is not mutated');
+  assert.equal(effective.hardware_power, 'Battery');
+  assert.equal(effective.hardware_platform, base.hardware_platform);
+  assert.deepEqual(effective.goal_thresholds, ['prefill_tokens_per_second >= 2']);
+  assert.equal(effective.goal_primary_metric, base.goal_primary_metric);
+  assert.deepEqual(effective.baseline_engines, [`other-baseline=${commit('8')}`]);
+  assert.equal(base.hardware_power, example.hardware_power, 'the base is not mutated');
+  assert.equal('extends_path' in effective, false, 'the effective experiment carries no extends fields');
 
-  const amended = mutate(base, c => { c.amends = { revision: commit('5'), reason: 'synthetic' }; });
-  assert.equal('amends' in resolveContract(derived, amended), false, 'amendments are not inherited');
+  const amended = { ...base, amends_revision: commit('5'), amends_reason: 'synthetic' };
+  assert.equal('amends_revision' in resolveExperiment(derived, amended), false, 'amendments are not inherited');
 });
 
-test('a derived contract cannot override the target model or its own identity fields', () => {
-  for (const key of ['target_model', 'experiment_id', 'status', 'description', 'contract_frozen_at', 'amends']) {
-    const derived = derivedFrom({ [key]: {} });
-    rejects('DerivedExperimentContract', derived, `${key} must not be overridden`);
-    assert.throws(() => resolveContract(derived, frozenContract()), new RegExp(key));
+test('a derived experiment cannot override the target model, and its own identity fields come from itself', () => {
+  for (const key of ['target_repository', 'target_weights', 'target_revision']) {
+    const derived = derivedFrom({ [key]: 'x' });
+    rejects('DerivedExperiment', derived, `${key} must not be overridden`);
+    assert.throws(() => resolveExperiment(derived, frozenExperiment()), new RegExp(key));
   }
-  rejects('DerivedExperimentContract', derivedFrom({}, { extends: { path: 'base.json' } }), 'base must be pinned');
-  rejects('DerivedExperimentContract', mutate(derivedFrom({}), d => { delete d.extends; }), 'base is required');
+  rejects('DerivedExperiment', mutate(derivedFrom({}), d => { delete d.extends_sha256; }), 'base must be pinned');
+  rejects('DerivedExperiment', mutate(derivedFrom({}), d => { delete d.extends_path; }), 'base is required');
+  rejects('DerivedExperiment', derivedFrom({}, { amends_reason: 'x' }), 'an amendment names its revision');
 });
 
-test('misspelled or unresolved overrides fail validation of the effective contract', () => {
-  const base = frozenContract();
-  rejects('ExperimentContract', resolveContract(derivedFrom({ hardwre: { power: 'x' } }), base), 'unknown section');
-  rejects('ExperimentContract', resolveContract(derivedFrom({ hardware: { powr: 'x' } }), base), 'unknown field');
-  rejects('ExperimentContract', resolveContract(derivedFrom({ hardware: { power: null } }), base), 'frozen forbids null');
-  const draft = derivedFrom({ hardware: { os_version: 'synthetic-os 2' } }, { status: 'draft-not-run', contract_frozen_at: null });
-  accepts('ExperimentContract', resolveContract(draft, example));
+test('misspelled or unresolved overrides fail validation of the effective experiment', () => {
+  const base = frozenExperiment();
+  rejects('Experiment', resolveExperiment(derivedFrom({ hardware_powr: 'x' }), base), 'unknown field');
+  rejects('Experiment', resolveExperiment(derivedFrom({ hardware_power: null }), base), 'frozen forbids null');
+  const draft = derivedFrom({ hardware_os_version: 'synthetic-os 2' }, { status: 'draft-not-run', contract_frozen_at: null });
+  accepts('Experiment', resolveExperiment(draft, example));
 });
 
-test('derived contract files resolve through a hash-pinned chain and reject a changed base', () => {
+test('derived experiment files resolve through a hash-pinned chain and reject a changed base', () => {
   const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-derive-'));
   try {
     const write = (name, value) => {
@@ -275,25 +293,23 @@ test('derived contract files resolve through a hash-pinned chain and reject a ch
       writeFileSync(join(dir, name), text);
       return createHash('sha256').update(text).digest('hex');
     };
-    const base = frozenContract();
+    const base = frozenExperiment();
     const baseHash = write('base.json', base);
-    const middleHash = write('middle.json', derivedFrom({ hardware: { power: 'Battery' } }, {
+    const middleHash = write('middle.json', derivedFrom({ hardware_power: 'Battery' }, {
       experiment_id: 'synthetic-middle',
-      extends: { path: 'base.json', revision: commit('6'), sha256: baseHash },
+      extends_sha256: baseHash,
     }));
-    write('leaf.json', derivedFrom({ budget: { wall_clock_hours: 2 } }, {
-      extends: { path: 'middle.json', revision: commit('6'), sha256: middleHash },
-    }));
+    write('leaf.json', derivedFrom({ budget_wall_clock_hours: 2 }, { extends_path: 'middle.json', extends_sha256: middleHash }));
 
-    const effective = resolveContractFile(join(dir, 'leaf.json'));
-    accepts('ExperimentContract', effective);
+    const effective = resolveExperimentFile(join(dir, 'leaf.json'));
+    accepts('Experiment', effective);
     assert.equal(effective.experiment_id, 'synthetic-derived');
-    assert.equal(effective.hardware.power, 'Battery');
-    assert.equal(effective.budget.wall_clock_hours, 2);
-    assert.deepEqual(effective.target_model, base.target_model);
+    assert.equal(effective.hardware_power, 'Battery');
+    assert.equal(effective.budget_wall_clock_hours, 2);
+    assert.equal(effective.target_repository, base.target_repository);
 
-    write('base.json', mutate(base, c => { c.hardware.power = 'Changed'; }));
-    assert.throws(() => resolveContractFile(join(dir, 'leaf.json')), /sha256/);
+    write('base.json', { ...base, hardware_power: 'Changed' });
+    assert.throws(() => resolveExperimentFile(join(dir, 'leaf.json')), /sha256/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
