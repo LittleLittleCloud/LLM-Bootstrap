@@ -34,13 +34,14 @@ Use “Not obtained” for unavailable values. Preserve all formal repetitions a
 
 | Metric / gate | Baseline | Candidate | Definition, coverage, and conditions |
 | --- | --- | --- | --- |
-| Official assertions / fixed task count | | | |
+| Intelligence: HumanEval and GSM8K score ± standard error (samples) | | | Within the contract's tolerance of the baseline engine? |
 | Prefill tokens / seconds / tok/s | | | |
 | Decode intervals / seconds / tok/s | | | N−1; native command metrics separate |
 | Client TTFT median / variability | | | |
-| Application duration and request/token totals | | | |
+| Output tok/s by concurrency (1, 2, 4, 8) | | | |
+| Multi-turn cache hit ratio, first-turn and later-turn TTFT | | | |
 | Memory, pressure, swap-out and resource gates | | | |
-| Errors / timeouts / incomplete tasks | | | |
+| Errors / timeouts / gated levels | | | |
 
 ## Interpretation and disposition
 
