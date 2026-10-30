@@ -214,8 +214,8 @@
           "status": { "enum": ["draft", "released"] },
           "description": { "$ref": "#/components/schemas/Text" },
           "result_schema": {
-            "description": "The result document the scripts emit: EvaluationResult for performance evaluations, ConformanceResult for endpoint conformance evaluations.",
-            "enum": ["EvaluationResult", "ConformanceResult"]
+            "description": "The result document the scripts emit.",
+            "enum": ["EvaluationResult"]
           },
           "harness": {
             "description": "The tool or agent harness that drives the endpoint under test, with its exact version, or not applicable when the driver script talks to the endpoint directly.",
@@ -244,7 +244,7 @@
             ]
           },
           "task_ids": {
-            "description": "Exact task identifiers, or for a conformance evaluation the ids of its checks.",
+            "description": "Exact task identifiers: the workload and benchmark ids of the plan.",
             "type": ["array", "null"],
             "minItems": 1,
             "uniqueItems": true,
@@ -508,106 +508,6 @@
             }
           }
         }
-      },
-      "ConformanceCheckResult": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["check_id", "api", "level", "outcome", "requests"],
-        "properties": {
-          "check_id": { "$ref": "#/components/schemas/Text" },
-          "api": { "enum": ["openai-chat", "openai-responses", "anthropic-messages"] },
-          "level": { "description": "A required check must pass for the endpoint to be conformant. An advisory check is recorded but does not decide it.", "enum": ["required", "advisory"] },
-          "outcome": { "description": "skip means the feature is unsupported or the check was inconclusive; error means the check could not run to a verdict.", "enum": ["pass", "fail", "skip", "error"] },
-          "requests": { "description": "Requests first issued by this check. Checks that share a response count it once.", "type": "integer", "minimum": 0 },
-          "detail": { "$ref": "#/components/schemas/Text" }
-        },
-        "allOf": [
-          {
-            "if": { "required": ["outcome"], "properties": { "outcome": { "enum": ["fail", "skip", "error"] } } },
-            "then": { "required": ["detail"] }
-          }
-        ]
-      },
-      "ConformanceResult": {
-        "description": "The result document of an endpoint conformance evaluation. Checks validate structure and protocol invariants, not model quality. An endpoint is conformant only for a complete run whose evaluator passed its negative control; JSON Schema cannot check that the summary counts match the checks.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["evaluation", "engine_name", "endpoint", "started_at", "ended_at", "runtime_revision", "artifacts", "identity_verification", "checks", "summary", "complete", "cost", "negative_control"],
-        "properties": {
-          "evaluation": { "$ref": "#/components/schemas/EvaluationReference" },
-          "engine_name": { "$ref": "#/components/schemas/Text" },
-          "endpoint": {
-            "description": "Only the scheme and whether the host is loopback are recorded, never a machine address or credential.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["scheme", "host_class", "model"],
-            "properties": {
-              "scheme": { "enum": ["http", "https"] },
-              "host_class": { "enum": ["loopback", "remote"] },
-              "model": { "$ref": "#/components/schemas/Text" }
-            }
-          },
-          "started_at": { "type": "string", "format": "date-time" },
-          "ended_at": { "type": "string", "format": "date-time" },
-          "runtime_revision": { "$ref": "#/components/schemas/CommitOrUnavailable" },
-          "artifacts": {
-            "description": "Deployed engine artifacts when the operator supplied them. A conformance run observes only the HTTP endpoint.",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/HashedArtifact" }
-          },
-          "identity_verification": { "$ref": "#/components/schemas/Text" },
-          "checks": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/ConformanceCheckResult" } },
-          "summary": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["total", "passed", "failed", "skipped", "errored", "required_failed", "conformant"],
-            "properties": {
-              "total": { "type": "integer", "minimum": 1 },
-              "passed": { "type": "integer", "minimum": 0 },
-              "failed": { "type": "integer", "minimum": 0 },
-              "skipped": { "type": "integer", "minimum": 0 },
-              "errored": { "type": "integer", "minimum": 0 },
-              "required_failed": { "description": "Required checks that failed or errored.", "type": "integer", "minimum": 0 },
-              "conformant": { "description": "True only when no required check failed or errored.", "type": "boolean" }
-            }
-          },
-          "complete": { "description": "Every check in the pinned definition ran.", "type": "boolean" },
-          "cost": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["requests", "prompt_tokens", "completion_tokens"],
-            "properties": {
-              "requests": { "type": "integer", "minimum": 0 },
-              "prompt_tokens": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] },
-              "completion_tokens": { "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }] }
-            }
-          },
-          "negative_control": {
-            "description": "Whether the evaluator detected every known injected defect before this run.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["verified", "method"],
-            "properties": {
-              "verified": { "type": "boolean" },
-              "method": { "$ref": "#/components/schemas/Text" }
-            }
-          },
-          "evidence": { "$ref": "#/components/schemas/EvidenceRef" }
-        },
-        "allOf": [
-          {
-            "if": {
-              "required": ["summary"],
-              "properties": { "summary": { "required": ["conformant"], "properties": { "conformant": { "const": true } } } }
-            },
-            "then": {
-              "properties": {
-                "complete": { "const": true },
-                "negative_control": { "properties": { "verified": { "const": true } } }
-              }
-            }
-          }
-        ]
       }
     }
   }
