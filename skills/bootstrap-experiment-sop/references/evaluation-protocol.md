@@ -24,10 +24,11 @@ Run an evaluation from the pinned repository revision. Check every script agains
 
 Each evaluation has a definition file, `evaluations/<evaluation-id>/evaluation.json`, that fixes:
 
-- The agent harness name and version that drives the endpoint under test.
-- The dataset repository, revision, file, and hash, the exact task IDs, and the seed.
+- The tool or harness name and exact version that drives the endpoint under test.
+- The datasets, each pinned by repository and the hashes of the files read, the exact task IDs, and the seed.
 - Input/output limits, per-task timeout, request concurrency, cache policy, and sampling settings for the target model.
-- The scripts that carry out the evaluation, each with a role (driver or assertion evaluator), a path inside the evaluation directory, and a content hash.
+- The plan of a performance evaluation: its throughput workloads, its rule-scored benchmarks, and the sandbox for generated code.
+- The scripts that carry out the evaluation, each with a role (driver, assertion evaluator, or dependency lock), a path inside the evaluation directory, and a content hash.
 
 A definition is a `draft` or `released`. A released definition has every field resolved, and every script exists in the repository and matches its hash. A draft has unresolved fields and cannot be used for formal runs.
 
@@ -37,101 +38,69 @@ Evaluations in the repository at the time of writing (the commit you resolved is
 
 | Evaluation | Status | Result document | Purpose |
 | --- | --- | --- | --- |
-| `engine-api-conformance` | released | `ConformanceResult` | Cheap structural checks of an endpoint's OpenAI chat, OpenAI Responses, and Anthropic Messages behavior. |
-| `engine-throughput` | released | `EvaluationResult` | Fixed-shape throughput of a streaming chat endpoint: prefill by prompt length up to 216k, decode by context depth, an agent session with prefix-cache hits, and closed-loop concurrency, with client timing. |
-| `humaneval-20-pi` | released | `EvaluationResult` | Pi 1.4.0 solves 20 fixed HumanEval tasks against the endpoint; the official assertions score every solution in offline containers, with proxy-measured request timing and application duration. |
+| `engine-evalscope` | released | `EvaluationResult` | EvalScope measurement of a chat endpoint: throughput first (prefill by prompt length up to 128k, decode by context depth, concurrency, multi-turn prefix reuse), then rule-scored HumanEval and GSM8K to show the engine still computes the model correctly. |
 
-The driver behind the prior Infer.NET measurements is external to this repository. It measures Pi coding-agent wall time and records `correctness_evaluated: false`, so it does not satisfy this protocol. Those measurements are prior evidence only and are not comparable with `humaneval-20-pi` results.
+Earlier measurements with external drivers (the Infer.NET records) are prior evidence only: they used different workloads, timing boundaries, and a Pi coding-agent harness, and their correctness check did not meet this protocol.
 
 When a script changes (a maintainer task in the repository), update its hash in the definition (for example with `shasum -a 256`). The repository tests fail until the hashes match.
 
-## Endpoint conformance
+## EvalScope evaluation
 
-`engine-api-conformance` is a correctness gate that runs before any performance measurement. Each check sends a few tiny requests (temperature 0, at most 64 output tokens) and validates response structure and protocol invariants. It does not judge model quality. Run reasoning models with thinking disabled so the small token budget is enough.
+`engine-evalscope` measures an OpenAI-compatible chat endpoint with [EvalScope](https://github.com/modelscope/evalscope) in two parts. **Throughput** is the main result: it says how fast the engine serves the model. **Intelligence** is a check: it says the engine still computes the model correctly. EvalScope does the measuring and scoring. The repository fixes how it is invoked, pins it, and checks that what it reports means what this protocol says.
 
-- **OpenAI chat completions:** the model list; non-streaming schema, `max_tokens`, stop strings, roles, and JSON mode; streaming framing, chunk shape, final usage chunk, and finish reason; tool calling with forced, selected, disabled, and automatic choice, tool-result round trips, and streamed tool-call fragments; and the error format.
-- **OpenAI Responses:** the response object, `max_output_tokens`, input items, the named stream events in order with deltas that add up, function calling in both modes, and the error format.
-- **Anthropic Messages:** the message object, `max_tokens`, stop sequences, system prompt and multi-turn input, the stream events in order, `tool_use` blocks and `tool_result` round trips, and the error format.
-- **Text integrity and robustness (all three APIs):** non-ASCII text that survives streaming without split multi-byte characters, reasoning kept out of the answer text (`<think>` tags, reasoning fields, thinking blocks, reasoning items), malformed JSON bodies, empty `messages`, an unknown role, `max_tokens` of 1, and control-token strings in user text that must stay plain text.
-- **Engine behavior (chat):** four simultaneous requests and streams that must not mix their answers, clients that disconnect in the middle of streams, output that must not change after requests that share the prompt prefix, and a prompt about twice the context window that must be rejected with a 4xx error and must not break the next request. The overflow checks need `--context-window` and are skipped without it.
+- **Pinned tool.** The definition names the EvalScope version (1.14.1), and `requirements.lock` pins it and every dependency by hash, for Python 3.10 or newer. The lock is hashed in the definition like a script. Install it into a clean environment (`uv venv --python 3.13 && uv pip install --require-hashes -r evaluations/engine-evalscope/requirements.lock`) and run the driver with that environment's Python. The driver refuses another EvalScope version.
+- **Everything is in the plan.** The definition's `plan` lists every workload, benchmark, and the sandbox. The driver builds each `evalscope perf` and `evalscope eval` command from it, so an experiment cannot change a workload or a benchmark.
 
-Each check is `required` or `advisory`. Only required checks decide conformance. Advisory checks record common behavior the APIs do not mandate, such as identical output for repeated temperature 0 requests. An unsupported optional feature is a `skip`, not a pass. Checks share responses where they can, so a run takes about 70 small requests.
+### Throughput
 
-The driver checks every script against its hash before importing any of them, then repeats its negative control: a reference engine that must pass every check, and each of a set of injected faults, which must each be caught. An endpoint is reported conformant only for a complete run with a verified negative control. Run the driver from a checkout of the repository at the recorded revision.
+Each workload is an `evalscope perf` run at one or more closed-loop concurrency levels (`parallel`), with warm-up requests that EvalScope excludes. Prompts are EvalScope's random tokens of an exact length, and `ignore_eos` forces the output length. Lengths count tokens as the engine reports them.
 
-```sh
-python3 evaluations/engine-api-conformance/scripts/conformance.py \
-  --endpoint http://127.0.0.1:8080 --model MODEL --engine-name NAME --context-window 4096 \
-  --evaluation-revision FULL_COMMIT_SHA --output experiments/EXPERIMENT_ID/runs/RUN_ID/conformance.json
-```
-
-It needs Python 3.9 or newer and no packages. The endpoint must be a credential-free origin, and plain http is allowed only on loopback. Pass a key with `--api-key-file`; it is never logged or stored. The result records only whether the host is loopback, never an address. Failing checks write their requests and responses to a local-only evidence file next to the result.
-
-## Fixed-shape throughput
-
-`engine-throughput` measures the throughput of an OpenAI-compatible streaming chat endpoint with fixed request shapes. It is a performance measurement: it does not check output quality or API behavior, so run `engine-api-conformance` first. Here k means 1024 tokens.
-
-| Workloads | Shape | Measures |
+| Workload | Shape | Measures |
 | --- | --- | --- |
-| `prefill.in2k.out1`, `in4k`, `in8k`, `in216k` | 2k, 4k, 8k, or 216k prompt tokens, one output token | Prefill speed by prompt length |
+| `prefill.in2k.out1`, `in8k`, `in32k`, `in128k` | 2k, 8k, 32k, or 128k prompt tokens, one output token | Prefill speed by prompt length |
 | `decode.in128.out256`, `in8k`, `in32k` | 128, 8k, or 32k tokens of context, 256 output tokens | Decode speed by context depth |
-| `agent.p32k.s256.t5`, `p128k` | One session of 5 turns that share a 32k or 128k prefix and append about 256 tokens each, one output token per turn | Large-window input with prefix-cache hits, as in an agent loop |
-| `batch.c1`, `c2`, `c4`, `c8` `.in512.out64` | 1, 2, 4, or 8 closed-loop workers, each sending 4 requests of about 512 input and 64 output tokens | Aggregate throughput and per-request speed under concurrency |
+| `concurrency.in512.out64` | 1, 2, 4, and 8 concurrent requests of 512 input and 64 output tokens | Aggregate throughput and per-request speed under load |
+| `multi-turn.in8k.t5` | Conversations of 5 turns that each add 8k tokens | Prefix-cache reuse as the context grows |
 
-The run-level `prefill`, `decode`, and `client_ttft_median_seconds` metrics are the single-stream headline workloads `prefill.in2k.out1` and `decode.in128.out256`. Every other workload is reported in the result's `workloads` list. A run may select a subset with `--workloads`, which is recorded in the settings. The 216k and 128k workloads are slow on a slow engine: a cold 216k prefill at 500 tok/s takes about seven minutes per pass.
+Here k means 1024 tokens. The run-level `prefill`, `decode`, and `client_ttft_median_seconds` are the single-stream workloads `prefill.in2k.out1` and `decode.in128.out256`. Every level is reported in the result's `throughput` list.
 
-- **Input length.** The engine's own `usage.prompt_tokens` (which includes the chat template) is the length. Up to 8k, the driver sizes each prompt with probe requests until the reported count is within half the allowed deviation of the target (2% or 8 tokens, whichever is larger). Longer prompts are sized from a fit made on 2k probes, so they are not probed at full length, and every request is checked against the allowed deviation. A request outside it fails.
-- **Output length.** A request must produce exactly the workload's output tokens by `usage.completion_tokens`. A request that stops early fails, so a short answer is never averaged in as a fast one. Where the engine supports it, force the length with an engine field such as `--request-field ignore_eos=true`. These fields are recorded in the result's settings and cannot replace the fixed fields.
-- **Cache policy.** Every session starts with a unique nonce, including calibration and warm-up, so no prefix is reused across sessions. Where the engine reports cached prompt tokens they must be zero, except on warm agent turns, and the result records whether the engine reports them at all.
-- **Agent workflow.** Turn 1 sends the prefix cold. Turns 2 to 5 send the same prefix plus the earlier appended outputs and one new one, so most of each prompt is cacheable. A warm turn must reuse at least 90% of the prefix when the engine reports cached tokens. When it does not, warm turns must reach the first token within half the cold turn's time, or the instance fails. The result records the hit ratio, the cold and warm time to the first token, and their ratio. The workload's `prefill` is the cold turn, and its `ttft_median_seconds` is the warm turns.
-- **Batch input.** A chat endpoint takes one conversation per request, so batching means concurrency. Each worker sends its requests one after another with no pause, and all workers start together. The aggregate output throughput is the output tokens of every request divided by the time from the first dispatch to the last completion, summed over repetitions, so ramp-up and ramp-down are included. Per-request decode speed under the same load is reported next to it, because aggregate throughput can rise while each user slows. A single request carrying several inputs is not measured here.
-- **Timing.** All intervals use one monotonic clock at the client. Prefill seconds are the time from dispatch to the first output chunk, so they include queueing, transfer, and the first sampled token; processed input tokens are the reported prompt tokens minus cached ones. Decode throughput is the sum of N-1 over the sum of first-to-last chunk intervals, with N from `usage.completion_tokens`. It applies only when the engine sends at least 0.9 output chunks per token. Otherwise decode is "Not obtained" and the result says why, because multi-token chunks need a native definition that is never relabeled N-1.
-- **Passes and spread.** The contract's warm-up and formal repetition counts are passed as `--warmup` and `--repetitions`. A workload instance in which any request fails its gates is excluded from that workload's metrics, and its pass is recorded as failed in the result's repetitions with the reason. `formal_repetitions` counts the formal passes in which every workload succeeded. Each workload reports its headline tokens per second for every repetition that counted and their sample standard deviation. Cold load is not measured here.
-- **Resources.** Swap-out is the whole-machine delta over the formal passes and is measured only for a loopback endpoint. Peak memory is sampled only when `--memory-pid` names the engine process, and is the sampled resident size, which may not include GPU memory; otherwise it is "Not obtained".
-- **Quality block.** `quality.application` counts formal requests that met their workload gates. It is not a correctness result and does not include conformance, which is its own result document.
-- **Negative control.** Before every run the driver starts reference engines with known behavior. One has known prefill and decode rates, block prefix caching, and slot-limited concurrency: the timing must recover its rates within 30%, its aggregate throughput must rise with concurrency while the per-request speed falls, and a half-speed engine must read about half. A fast one must pass the 216k, 32k-depth, and agent workloads, with cache reuse visible. Six faults must each be caught: reported cache hits, early stops, missing usage, coalesced chunks, HTTP errors, and a missing prefix cache.
+- **Definitions.** Prefill is processed input tokens (reported prompt tokens minus cached ones) over EvalScope's time to first token. Decode is output tokens minus one over its time per output token. Output throughput is the output tokens of all requests over the test duration, so ramp-up and ramp-down are included. All are ratios of sums over requests and passes, never means of per-request speeds.
+- **Gates.** A level counts only if every request succeeded, prompts reached the target length (within 2% or 16 tokens), and every request produced exactly the target output length. A level that fails is excluded from the metrics, its pass is recorded as failed with the reason, and the metrics stay "Not obtained" rather than zero. The engine must report cached tokens as zero on unique prompts (above 1% fails the level); only multi-turn workloads reuse their own earlier turns, and their cache hit ratio and first-turn and later-turn time to first token are recorded.
+- **No repeated prompts.** The random prompts are reseeded for every level and pass from a per-run salt that is recorded in the settings, so an engine cannot serve one from an earlier run's prefix cache.
+- **Passes.** The contract's warm-up and formal repetition counts are `--warmup` and `--repetitions`: whole passes over the plan. A single formal pass is preliminary evidence. Each workload reports its headline tokens per second for every pass that counted, with their sample standard deviation. Cold load is not measured.
+- **Resources.** Swap-out is the whole-machine delta over the formal passes and is measured only for a loopback endpoint. Peak memory is sampled only when `--memory-pid` names the engine process; it is the sampled resident size, which may not include GPU memory. Otherwise both are "Not obtained".
+
+### Intelligence
+
+Benchmarks are rule-scored only; no judge model is involved. The plan uses HumanEval (all 164 tasks, pass@1, the official tests executed in a Docker sandbox) and GSM8K (4-shot, the first 200 test questions, final-number match), at temperature 0 with a 4096-token output limit. Reasoning models should run with thinking disabled through `--request-field`.
+
+- **Pinned data.** The datasets are the ModelScope files named in the definition, checked by SHA-256 and copied before use, because EvalScope edits the dataset folder it reads. `--dataset-dir` supplies local copies; the hashes are checked either way.
+- **Sandbox.** Generated code runs in a container from a digest-pinned Python image with the network disabled, 1 GiB of memory, and 1 CPU. Docker is required.
+- **What the score means.** It shows the engine did not break the model; it is not a ranking of models and not numerical equivalence. Each score carries its sample count and the standard error of a proportion. The experiment judges it against a baseline engine of the same model: a candidate passes when no benchmark falls below the best baseline score by more than two standard errors of the difference. The leaderboard applies that rule, and a baseline passes on verification alone because it defines the reference. State the rule in the contract's `quality_gate`.
+- **Partial runs.** `--parts throughput` or `--parts intelligence` runs one part for development. The result records the deviation, and a missing intelligence block is "Not obtained", so the gate stays unverified.
+
+### Negative control
+
+Before every run the driver repeats its control through the same EvalScope pipeline, so a change in EvalScope's behavior shows up as a failed control. A reference engine with known prefill and decode rates, two decode slots, and a prefix cache must be recovered within 35%, its aggregate throughput must rise with concurrency, and its multi-turn workload must show prefix reuse. Three faults must each be caught: early stops, HTTP errors, and a missing prefix cache. An oracle engine that answers from the pinned datasets must score right answers 1 and wrong answers 0 on both benchmarks. Code that probes the network must run cleanly in the sandbox and must fail when the same probe runs with the network enabled; if that second half cannot be shown (for example the machine is offline), the result records that isolation was not demonstrated and `restricted_environment` is false.
 
 ```sh
-python3 evaluations/engine-throughput/scripts/throughput.py \
-  --endpoint http://127.0.0.1:8080 --model MODEL --role candidate --engine-name NAME \
-  --workloads prefill.in2k.out1,decode.in128.out256,agent.p32k.s256.t5,batch.c4.in512.out64 \
-  --warmup 1 --repetitions 3 --evaluation-revision FULL_COMMIT_SHA \
+python3 evaluations/engine-evalscope/scripts/evaluate.py \
+  --endpoint http://127.0.0.1:8080 --model MODEL --tokenizer-path DIR_WITH_TOKENIZER_AND_CHAT_TEMPLATE \
+  --role candidate --engine-name NAME --warmup 0 --repetitions 3 --evaluation-revision FULL_COMMIT_SHA \
   --artifact ENGINE_BINARY=SHA256 --engine-command "COMMAND THAT STARTED THE ENGINE" \
   --hardware-model HARDWARE --toolchain TOOLCHAIN --power-mode MODE --thermal-observations TEXT --exclusive-gpu \
   --output experiments/EXPERIMENT_ID/runs/RUN_ID/candidate-NAME.json
 ```
 
-It needs Python 3.9 or newer and no packages. Omit `--workloads` to run every workload. Run it on the engine's machine against a loopback endpoint (a remote one needs `--allow-remote` and is recorded as a deviation), and pass a key with `--api-key-file`. The environment options describe what you observed; `exclusive-gpu` is your statement that nothing else used the GPU. The driver writes the result document and, next to it, a `.requests.evidence` file with every request's timings and gate outcomes. That file holds no prompts or model output, is referenced by hash as local-only evidence, and is not committed (the repository ignores `*.evidence`).
+Use the locked environment's Python. The tokenizer directory must be the model's own, with its chat template, because EvalScope sizes prompts with it; a tokenizer of another model distorts every token count, and its hash is recorded. Run on the engine's machine against a loopback endpoint (a remote one needs `--allow-remote` and is recorded as a deviation), and pass a key with `--api-key-file`. The environment options describe what you observed; `exclusive-gpu` is your statement that nothing else used the GPU. The driver writes the result document and, next to it, a `.requests.evidence` file with every level's EvalScope summary, gate outcomes, and seeds. That file holds no prompts or model output, is referenced by hash as local-only evidence, and is not committed (the repository ignores `*.evidence`). `--logs-dir` keeps EvalScope's logs locally.
 
-These shapes follow common engine benchmarks: fixed-length synthetic prompts and outputs (TensorRT-LLM's `trtllm-bench`, vLLM's random dataset), forced output length (`ignore_eos`), warm-up before measurement, bounded concurrency with aggregate throughput over the benchmark window (vLLM, GenAI-Perf), shared-prefix workloads (SGLang's generated-shared-prefix, vLLM's prefix repetition), and decode measured at a context depth (llama.cpp's `llama-bench -d`). Where this evaluation differs, it is stricter: a request that misses its length or cache gate fails instead of being averaged in.
-
-## Pi on HumanEval
-
-`humaneval-20-pi` runs the Pi coding agent (pinned to 1.4.0) on 20 fixed HumanEval tasks, then scores the solutions with the official assertions. It is the agent-level workload: requests are whatever Pi sends, so request counts and token totals differ between engines. Use `engine-throughput` for controlled engine comparisons.
-
-- **Pi launch.** One fresh Pi process per task, in an empty workspace with a private home and agent directory, thinking off, the `read`, `write`, `bash`, and `edit` tools, no extensions, skills, MCP, context files, compaction, or retries, and a minimal environment without credentials. Pi 1.4.0 has no sampling option, so the engine's default sampling applies and is recorded. The prompt starts with a unique session nonce and asks for the complete implementation in `solution.py`. Only prompts are given to Pi; the tests stay with the evaluator.
-- **Measuring proxy.** Pi talks to a local reverse proxy that forwards to `--endpoint`. The proxy holds the API key (from `--api-key-file`), so the key never reaches Pi or the programs it runs. It records each request's dispatch, first and last output chunk on one monotonic clock, and the engine's usage. Prefill, decode, and client TTFT use the same definitions as `engine-throughput`, measured at the proxy; decode is "Not obtained" when the engine sends fewer than 0.9 chunks per token.
-- **Reconciliation.** Pi's own message and usage totals (input plus cache-read, output, message count) must equal the proxy's totals for the task, or `requests_reconciled` is false.
-- **Passes.** Warm-up passes cover the first two tasks; formal passes cover all 20, serially (`--warmup`, `--repetitions` from the contract). A pass is failed when Pi does not finish a task cleanly (non-zero exit, an aborted or non-`stop` ending), and timed-out when a task exceeds 300 seconds. A missing or wrong `solution.py` is a failed task (quality), not a failed pass, so its timings still count. Application duration is the mean summed Pi wall time of the tasks over succeeded passes; assertions are excluded. `--tasks` selects a subset and records that deviation.
-- **Assertions.** After each formal pass, every `solution.py` plus its official test runs in its own container from a digest-pinned Python image: no network, read-only root and mount, all capabilities dropped, unprivileged user, bounded memory, processes, CPU, and 30 seconds. Docker is required. `quality.application` is the number of solutions that pass out of all formal tasks; tasks without a solution, unfinished, timed-out, or failing tasks stay in the denominator. This is an agent that can run and repair code, not model pass@1.
-- **Negative control.** Before every run the driver checks the sandbox (a correct solution passes, a stub fails, network access and file writes are blocked, a runaway program times out), then runs a scripted stand-in for Pi against a reference engine with known rates and prefix caching: its rates must be recovered within 35% and its canonical solutions must all pass. Five faults must each be caught: a wrong solution, no solution file, a Pi hang, usage that disagrees with the wire, and engine HTTP errors.
-
-```sh
-python3 evaluations/humaneval-20-pi/scripts/humaneval.py \
-  --endpoint http://127.0.0.1:8080 --model MODEL --role candidate --engine-name NAME \
-  --warmup 1 --repetitions 3 --evaluation-revision FULL_COMMIT_SHA \
-  --artifact ENGINE_BINARY=SHA256 --engine-command "COMMAND THAT STARTED THE ENGINE" \
-  --hardware-model HARDWARE --toolchain TOOLCHAIN --power-mode MODE --thermal-observations TEXT --exclusive-gpu \
-  --output experiments/EXPERIMENT_ID/runs/RUN_ID/candidate-NAME.json
-```
-
-It needs Python 3.9 or newer, Docker, Pi 1.4.0 (`--pi` names the executable), and network access once to fetch the pinned dataset (or `--dataset-file`; the hash is checked either way). The first run pulls the pinned image. Run it on the engine's machine against a loopback endpoint. The `.requests.evidence` file holds per-task outcomes and per-request timings but no prompts, solutions, or model output; `--artifacts-dir` additionally keeps Pi's event stream and each solution locally and is never committed.
+A full run of the real plan takes about half an hour on a slow engine, mostly the 128k prefill and the benchmarks. The tests exercise the control with `EVALSCOPE_TEST_TOKENIZER` (and optionally `EVALSCOPE_TEST_DATASETS`) set.
 
 ## Correctness gates
 
-Numerical equivalence with a reference implementation is not required. The correctness gates are the endpoint conformance evaluation and the application-level task checks, and neither is evidence of numerical equivalence.
+Numerical equivalence with a reference implementation is not required. The correctness gate is the intelligence check of `engine-evalscope`, and it is not evidence of numerical equivalence.
 
-Retain application-level task checks as a separate quality gate. A coding agent can call the model repeatedly and repair solutions; a 20-task assertion pass is not model pass@1. Run generated programs in a restricted evaluation environment with no credentials or network and bounded resources. Preserve timeouts/errors in the denominator and verify the assertion evaluator with a negative control.
+The intelligence check compares rule-scored benchmark results with a baseline engine of the same model. A candidate is not ranked on throughput unless it passes. Run generated programs in a restricted evaluation environment with no network and bounded resources, keep samples the model failed to answer in the denominator, and verify the scorer with a negative control. A small benchmark gives a wide standard error, so a pass shows only that the engine is not badly broken.
 
 ## Measurement
 
@@ -142,13 +111,12 @@ Collect per-request native timings, client observations, input/output token coun
 - Prefill throughput: sum of processed input tokens divided by sum of measured prefill seconds; define whether queueing, transfer, and state import are included. Cached tokens are identified separately.
 - Decode throughput: sum of N−1 generation intervals divided by sum of first-to-last token durations. Requests with fewer than two tokens have no such throughput. Engines reporting command-level tokens/time or speculative multi-token emissions require their native definition to be reported separately; do not relabel it N−1.
 - Client TTFT: monotonic time from request dispatch to first valid text/tool output. Ignore role-only, heartbeat, and usage events. Disclose proxy boundaries and observation overhead.
-- Application duration: full task/cohort time, separate from GPU work. For interactive workloads, generated requests may diverge between engines; retain trajectories and token totals. Use a separate fixed-request workload for controlled kernel/engine comparisons when needed.
 - Resources: sampled memory allocation/footprint with definition and interval, memory pressure, whole-machine swap-out delta over bracketed boundaries, power/thermal conditions, and failures. Do not attribute whole-machine paging to a process without evidence.
 
 Aggregate throughput as ratios of sums, not an arithmetic mean of request speeds. Do not derive prefill/decode from application wall time. Missing metrics are “Not obtained”, not zero. Use monotonic clocks on a common observer for end-to-end intervals; do not subtract uncalibrated cross-host timestamps.
 
 ## Results
 
-Each engine measurement is one result document, of the kind the definition names in `result_schema`. A performance evaluation emits an `EvaluationResult`. It pins the evaluation reference it ran, records the observed environment (which may differ from the contract, so deviations are written down), identifies the deployed runtime by artifact hashes, and holds the settings used, every repetition including failures, run-level metrics, resources, and quality gates. Per-request records stay in a hashed evidence file it references. A conformance evaluation emits a `ConformanceResult` with one outcome per check, a summary, its cost, and the negative-control verdict.
+Each engine measurement is one result document, of the kind the definition names in `result_schema`. A performance evaluation emits an `EvaluationResult`. It pins the evaluation reference it ran, records the observed environment (which may differ from the contract, so deviations are written down), identifies the deployed runtime by artifact hashes, and holds the settings used, every repetition including failures, run-level headline metrics, the throughput of every workload level, resources, and the intelligence scores with their negative-control verdict. Per-request records stay in a hashed evidence file it references. The leaderboard lists only results of evaluations that exist at the current commit; records pinned to a retired evaluation stay in the repository as history and are named as retired, not dropped.
 
 An experiment's run record lists result documents by path and hash and must cite the same evaluation reference as its contract. Comparison, SOTA, and autonomy claims belong to the experiment protocol.

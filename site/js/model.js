@@ -6,7 +6,7 @@ export const METRICS = {
   decode_tok_s: { label: 'Decode tok/s', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'decode_tok_s']) },
   prefill_tok_s: { label: 'Prefill tok/s', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'prefill_tok_s']) },
   client_ttft_median_s: { label: 'Client TTFT (median)', unit: 's', better: 'lower', digits: 3, read: read(['metrics', 'client_ttft_median_s']) },
-  application_duration_s: { label: 'Application duration', unit: 's', better: 'lower', digits: 0, read: read(['metrics', 'application_duration_s']) },
+  concurrent_output_tok_s: { label: 'Output tok/s at concurrency 8', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'concurrent_output_tok_s']) },
   peak_memory_gib: { label: 'Peak memory', unit: 'GiB', better: 'lower', digits: 1, read: read(['metrics', 'peak_memory_gib']) },
   human_interventions: { label: 'Human interventions', unit: '', better: 'lower', digits: 0, read: read(['autonomy', 'human_interventions']) },
   hardware_hours: { label: 'Hardware hours', unit: 'h', better: 'lower', digits: 1, read: read(['autonomy', 'hardware_hours']) },

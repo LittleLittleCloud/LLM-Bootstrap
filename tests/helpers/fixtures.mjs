@@ -98,13 +98,18 @@ export function syntheticResult() {
       prefill: { basis: 'processed-input-tokens', total_tokens: 100, total_seconds: 1, tokens_per_second: 100 },
       decode: { basis: 'n-minus-1-intervals', total_tokens: 9, total_seconds: 1, tokens_per_second: 9 },
       client_ttft_median_seconds: 'Not obtained',
-      application_duration_seconds: 'Not obtained',
       requests_reconciled: true,
       per_request_evidence: evidenceFixture,
     },
+    throughput: [],
     resources: { peak_memory_gib: 'Not obtained', swap_out_delta_bytes: 'Not obtained' },
     quality: {
-      application: { passed: 1, total: 1, negative_control_verified: true, restricted_environment: true },
+      intelligence: {
+        benchmarks: [{ benchmark_id: 'synthetic', metric: 'accuracy/mean', score: 1, num_samples: 10, stderr: 0 }],
+        complete: true,
+        negative_control_verified: true,
+        restricted_environment: true,
+      },
     },
   };
 }

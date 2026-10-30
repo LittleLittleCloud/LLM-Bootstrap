@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, sep } from 'node:path';
 import test from 'node:test';
@@ -134,7 +133,7 @@ const releasedDefinition = scriptHash => ({
   description: 'Synthetic fixture; not an evaluation.',
   result_schema: 'EvaluationResult',
   harness: { name: 'synthetic-harness', version: '1' },
-  dataset: { repository: 'https://example.invalid/data', revision: commit('a'), file: 'data.jsonl', sha256: sha('b') },
+  datasets: [{ name: 'data', source: 'modelscope', repository: 'synthetic/data', files: [{ path: 'data.parquet', sha256: sha('b') }] }],
   task_ids: ['task-1'],
   seed: 0,
   limits: { context_window: 1024, max_output_tokens_per_request: 128, timeout_seconds_per_task: 10, request_concurrency: 1 },
@@ -295,121 +294,6 @@ test('derived contract files resolve through a hash-pinned chain and reject a ch
 
     write('base.json', mutate(base, c => { c.hardware.power = 'Changed'; }));
     assert.throws(() => resolveContractFile(join(dir, 'leaf.json')), /sha256/);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-const conformanceDir = join(root, 'evaluations', 'engine-api-conformance');
-const python = (script, args, options = {}) => execFileSync('python3', [script, ...args], {
-  encoding: 'utf8',
-  stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
-  ...options,
-});
-const driver = (...args) => python(join(conformanceDir, 'scripts', 'conformance.py'), args);
-const fileHash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
-
-// Runs the real driver entry point against the reference engine, optionally with an injected fault.
-function runAgainstReference(dir, fault, window = true) {
-  const output = join(dir, `result-${fault ?? 'clean'}${window ? '' : '-nowindow'}.json`);
-  const code = [
-    'import sys',
-    `sys.path.insert(0, ${JSON.stringify(join(conformanceDir, 'scripts'))})`,
-    'import conformance',
-    'from fake_engine import FakeEngine',
-    `with FakeEngine(faults=[${fault ? JSON.stringify(fault) : ''}]) as engine:`,
-    `    sys.argv = ['conformance.py', '--endpoint', engine.origin, '--model', engine.model, '--engine-name', 'fake', ${window ? "'--context-window', str(engine.context_window), " : ''}'--output', ${JSON.stringify(output)}, '--evaluation-revision', ${JSON.stringify(commit('9'))}]`,
-    '    code = conformance.main()',
-    'raise SystemExit(code)',
-  ].join('\n');
-  let status = 0;
-  try {
-    python('-c', [code]);
-  } catch (error) {
-    status = error.status;
-  }
-  return { status, output, result: JSON.parse(readFileSync(output, 'utf8')) };
-}
-
-test('the conformance definition lists exactly the driver checks and limits', () => {
-  const definition = read('evaluations/engine-api-conformance/evaluation.json');
-  const described = JSON.parse(driver('--describe'));
-  assert.deepEqual(definition.task_ids, described.check_ids);
-  assert.equal(definition.limits.max_output_tokens_per_request, described.limits.max_output_tokens_per_request);
-  assert.equal(definition.result_schema, 'ConformanceResult');
-});
-
-test('the conformance negative control passes and emits a valid, conformant result document', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-conformance-'));
-  try {
-    const output = join(dir, 'result.json');
-    assert.match(driver('--self-test', '--emit-result', output, '--evaluation-revision', commit('9')), /self-test: ok/);
-    const result = JSON.parse(readFileSync(output, 'utf8'));
-    acceptsEvaluation('ConformanceResult', result);
-    assert.equal(result.checks.length, read('evaluations/engine-api-conformance/evaluation.json').task_ids.length);
-    assert.deepEqual(result.summary, { ...result.summary, failed: 0, errored: 0, skipped: 0, required_failed: 0, conformant: true });
-    assert.equal(result.evaluation.sha256, fileHash(join(conformanceDir, 'evaluation.json')));
-
-    rejectsEvaluation('ConformanceResult', mutate(result, r => { r.negative_control.verified = false; }), 'conformant needs a verified negative control');
-    rejectsEvaluation('ConformanceResult', mutate(result, r => { r.complete = false; }), 'conformant needs a complete run');
-    rejectsEvaluation('ConformanceResult', mutate(result, r => { r.checks[0].outcome = 'fail'; }), 'a failed check needs a detail');
-    rejectsEvaluation('ConformanceResult', mutate(result, r => { r.endpoint.host = '10.0.0.5'; }), 'no machine address in the result');
-    acceptsEvaluation('ConformanceResult', mutate(result, r => {
-      r.summary.conformant = false;
-      r.complete = false;
-      r.negative_control.verified = false;
-    }));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('without a context window the overflow checks are skipped and the run stays valid', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-conformance-'));
-  try {
-    const run = runAgainstReference(dir, undefined, false);
-    acceptsEvaluation('ConformanceResult', run.result);
-    const skipped = run.result.checks.filter(c => c.outcome === 'skip').map(c => c.check_id).sort();
-    assert.deepEqual(skipped, ['chat.context.overflow_rejected', 'chat.context.recovers']);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('the real driver passes a correct engine, fails a faulty one, and records evidence', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-conformance-'));
-  try {
-    const clean = runAgainstReference(dir);
-    assert.equal(clean.status, 0);
-    acceptsEvaluation('ConformanceResult', clean.result);
-    assert.equal(clean.result.summary.conformant, true);
-    assert.equal(clean.result.endpoint.host_class, 'loopback');
-    assert.equal(clean.result.cost.requests > 20, true);
-    assert.equal(clean.result.evidence, undefined);
-
-    const faulty = runAgainstReference(dir, 'chat_tool_finish_stop');
-    assert.equal(faulty.status, 1);
-    acceptsEvaluation('ConformanceResult', faulty.result);
-    assert.equal(faulty.result.summary.conformant, false);
-    assert.ok(faulty.result.summary.required_failed >= 1);
-    assert.equal(faulty.result.evidence.access, 'local-only');
-    assert.equal(faulty.result.evidence.sha256, fileHash(faulty.output.replace('.json', '.evidence.json')));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('the real driver refuses to run when a script no longer matches its recorded hash', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-conformance-'));
-  try {
-    const copy = join(dir, 'engine-api-conformance');
-    cpSync(conformanceDir, copy, { recursive: true });
-    writeFileSync(join(copy, 'scripts', 'client.py'), `${readFileSync(join(copy, 'scripts', 'client.py'), 'utf8')}# tampered\n`);
-    assert.throws(
-      () => python(join(copy, 'scripts', 'conformance.py'), ['--endpoint', 'http://127.0.0.1:1', '--model', 'm', '--output', join(dir, 'out.json'), '--evaluation-revision', commit('9')]),
-      error => /does not match its recorded hash/.test(String(error.stderr)),
-    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
