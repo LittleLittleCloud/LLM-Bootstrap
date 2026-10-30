@@ -134,7 +134,7 @@ const releasedDefinition = scriptHash => ({
   description: 'Synthetic fixture; not an evaluation.',
   result_schema: 'EvaluationResult',
   harness: { name: 'synthetic-harness', version: '1' },
-  dataset: { repository: 'https://example.invalid/data', revision: commit('a'), file: 'data.jsonl', sha256: sha('b') },
+  datasets: [{ name: 'data', source: 'modelscope', repository: 'synthetic/data', files: [{ path: 'data.parquet', sha256: sha('b') }] }],
   task_ids: ['task-1'],
   seed: 0,
   limits: { context_window: 1024, max_output_tokens_per_request: 128, timeout_seconds_per_task: 10, request_concurrency: 1 },

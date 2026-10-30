@@ -21,7 +21,6 @@ function result(role, engine, patch = {}) {
   Object.assign(document, { role, engine_name: engine, runtime_revision: role === 'baseline' ? commit('6') : unavailable('Not exposed by the runtime.') }, patch);
   document.environment.hardware_model = 'fixture-hardware';
   document.metrics.client_ttft_median_seconds = 0.5;
-  document.metrics.application_duration_seconds = 100;
   document.resources.peak_memory_gib = 12;
   return document;
 }
@@ -93,33 +92,43 @@ test('runs and their results project into one entry per result, with derived con
   assert.equal(derived.target_model, candidate.target_model);
 });
 
-test('the quality gate is passed only for a completed, verified, fully passing result', () => {
-  const gate = (patch, status = 'completed') => {
-    const r = result('candidate', 'e');
-    Object.assign(r.quality, patch.quality);
-    Object.assign(r.quality.application, patch.application);
-    return qualityGate(r, status);
+test('the quality gate compares a verified candidate with the baselines of its run, within two standard errors', () => {
+  const scored = (role, score, patch = {}) => {
+    const r = result(role, role);
+    r.quality.intelligence = { benchmarks: [{ benchmark_id: 'humaneval', metric: 'accuracy/pass_at_k(k=1)', score, num_samples: 164, stderr: Math.sqrt(score * (1 - score) / 164) }],
+      complete: true, negative_control_verified: true, restricted_environment: true, ...patch };
+    return r;
   };
-  assert.equal(gate({}), 'passed');
-  assert.equal(gate({ application: { passed: 0 } }), 'failed');
-  assert.equal(gate({ application: { negative_control_verified: false } }), 'unverified');
-  assert.equal(gate({ application: { restricted_environment: false } }), 'unverified');
-  assert.equal(gate({}, 'interrupted'), 'unverified');
+  const baselines = [scored('baseline', 0.9)];
+  assert.equal(qualityGate(scored('candidate', 0.9), 'completed', baselines), 'passed');
+  assert.equal(qualityGate(scored('candidate', 0.86), 'completed', baselines), 'passed', 'a difference within noise passes');
+  assert.equal(qualityGate(scored('candidate', 0.5), 'completed', baselines), 'failed');
+  assert.equal(qualityGate(scored('candidate', 0.9), 'completed', []), 'unverified', 'a candidate without a baseline cannot be judged');
+  assert.equal(qualityGate(scored('baseline', 0.1), 'completed', []), 'passed', 'a verified baseline defines the reference');
+  assert.equal(qualityGate(scored('candidate', 0.9, { negative_control_verified: false }), 'completed', baselines), 'unverified');
+  assert.equal(qualityGate(scored('candidate', 0.9, { restricted_environment: false }), 'completed', baselines), 'unverified');
+  assert.equal(qualityGate(scored('candidate', 0.9, { complete: false }), 'completed', baselines), 'unverified');
+  assert.equal(qualityGate(scored('candidate', 0.9), 'interrupted', baselines), 'unverified');
+  const none = scored('candidate', 0.9);
+  none.quality.intelligence = 'Not obtained';
+  assert.equal(qualityGate(none, 'completed', baselines), 'unverified');
 });
 
 test('missing metrics and an unavailable intervention log stay null, never zero', () => {
   const files = new Map();
   const hashes = addContracts(files);
   const interrupted = result('candidate', 'fixture-engine');
-  Object.assign(interrupted.metrics, { prefill: 'Not obtained', decode: 'Not obtained', client_ttft_median_seconds: 'Not obtained', application_duration_seconds: 'Not obtained',
+  Object.assign(interrupted.metrics, { prefill: 'Not obtained', decode: 'Not obtained', client_ttft_median_seconds: 'Not obtained',
     formal_repetitions: 0, preliminary: true, requests_reconciled: false });
   Object.assign(interrupted.resources, { peak_memory_gib: 'Not obtained' });
+  interrupted.quality.intelligence = 'Not obtained';
   addRun(files, hashes, 'exp-base', 'run-1', [interrupted], { status: 'interrupted', human_interventions: unavailable('No log was kept.') });
   const [entry] = buildIndex(files, { validators }).entries;
   assert.equal(entry.run_status, 'interrupted');
   assert.equal(entry.quality_gate, 'unverified');
+  assert.equal(entry.quality.benchmarks, null);
   assert.deepEqual([entry.metrics.decode_tok_s, entry.metrics.decode_basis, entry.metrics.prefill_tok_s, entry.metrics.client_ttft_median_s,
-    entry.metrics.application_duration_s, entry.metrics.peak_memory_gib], [null, null, null, null, null, null]);
+    entry.metrics.concurrent_output_tok_s, entry.metrics.peak_memory_gib], [null, null, null, null, null, null]);
   assert.equal(entry.autonomy.human_interventions, null);
   assert.equal(entry.autonomy.hardware_hours, null);
 });

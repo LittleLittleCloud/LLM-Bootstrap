@@ -8,9 +8,11 @@
 //
 // The index is a projection for display. It is not a record: the documents under experiments/ stay authoritative.
 // Two rules are leaderboard policy, not schema facts:
-//   - quality_gate is "passed" only when the run completed, every application task passed, the negative control was
-//     verified, and generated programs ran in a restricted environment. It is "failed" when a task failed, and
-//     "unverified" otherwise. Only "passed" entries are ranked.
+//   - quality_gate is the intelligence check that the engine still computes the model correctly. It is "passed" only when the
+//     run completed, every benchmark was scored in full, the negative control was verified, generated programs ran in a
+//     restricted environment, and, for a candidate, every benchmark score is within two standard errors of the best score of
+//     the baselines of the same run. A baseline defines that reference, so it passes on verification alone. It is "failed"
+//     when a candidate scores lower than that tolerance allows, and "unverified" otherwise. Only "passed" entries are ranked.
 //   - Missing values stay null. They are never replaced by zero or inferred (an unavailable intervention log is not "none").
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
@@ -19,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveContract } from '../../skills/bootstrap-experiment-sop/scripts/resolve-contract.mjs';
 import { errorsOf, loadValidators } from '../../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 
-export const INDEX_VERSION = '0.3.0';
+export const INDEX_VERSION = '0.4.0';
 const RUN_PATH = /^experiments\/[^/]+\/runs\/[^/]+\/run\.json$/;
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 // Display precision only; the documents keep the exact ratio of sums.
@@ -34,12 +36,24 @@ export class IndexError extends Error {
   }
 }
 
-export function qualityGate(result, runStatus) {
-  const { application } = result.quality;
-  if (application.passed < application.total) return runStatus === 'completed' ? 'failed' : 'unverified';
-  const verified = runStatus === 'completed' && application.negative_control_verified && application.restricted_environment;
-  return verified ? 'passed' : 'unverified';
+export function qualityGate(result, runStatus, baselines = []) {
+  const { intelligence } = result.quality;
+  const verified = runStatus === 'completed' && typeof intelligence === 'object' && intelligence.complete
+    && intelligence.negative_control_verified && intelligence.restricted_environment;
+  if (!verified) return 'unverified';
+  if (result.role === 'baseline') return 'passed';
+  for (const own of intelligence.benchmarks) {
+    const references = baselines.flatMap(baseline => (typeof baseline.quality.intelligence === 'object'
+      ? baseline.quality.intelligence.benchmarks.filter(item => item.benchmark_id === own.benchmark_id) : []));
+    if (!references.length) return 'unverified';
+    const best = references.reduce((a, b) => (b.score > a.score ? b : a));
+    const tolerance = Math.max(2 * Math.hypot(own.stderr, best.stderr), 1 / Math.min(own.num_samples, best.num_samples));
+    if (own.score < best.score - tolerance) return 'failed';
+  }
+  return 'passed';
 }
+
+const throughputOf = (result, workloadId, concurrency) => result.throughput.find(item => item.workload_id === workloadId && item.concurrency === concurrency);
 
 // files: Map of repository-relative POSIX path -> file text.
 export function buildIndex(files, { synthetic = false, validators = null } = {}) {
@@ -103,23 +117,30 @@ export function buildIndex(files, { synthetic = false, validators = null } = {})
     const { contract, parent } = loaded;
     if (contract.status !== 'frozen') { fail(`${run.contract.path} is not frozen, so ${path} cannot be listed`); continue; }
 
+    const documents = [];
     for (const reference of run.evaluation_results) {
+      const text = read(reference.path);
+      if (text == null) continue;
+      if (sha256(text) !== reference.sha256) { fail(`${reference.path} does not match the sha256 pinned in ${path}`); continue; }
+      const result = parse(text, reference.path);
+      if (!result || !validate('evaluation', 'EvaluationResult', result, reference.path)) continue;
+      if (result.role !== reference.role || result.engine_name !== reference.engine_name) {
+        fail(`${reference.path} does not match the role and engine recorded in ${path}`);
+        continue;
+      }
+      const pinned = contract.evaluation.definition;
+      if (['evaluation_id', 'revision', 'sha256'].some(key => result.evaluation[key] !== pinned[key])) {
+        fail(`${reference.path} cites a different evaluation than the contract of ${path}`);
+        continue;
+      }
+      documents.push({ reference, result });
+    }
+    const baselines = documents.filter(item => item.result.role === 'baseline').map(item => item.result);
+
+    for (const { reference, result } of documents) {
       try {
-        const text = read(reference.path);
-        if (text == null) continue;
-        if (sha256(text) !== reference.sha256) { fail(`${reference.path} does not match the sha256 pinned in ${path}`); continue; }
-        const result = parse(text, reference.path);
-        if (!result || !validate('evaluation', 'EvaluationResult', result, reference.path)) continue;
-        if (result.role !== reference.role || result.engine_name !== reference.engine_name) {
-          fail(`${reference.path} does not match the role and engine recorded in ${path}`);
-          continue;
-        }
-        const pinned = contract.evaluation.definition;
-        if (['evaluation_id', 'revision', 'sha256'].some(key => result.evaluation[key] !== pinned[key])) {
-          fail(`${reference.path} cites a different evaluation than the contract of ${path}`);
-          continue;
-        }
         const { metrics } = result;
+        const intelligence = typeof result.quality.intelligence === 'object' ? result.quality.intelligence : null;
         entries.push({
           entry_id: `${run.run_id}/${result.role}/${result.engine_name}`,
           run_id: run.run_id,
@@ -141,17 +162,18 @@ export function buildIndex(files, { synthetic = false, validators = null } = {})
             prefill_tok_s: numberOrNull(aggregate(metrics.prefill)?.tokens_per_second),
             prefill_basis: aggregate(metrics.prefill)?.basis ?? null,
             client_ttft_median_s: numberOrNull(metrics.client_ttft_median_seconds),
-            application_duration_s: numberOrNull(metrics.application_duration_seconds),
+            concurrent_output_tok_s: numberOrNull(throughputOf(result, 'concurrency.in512.out64', 8)?.output_tokens_per_second),
+            cache_hit_ratio: numberOrNull(result.throughput.find(item => item.kind === 'multi-turn')?.cache_hit_ratio),
             peak_memory_gib: numberOrNull(result.resources.peak_memory_gib),
             formal_repetitions: metrics.formal_repetitions,
             preliminary: metrics.preliminary,
             requests_reconciled: metrics.requests_reconciled,
           },
-          quality_gate: qualityGate(result, run.status),
+          quality_gate: qualityGate(result, run.status, baselines),
           quality: {
-            application_passed: result.quality.application.passed,
-            application_total: result.quality.application.total,
-            negative_control_verified: result.quality.application.negative_control_verified,
+            benchmarks: intelligence ? intelligence.benchmarks.map(({ benchmark_id, score, stderr, num_samples }) => ({ benchmark_id, score: numberOrNull(score), stderr: numberOrNull(stderr), num_samples })) : null,
+            complete: intelligence ? intelligence.complete : null,
+            negative_control_verified: intelligence ? intelligence.negative_control_verified : null,
           },
           autonomy: {
             human_interventions: Array.isArray(run.human_interventions) ? run.human_interventions.length : null,

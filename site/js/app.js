@@ -188,6 +188,8 @@ const BASIS_LABEL = {
 const BASIS_KEY = { decode_tok_s: 'decode_basis', prefill_tok_s: 'prefill_basis' };
 const heading = key => `${METRICS[key].label}${METRICS[key].unit && !METRICS[key].label.includes(METRICS[key].unit) ? ` (${METRICS[key].unit})` : ''}`;
 
+const scoreText = run => (run.quality.benchmarks ? run.quality.benchmarks.map(item => `${item.benchmark_id} ${(100 * item.score).toFixed(1)}%`).join(', ') : 'not obtained');
+
 function renderLeaderboard(collapsed) {
   const ranks = rankRuns(collapsed, state.metric);
   const rows = orderRows(collapsed, ranks, state.sort);
@@ -233,8 +235,7 @@ function renderLeaderboard(collapsed) {
       h('td', {}, run.hardware, h('span', { class: 'sub' }, `${run.target_model} (${run.weights}) \u00b7 ${run.evaluation}`)),
       h('td', {}, run.builder ?? '\u2014', h('span', { class: 'sub' }, run.harness)),
       metrics.map(key => h('td', { class: `num${key === state.metric ? ' hot' : ''}` }, formatValue(key, METRICS[key].read(run), false), sub(key))),
-      h('td', { class: `gate ${gate[0]}`, title: `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks` },
-        `${gate[1]} ${run.quality.application_passed}/${run.quality.application_total}`),
+      h('td', { class: `gate ${gate[0]}`, title: `${run.quality_gate}: ${scoreText(run)}` }, gate[1]),
       h('td', { class: 'date' }, run.date));
   });
 
@@ -320,7 +321,7 @@ function openDetail(run) {
     ['Prefill timing basis', run.metrics.prefill_basis ? BASIS_LABEL[run.metrics.prefill_basis] : 'not obtained'],
     ['Formal repetitions', `${run.metrics.formal_repetitions}${run.metrics.preliminary ? ' (preliminary)' : ''}`],
     ['Requests reconciled', run.metrics.requests_reconciled ? 'yes' : 'no'],
-    ['Quality gate', `${run.quality_gate}: ${run.quality.application_passed}/${run.quality.application_total} tasks, negative control ${run.quality.negative_control_verified ? 'verified' : 'not verified'}`],
+    ['Intelligence gate', `${run.quality_gate}: ${scoreText(run)}; negative control ${run.quality.negative_control_verified ? 'verified' : 'not verified'}`],
     ['Builder tokens', count(run.autonomy.builder_tokens)], ['Elapsed hours', count(run.autonomy.elapsed_hours)],
     ['Self-hosting', `${run.autonomy.self_hosting_status}${run.autonomy.external_recovery_used ? ' (external recovery used)' : ''}`],
     ['Deviations', run.deviations.length ? run.deviations.join('; ') : 'none recorded'],

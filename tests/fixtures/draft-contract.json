@@ -44,7 +44,7 @@
   },
   "evaluation": {
     "definition": {
-      "evaluation_id": "humaneval-20-pi",
+      "evaluation_id": "engine-evalscope",
       "revision": null,
       "sha256": null
     },
@@ -67,7 +67,7 @@
   "goal": {
     "primary_metric": null,
     "performance_thresholds": null,
-    "quality_gate": "20/20 official task assertions",
+    "quality_gate": "HumanEval and GSM8K scores within two standard errors of the baseline engine on the same model",
     "resource_limits": null,
     "self_hosting_in_scope": false
   },

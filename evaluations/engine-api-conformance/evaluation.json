@@ -7,7 +7,7 @@
     "not_applicable": true,
     "reason": "The driver script sends HTTP requests to the endpoint directly; no agent harness is involved."
   },
-  "dataset": {
+  "datasets": {
     "not_applicable": true,
     "reason": "The checks and their prompts are built into the scripts; there is no external dataset."
   },
