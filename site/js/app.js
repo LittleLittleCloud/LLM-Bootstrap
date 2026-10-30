@@ -311,7 +311,7 @@ function openDetail(run) {
       ? h('a', { href: item.url, target: '_blank', rel: 'noopener noreferrer' }, item.description) : item.description,
     ` (${item.access})`)));
   const rows = [
-    ['Experiment', run.experiment_id], ['Lineage', chain.join(' \u2192 ')], ['Run', `${run.run_id} (${run.run_status}, acceptance ${run.acceptance})`],
+    ['Experiment', run.experiment_id], ['Lineage', chain.join(' \u2192 ')], ['Run', run.run_id],
     ['Role and track', `${run.role}, ${run.comparison_track}`], ['Date', run.date],
     ['Engine', run.engine.name], ['Runtime revision', run.engine.revision ?? 'unavailable'],
     ['Hardware', run.hardware], ['Target model', `${run.target_model} (${run.weights})`], ['Builder LLM', run.builder ?? 'n/a (baseline)'],
@@ -325,7 +325,7 @@ function openDetail(run) {
     ['Builder tokens', count(run.autonomy.builder_tokens)], ['Elapsed hours', count(run.autonomy.elapsed_hours)],
     ['Self-hosting', `${run.autonomy.self_hosting_status}${run.autonomy.external_recovery_used ? ' (external recovery used)' : ''}`],
     ['Deviations', run.deviations.length ? run.deviations.join('; ') : 'none recorded'],
-    ['Source', `${run.source.run}`],
+    ['Source', run.source.evaluation],
   ];
   const dialog = $('detail');
   dialog.replaceChildren(

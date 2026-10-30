@@ -131,10 +131,10 @@ test('the skill works when its folder is copied on its own', () => {
   try {
     const copy = join(temp, 'bootstrap-experiment-sop');
     cpSync(join(root, 'skills', 'bootstrap-experiment-sop'), copy, { recursive: true });
-    const run = spawnSync('node', [join(copy, 'scripts', 'check-experiment.mjs'), join(root, 'tests', 'fixtures', 'draft-contract.json')], { encoding: 'utf8' });
+    const run = spawnSync('node', [join(copy, 'scripts', 'check-experiment.mjs'), join(root, 'tests', 'fixtures', 'draft-experiment.json')], { encoding: 'utf8' });
     assert.equal(run.status, 0, run.stdout + run.stderr);
     assert.match(run.stdout, /status: draft-not-run/);
-    assert.match(run.stdout, /schema: (valid ExperimentContract|not checked)/);
+    assert.match(run.stdout, /schema: (valid Experiment|not checked)/);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

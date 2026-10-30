@@ -236,7 +236,7 @@
     {
       "role": "driver",
       "path": "scripts/evaluate.py",
-      "sha256": "7ab40337fb5695317d52e22d73526bc604702ecf321f41a6d633f75521c603a4"
+      "sha256": "dcefe1d0fcdf769871606b21dea9018b175ef0eddfb562b9ea45149e8f53b8fa"
     },
     {
       "role": "driver",

@@ -14,11 +14,11 @@ Evaluations are not bundled with the skill; the repository above is the only sou
 
 1. When planning, resolve that commit: `git ls-remote https://github.com/LittleLittleCloud/LLM-Bootstrap.git refs/heads/main`.
 2. Read the definitions and scripts at exactly that commit, for example in a scratch clone checked out at it, outside the project workspace and outside any installed plugin. Choose a `released` definition.
-3. Record the full commit as the contract's evaluation `revision` and the definition file's sha256. Later stages use the recorded revision, never a newer `main`.
+3. Record the full commit as the experiment's `evaluation_revision` and the definition file's sha256 as `evaluation_sha256`. Later stages use the recorded revision, never a newer `main`.
 
 Do not use an evaluation copy that shipped with an installed plugin, was cached earlier, or has local changes.
 
-Run an evaluation from the pinned repository revision. Check every script against its recorded hash before use, and never run from a modified checkout. The pinned scripts emit the result documents (see Results below); do not edit them by hand.
+Run an evaluation from the pinned repository revision. Check every script against its recorded hash before use, and never run from a modified checkout. The pinned scripts emit the evaluation records (see Results below); do not edit them by hand.
 
 ## Evaluation definition
 
@@ -32,11 +32,11 @@ Each evaluation has a definition file, `evaluations/<evaluation-id>/evaluation.j
 
 A definition is a `draft` or `released`. A released definition has every field resolved, and every script exists in the repository and matches its hash. A draft has unresolved fields and cannot be used for formal runs.
 
-The experiment contract keeps only what depends on the experiment: the evaluation reference, the warm-up plan, and formal repetitions.
+The experiment keeps only what depends on the experiment: the evaluation reference, the warm-up plan, and formal repetitions.
 
 Evaluations in the repository at the time of writing (the commit you resolved is authoritative):
 
-| Evaluation | Status | Result document | Purpose |
+| Evaluation | Status | Record | Purpose |
 | --- | --- | --- | --- |
 | `engine-evalscope` | released | `EvaluationResult` | EvalScope measurement of a chat endpoint: throughput first (prefill by prompt length up to 128k, decode by context depth, concurrency, multi-turn prefix reuse), then rule-scored HumanEval and GSM8K to show the engine still computes the model correctly. |
 
@@ -62,12 +62,12 @@ Each workload is an `evalscope perf` run at one or more closed-loop concurrency 
 | `concurrency.in512.out64` | 1, 2, 4, and 8 concurrent requests of 512 input and 64 output tokens | Aggregate throughput and per-request speed under load |
 | `multi-turn.in8k.t5` | Conversations of 5 turns that each add 8k tokens | Prefix-cache reuse as the context grows |
 
-Here k means 1024 tokens. The run-level `prefill`, `decode`, and `client_ttft_median_seconds` are the single-stream workloads `prefill.in2k.out1` and `decode.in128.out256`. Every level is reported in the result's `throughput` list.
+Here k means 1024 tokens. The headline `prefill_tokens_per_second`, `decode_tokens_per_second`, and `client_ttft_median_seconds` are the single-stream workloads `prefill.in2k.out1` and `decode.in128.out256`. Every level is recorded as flat keys named `throughput.<workload>.c<concurrency>.<metric>`, for example `throughput.concurrency.in512.out64.c8.output_tokens_per_second`.
 
 - **Definitions.** Prefill is processed input tokens (reported prompt tokens minus cached ones) over EvalScope's time to first token. Decode is output tokens minus one over its time per output token. Output throughput is the output tokens of all requests over the test duration, so ramp-up and ramp-down are included. All are ratios of sums over requests and passes, never means of per-request speeds.
 - **Gates.** A level counts only if every request succeeded, prompts reached the target length (within 2% or 16 tokens), and every request produced exactly the target output length. A level that fails is excluded from the metrics, its pass is recorded as failed with the reason, and the metrics stay "Not obtained" rather than zero. The engine must report cached tokens as zero on unique prompts (above 1% fails the level); only multi-turn workloads reuse their own earlier turns, and their cache hit ratio and first-turn and later-turn time to first token are recorded.
 - **No repeated prompts.** The random prompts are reseeded for every level and pass from a per-run salt that is recorded in the settings, so an engine cannot serve one from an earlier run's prefix cache.
-- **Passes.** The contract's warm-up and formal repetition counts are `--warmup` and `--repetitions`: whole passes over the plan. A single formal pass is preliminary evidence. Each workload reports its headline tokens per second for every pass that counted, with their sample standard deviation. Cold load is not measured.
+- **Passes.** The experiment's warm-up and formal repetition counts are `--warmup` and `--repetitions`: whole passes over the plan. A single formal pass is preliminary evidence. Each workload records its headline tokens per second for every pass that counted (`pass_tokens_per_second`), with their sample standard deviation. Cold load is not measured.
 - **Resources.** Swap-out is the whole-machine delta over the formal passes and is measured only for a loopback endpoint. Peak memory is sampled only when `--memory-pid` names the engine process; it is the sampled resident size, which may not include GPU memory. Otherwise both are "Not obtained".
 
 ### Intelligence
@@ -76,8 +76,8 @@ Benchmarks are rule-scored only; no judge model is involved. The plan uses Human
 
 - **Pinned data.** The datasets are the ModelScope files named in the definition, checked by SHA-256 and copied before use, because EvalScope edits the dataset folder it reads. `--dataset-dir` supplies local copies; the hashes are checked either way.
 - **Sandbox.** Generated code runs in a container from a digest-pinned Python image with the network disabled, 1 GiB of memory, and 1 CPU. Docker is required.
-- **What the score means.** It shows the engine did not break the model; it is not a ranking of models and not numerical equivalence. Each score carries its sample count and the standard error of a proportion. The experiment judges it against a baseline engine of the same model: a candidate passes when no benchmark falls below the best baseline score by more than two standard errors of the difference. The leaderboard applies that rule, and a baseline passes on verification alone because it defines the reference. State the rule in the contract's `quality_gate`.
-- **Partial runs.** `--parts throughput` or `--parts intelligence` runs one part for development. The result records the deviation, and a missing intelligence block is "Not obtained", so the gate stays unverified.
+- **What the score means.** It shows the engine did not break the model; it is not a ranking of models and not numerical equivalence. Each score carries its sample count and the standard error of a proportion. The experiment judges it against a baseline engine of the same model: a candidate passes when no benchmark falls below the best baseline score by more than two standard errors of the difference. The leaderboard applies that rule, and a baseline passes on verification alone because it defines the reference. State the rule in the experiment's `goal_quality_gate`.
+- **Partial runs.** `--parts throughput` or `--parts intelligence` runs one part for development. The record lists the deviation, and without every benchmark `intelligence_complete` is false, so the gate stays unverified.
 
 ### Negative control
 
@@ -89,10 +89,11 @@ python3 evaluations/engine-evalscope/scripts/evaluate.py \
   --role candidate --engine-name NAME --warmup 0 --repetitions 3 --evaluation-revision FULL_COMMIT_SHA \
   --artifact ENGINE_BINARY=SHA256 --engine-command "COMMAND THAT STARTED THE ENGINE" \
   --hardware-model HARDWARE --toolchain TOOLCHAIN --power-mode MODE --thermal-observations TEXT --exclusive-gpu \
-  --output experiments/EXPERIMENT_ID/runs/RUN_ID/candidate-NAME.json
+  --experiment-dir experiments/EXPERIMENT_ID --experiment-revision FULL_COMMIT_SHA_OF_FROZEN_EXPERIMENT \
+  --declare human_interventions=N --declare builder_tokens=N --declare elapsed_hours=H --declare hardware_hours=H
 ```
 
-Use the locked environment's Python. The tokenizer directory must be the model's own, with its chat template, because EvalScope sizes prompts with it; a tokenizer of another model distorts every token count, and its hash is recorded. Run on the engine's machine against a loopback endpoint (a remote one needs `--allow-remote` and is recorded as a deviation), and pass a key with `--api-key-file`. The environment options describe what you observed; `exclusive-gpu` is your statement that nothing else used the GPU. The driver writes the result document and, next to it, a `.requests.evidence` file with every level's EvalScope summary, gate outcomes, and seeds. That file holds no prompts or model output, is referenced by hash as local-only evidence, and is not committed (the repository ignores `*.evidence`). `--logs-dir` keeps EvalScope's logs locally.
+Use the locked environment's Python. The tokenizer directory must be the model's own, with its chat template, because EvalScope sizes prompts with it; a tokenizer of another model distorts every token count, and its hash is recorded. Run on the engine's machine against a loopback endpoint (a remote one needs `--allow-remote` and is recorded as a deviation), and pass a key with `--api-key-file`. The environment options describe what you observed; `exclusive-gpu` is your statement that nothing else used the GPU. `--declare KEY=VALUE` states run context that is recorded as given and never measured: `human_interventions`, `builder_tokens`, `elapsed_hours`, `hardware_hours` (a number or `Unavailable: reason`), and the `self_hosting_*` fields (default `not-demonstrated`; see the experiment protocol). Anything not declared is recorded as unavailable. The driver reads `--experiment-dir`/experiment.json to pin its hash, writes `evaluation/<YYYYMMDD-HHMMSS>.json` named after its start time in UTC, and, in `evidence/`, a `.requests.evidence` file with every level's EvalScope summary, gate outcomes, and seeds. That file holds no prompts or model output, is referenced by hash as local-only evidence, and is not committed (the repository ignores `*.evidence`). `--logs-dir` keeps EvalScope's logs locally.
 
 A full run of the real plan takes about half an hour on a slow engine, mostly the 128k prefill and the benchmarks. The tests exercise the control with `EVALSCOPE_TEST_TOKENIZER` (and optionally `EVALSCOPE_TEST_DATASETS`) set.
 
@@ -117,6 +118,6 @@ Aggregate throughput as ratios of sums, not an arithmetic mean of request speeds
 
 ## Results
 
-Each engine measurement is one result document, of the kind the definition names in `result_schema`. A performance evaluation emits an `EvaluationResult`. It pins the evaluation reference it ran, records the observed environment (which may differ from the contract, so deviations are written down), identifies the deployed runtime by artifact hashes, and holds the settings used, every repetition including failures, run-level headline metrics, the throughput of every workload level, resources, and the intelligence scores with their negative-control verdict. Per-request records stay in a hashed evidence file it references. The leaderboard lists only results of evaluations that exist at the current commit; records pinned to a retired evaluation stay in the repository as history and are named as retired, not dropped.
+Each engine measurement is one evaluation record, of the kind the definition names in `result_schema`, stored at `experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json`. A performance evaluation emits an `EvaluationResult`, a flat JSON object. It pins the evaluation it ran and the experiment it belongs to, records the observed environment (which may differ from the experiment, so deviations are written down), identifies the deployed runtime by artifact hashes, and holds the settings used (`setting.*`), the pass counts and every failure, headline metrics, the throughput of every workload level (`throughput.*`), resources, the intelligence scores with their negative-control verdict (`intelligence.*`), and the declared run context. Per-request records stay in a hashed local evidence file it references. The leaderboard lists only records of evaluations that exist at the current commit; records pinned to a retired evaluation stay in the repository as history and are named as retired, not dropped.
 
-An experiment's run record lists result documents by path and hash and must cite the same evaluation reference as its contract. Comparison, SOTA, and autonomy claims belong to the experiment protocol.
+A baseline and a candidate are separate records, and so is every repeated or failed evaluation. A record must cite the same evaluation as its experiment. Comparison, SOTA, and autonomy claims belong to the experiment protocol.

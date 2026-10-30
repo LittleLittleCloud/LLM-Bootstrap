@@ -28,9 +28,9 @@ The initial LLM, operating system, compiler, hardware, and permitted libraries a
 | [.claude-plugin/plugin.json](.claude-plugin/plugin.json) | Claude Code manifest using the same skills and resources. |
 | [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) | Single-plugin marketplace for installation and updates. |
 | `site/` (not part of the plugin package) | Static leaderboard with multi-dimensional filters and a trend dashboard, currently on synthetic demo data. Preview with `python3 -m http.server -d site`; deployment to GitHub Pages is a manual workflow. |
-| `tools/leaderboard/build-index.mjs` (not part of the plugin package) | Builds the leaderboard index from `experiments/<id>/runs/<run-id>/run.json` and the contract and result documents it pins, checking every pinned hash and, when Ajv is installed, every schema. `site/data/leaderboard.mock.json` is a static synthetic index; a real `site/data/leaderboard.json` takes precedence when present. |
+| `tools/leaderboard/build-index.mjs` (not part of the plugin package) | Builds the leaderboard index from `experiments/<id>/experiment.json` and every `experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json` record, checking every pinned hash and, when Ajv is installed, every schema. `site/data/leaderboard.mock.json` is a static synthetic index; a real `site/data/leaderboard.json` takes precedence when present. |
 | [skills/bootstrap-submit-results](skills/bootstrap-submit-results/SKILL.md) | Submit finished experiment results to this repository as a reviewable pull request, after a private-material scan and the repository's own validation. |
-| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | A self-contained skill: run a new or derived experiment end to end. `references/` hold the stages, both protocols, and prior evidence; `assets/` the report template and schemas; `scripts/` the contract check and resolver. |
+| [skills/bootstrap-experiment-sop](skills/bootstrap-experiment-sop/SKILL.md) | A self-contained skill: run a new or derived experiment end to end. `references/` hold the stages, both protocols, and prior evidence; `assets/` the schemas; `scripts/` the experiment check and resolver. |
 | [evaluations/](evaluations/engine-evalscope/evaluation.json) | Evaluation definitions and scripts owned by this repository; the skill fetches them from the latest `main` commit. `engine-evalscope` is released. |
 | [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
 
@@ -52,11 +52,11 @@ Other harnesses may consume the skills directly if they preserve the entire repo
 
 For example: **Apple M5 Pro, 48 GiB + Qwen3.6-35B-A3B 8bit + Pi 1.4.0**, with a fixed HumanEval workload and explicit correctness, memory, and latency requirements. This tuple identifies a starting point; it is insufficient until revisions, builder identity, baseline settings, budgets, and thresholds are filled in.
 
-While a contract is being written, unresolved fields stay `null` and `status` is `draft-not-run`; fill them before running. A draft is a planning artifact, not an executable configuration. Distinguish the harness driving engine development from the harness evaluating the resulting endpoint, even if both use Pi.
+While `experiment.json` is being written, unresolved fields stay `null` and `status` is `draft-not-run`; fill them before running. A draft is a planning artifact, not an executable configuration. Distinguish the harness driving engine development from the harness evaluating the resulting endpoint, even if both use Pi.
 
 Supply a task such as:
 
-> Use bootstrap-experiment-sop to start a new experiment: copy the report template into a new experiment directory in my project workspace, then write and freeze the contract there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, follow its build and evaluation stages to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the contract. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
+> Use bootstrap-experiment-sop to start a new experiment: create a new experiment directory in my project workspace, then write and freeze its `experiment.json` there. Do not edit the installed plugin. After the essential fields and execution authorization are resolved, follow its build and evaluation stages to build a local inference engine specialized for this machine and target model. Measure it against the baselines named in the experiment. Preserve correctness and resource limits; retain failed attempts and record every human intervention. Work within the declared budget. Attempt self-hosting only if the builder identity and model support make it possible and it is included in the experiment scope.
 
 ### 3. Build, measure, and retain evidence
 

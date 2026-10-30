@@ -130,7 +130,9 @@ results = evaluate.summarize_throughput(plan, passes)
 run = {'plan': plan, 'passes': passes, 'formal_seconds': 1.0, 'peak_memory_gib': None, 'swap_out_delta_bytes': None}
 info = {'role': 'candidate', 'engine_name': 'fixture', 'warmup': 0, 'repetitions': 3, 'parts': ['throughput'], 'scheme': 'http', 'host_class': 'loopback',
         'fields': {}, 'salt': 'x', 'tokenizer_sha256': 'a' * 64, 'evaluation_revision': '9' * 40,
-        'runtime_revision': {'unavailable': True, 'reason': 'fixture'}, 'artifacts': [{'name': 'e', 'sha256': 'b' * 64}], 'commands': ['x'],
+        'runtime_revision': 'Unavailable: fixture', 'artifacts': [{'name': 'e', 'sha256': 'b' * 64}], 'commands': ['x'],
+        'started_at': '2026-10-28T08:00:00+00:00', 'experiment_id': 'fixture', 'experiment_revision': '8' * 40, 'experiment_sha256': 'd' * 64,
+        'declared': evaluate.parse_declarations([]),
         'environment': {'hardware_model': 'h', 'os_version': 'o', 'toolchain': 't', 'power_mode': 'p', 'thermal_observations': 'n', 'exclusive_gpu': True, 'deviations_from_contract': []}}
 control = {'verified': True, 'restricted': False, 'notes': [], 'problems': []}
 evidence = {'description': 'fixture', 'access': 'local-only', 'sha256': 'c' * 64, 'access_limitation': 'fixture'}
@@ -154,12 +156,21 @@ print(json.dumps({'results': results, 'result': result}))`);
     if (item[key] !== 'Not obtained') assert.ok(Math.abs(item[key].tokens_per_second - item[key].total_tokens / item[key].total_seconds) < 1e-9, `${item.workload_id} ${key}`);
   }
   accepts(doc.result);
-  assert.deepEqual(doc.result.repetitions.map(r => r.outcome), ['succeeded', 'succeeded', 'failed']);
-  assert.match(doc.result.repetitions[2].failure_description, /prefill\.in2k\.out1 at concurrency 1: 1 of 4 requests failed/);
-  assert.equal(doc.result.metrics.formal_repetitions, 2);
-  assert.equal(doc.result.metrics.requests_reconciled, false, 'a gated level makes the requests unreconciled');
-  assert.equal(doc.result.quality.intelligence, 'Not obtained');
-  assert.equal(doc.result.metrics.prefill.tokens_per_second, prefill.prefill.tokens_per_second, 'the headline prefill is the 2k workload');
+  assert.deepEqual([doc.result.formal_passes_succeeded, doc.result.formal_passes_failed], [2, 1]);
+  assert.equal(doc.result.failures.length, 1);
+  assert.match(doc.result.failures[0], /formal pass 2 failed: prefill\.in2k\.out1 at concurrency 1: 1 of 4 requests failed/);
+  assert.equal(doc.result.requests_reconciled, false, 'a gated level makes the requests unreconciled');
+  assert.equal(doc.result.intelligence_complete, false);
+  assert.ok(!Object.keys(doc.result).some(key => key.startsWith('intelligence.')), 'no benchmark was scored');
+  assert.equal(doc.result.prefill_tokens_per_second, prefill.prefill.tokens_per_second, 'the headline prefill is the 2k workload');
+  assert.equal(doc.result['throughput.prefill.in2k.out1.c1.prefill_tokens_per_second'], prefill.prefill.tokens_per_second);
+  assert.equal(doc.result.prefill_basis, 'processed-input-tokens');
+  assert.equal(doc.result['throughput.multi-turn.in8k.t5.c1.cache_hit_ratio'], 0.6);
+  assert.equal(doc.result['throughput.prefill.in2k.out1.c1.pass_tokens_per_second'].length, 2);
+  for (const [key, value] of Object.entries(doc.result)) {
+    const flat = ['string', 'number', 'boolean'].includes(typeof value) || (Array.isArray(value) && value.every(item => ['string', 'number'].includes(typeof item)));
+    assert.ok(flat, `${key} is not a scalar or an array of scalars`);
+  }
 });
 
 test('benchmark scores come from EvalScope reports, with a standard error, and must cover the expected samples', () => {
@@ -257,13 +268,14 @@ print(json.dumps({'first': first, 'second': second, 'plain': plain, 'early': ear
   assert.equal(out.oracle.choices[0].message.content, 'The answer is \\boxed{5}.');
 });
 
-test('the driver refuses a missing option, a bad endpoint, fixed request fields, and bad parts', () => {
+test('the driver refuses a missing option, a bad endpoint, fixed request fields, bad parts, and bad declarations', () => {
   const dir = tmp();
   try {
+    writeFileSync(join(dir, 'experiment.json'), '{}');
     const base = [
       '--endpoint', 'http://127.0.0.1:9', '--model', 'm', '--tokenizer-path', dir, '--role', 'baseline', '--engine-name', 'e', '--warmup', '0',
       '--repetitions', '1', '--evaluation-revision', commit('9'), '--artifact', `engine=${sha('a')}`, '--hardware-model', 'h',
-      '--toolchain', 't', '--power-mode', 'p', '--thermal-observations', 'n', '--output', join(dir, 'result.json'),
+      '--toolchain', 't', '--power-mode', 'p', '--thermal-observations', 'n', '--experiment-dir', dir, '--experiment-revision', commit('8'),
     ];
     const swap = (from, to) => base.map(arg => (arg === from ? to : arg));
     assert.match(failure(...base.slice(2)).text, /Missing required options: --endpoint/);
@@ -274,12 +286,32 @@ test('the driver refuses a missing option, a bad endpoint, fixed request fields,
     assert.match(failure(...base, '--request-field', 'max_tokens=5').text, /fixed by the evaluation/);
     assert.match(failure(...base, '--request-field', 'top_k=[1]').text, /scalar or an object/);
     assert.match(failure(...base, '--parts', 'speed').text, /--parts must be/);
-    assert.match(failure(...swap('--output', '--output').concat('--runtime-revision', 'abc')).text, /--runtime-revision must be a full/);
-    writeFileSync(join(dir, 'result.json'), '{}');
-    assert.match(failure(...base).text, /must be new files/);
+    assert.match(failure(...base, '--runtime-revision', 'abc').text, /--runtime-revision must be a full/);
+    assert.match(failure(...swap(commit('8'), 'abc')).text, /--experiment-revision must be a full/);
+    assert.match(failure(...swap(dir, join(dir, 'missing'))).text, /Missing required options|must hold experiment\.json|must be a directory/);
+    assert.match(failure(...base, '--declare', 'human_interventions=-1').text, /not a valid count/);
+    assert.match(failure(...base, '--declare', 'cost=1').text, /--declare must look like KEY=VALUE/);
+    assert.match(failure(...base, '--declare', 'self_hosting_status=demonstrated').text, /Demonstrated self-hosting needs/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('declared run context is recorded as given and defaults to unavailable', () => {
+  const out = harness(`
+print(json.dumps({
+  'default': evaluate.parse_declarations([]),
+  'given': evaluate.parse_declarations(['human_interventions=3', 'elapsed_hours=1.5', 'builder_tokens=Unavailable: no usage report', 'self_hosting_status=not-in-scope']),
+  'demonstrated': evaluate.parse_declarations(['self_hosting_status=demonstrated', 'self_hosting_transition_at=2026-10-28T08:00:00Z',
+      'self_hosting_builder_matches_target=true', 'self_hosting_routing=harness to the engine', 'self_hosting_external_recovery_used=false',
+      'self_hosting_evidence_sha256=' + 'a' * 64]),
+}))`);
+  assert.match(out.default.human_interventions, /^Unavailable: /);
+  assert.equal(out.default.self_hosting_status, 'not-demonstrated');
+  assert.deepEqual([out.given.human_interventions, out.given.elapsed_hours, out.given.self_hosting_status], [3, 1.5, 'not-in-scope']);
+  assert.equal(out.given.builder_tokens, 'Unavailable: no usage report');
+  assert.equal(out.demonstrated.self_hosting_transition_at, '2026-10-28T08:00:00+00:00');
+  assert.equal(out.demonstrated.self_hosting_builder_matches_target, true);
 });
 
 test('a modified script or dependency lock no longer matches its recorded hash and is refused', () => {
@@ -315,14 +347,14 @@ test('the negative control passes through the real EvalScope pipeline and emits 
     assert.match(text, /self-test: ok/);
     const result = JSON.parse(readFileSync(output, 'utf8'));
     accepts(result);
-    assert.equal(result.evaluation.sha256, fileHash(join(evaluationDir, 'evaluation.json')));
-    assert.equal(result.metrics.requests_reconciled, true);
-    assert.equal(result.quality.intelligence.negative_control_verified, true);
-    assert.equal(result.quality.intelligence.restricted_environment, true);
-    const byId = Object.fromEntries(result.throughput.map(item => [`${item.workload_id}@${item.concurrency}`, item]));
-    assert.ok(Math.abs(result.metrics.decode.tokens_per_second - 400) < 0.35 * 400, 'the known decode rate is recovered');
-    assert.ok(byId['concurrency.in512.out64@4'].output_tokens_per_second > byId['concurrency.in512.out64@1'].output_tokens_per_second);
-    assert.ok(byId['multi-turn.in2k.t3@1'].cache_hit_ratio > 0.3);
+    assert.equal(result.evaluation_sha256, fileHash(join(evaluationDir, 'evaluation.json')));
+    assert.equal(result.requests_reconciled, true);
+    assert.equal(result.negative_control_verified, true);
+    assert.equal(result.restricted_environment, true);
+    assert.equal(result.intelligence_complete, true);
+    assert.ok(Math.abs(result.decode_tokens_per_second - 400) < 0.35 * 400, 'the known decode rate is recovered');
+    assert.ok(result['throughput.concurrency.in512.out64.c4.output_tokens_per_second'] > result['throughput.concurrency.in512.out64.c1.output_tokens_per_second']);
+    assert.ok(result['throughput.multi-turn.in2k.t3.c1.cache_hit_ratio'] > 0.3);
     const evidence = readFileSync(join(dir, 'result.requests.evidence'), 'utf8');
     assert.ok(!evidence.includes('"messages"'), 'no prompts in the evidence');
   } finally {

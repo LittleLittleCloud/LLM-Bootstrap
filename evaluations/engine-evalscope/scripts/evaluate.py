@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import importlib.metadata
 import json
+import math
 import platform
 import re
 import statistics
@@ -28,6 +29,13 @@ NOT_OBTAINED = 'Not obtained'
 HEADLINE_PREFILL = 'prefill.in2k.out1'
 HEADLINE_DECODE = 'decode.in128.out256'
 TOKENIZER_FILES = ('tokenizer.json', 'tokenizer_config.json', 'chat_template.jinja', 'vocab.json', 'merges.txt')
+STAMP_FORMAT = '%Y%m%d-%H%M%S'
+SELF_HOSTING_STATES = ('not-in-scope', 'not-demonstrated', 'demonstrated')
+SELF_HOSTING_DETAILS = ('self_hosting_transition_at', 'self_hosting_builder_matches_target', 'self_hosting_routing',
+                        'self_hosting_external_recovery_used', 'self_hosting_evidence_sha256')
+DECLARABLE = {'human_interventions': 'count', 'builder_tokens': 'number', 'elapsed_hours': 'number', 'hardware_hours': 'number',
+              'self_hosting_status': 'status', 'self_hosting_transition_at': 'timestamp', 'self_hosting_builder_matches_target': 'bool',
+              'self_hosting_routing': 'text', 'self_hosting_external_recovery_used': 'bool', 'self_hosting_evidence_sha256': 'sha256'}
 
 
 def sha256_file(path):
@@ -303,14 +311,16 @@ def metric_label(metric):
     return '%s/%s%s' % (metric['name'], metric['aggregation'], '(%s)' % dimensions if dimensions else '')
 
 
-def intelligence_quality(definition, records, control):
-    benchmarks = [{'benchmark_id': r['item']['id'], 'metric': metric_label(r['item']['metric']), 'score': round(r['scored']['score'], 6),
-                   'num_samples': r['scored']['num_samples'], 'stderr': round(r['scored']['stderr'], 6)}
-                  for r in records.values() if r['scored'] and not r['problems']]
-    if not benchmarks:
-        return NOT_OBTAINED
-    return {'benchmarks': benchmarks, 'complete': len(benchmarks) == len(definition['plan']['intelligence']),
-            'negative_control_verified': control['verified'], 'restricted_environment': control['restricted']}
+def intelligence_fields(definition, records):
+    """The flat intelligence.<benchmark>.<field> keys of the scored benchmarks, and whether every planned benchmark was scored."""
+    fields, scored = {}, 0
+    for r in (records or {}).values():
+        if r['scored'] and not r['problems']:
+            scored += 1
+            prefix = 'intelligence.%s.' % r['item']['id']
+            fields.update({prefix + 'metric': metric_label(r['item']['metric']), prefix + 'score': round(r['scored']['score'], 6),
+                           prefix + 'num_samples': r['scored']['num_samples'], prefix + 'stderr': round(r['scored']['stderr'], 6)})
+    return fields, scored == len(definition['plan']['intelligence'])
 
 
 CONTROL_RATES = {'prefill': 20000.0, 'decode': 400.0}
@@ -484,10 +494,39 @@ def tokenizer_digest(path):
     return hashlib.sha256(''.join('%s:%s\n' % (p.name, sha256_file(p)) for p in files).encode()).hexdigest()
 
 
+def rate(value):
+    return NOT_OBTAINED if value == NOT_OBTAINED else value['tokens_per_second']
+
+
+def basis(value):
+    return NOT_OBTAINED if value == NOT_OBTAINED else value['basis']
+
+
+def throughput_fields(results):
+    """The flat throughput.<workload>.c<concurrency>.<metric> keys of every workload level."""
+    fields = {}
+    for r in results:
+        values = {
+            'requests': r['requests'], 'succeeded_requests': r['succeeded_requests'], 'prefill_tokens_per_second': rate(r['prefill']),
+            'decode_tokens_per_second': rate(r['decode']), 'ttft_median_seconds': r['ttft_median_seconds'],
+            'output_tokens_per_second': r['output_tokens_per_second'], 'total_tokens_per_second': r['total_tokens_per_second'],
+            'requests_per_second': r['requests_per_second'], 'cache_hit_ratio': r['cache_hit_ratio'],
+        }
+        for key in ('first_turn_ttft_seconds', 'subsequent_turn_ttft_seconds'):
+            if key in r:
+                values[key] = r[key]
+        if 'variability' in r:
+            values['pass_tokens_per_second'], values['pass_tokens_per_second_stddev'] = r['variability']['values'], r['variability']['sample_stddev']
+        fields.update({'throughput.%s.c%d.%s' % (r['workload_id'], r['concurrency'], key): value for key, value in values.items()})
+    return fields
+
+
 def build_result(info, definition, run, records, control, evidence_ref):
+    """The flat evaluation record: scalars and arrays of strings only."""
     plan = run['plan'] if run else []
     results = summarize_throughput(plan, run['passes']) if run else []
-    formal = [p for p in run['passes'] if p['phase'] == 'formal'] if run else []
+    passes = run['passes'] if run else []
+    formal = [p for p in passes if p['phase'] == 'formal']
     succeeded = [p for p in formal if p['outcome'] == 'succeeded']
     prefill, decode = headline(results, HEADLINE_PREFILL), headline(results, HEADLINE_DECODE)
     sandbox = definition['plan']['sandbox']
@@ -509,33 +548,44 @@ def build_result(info, definition, run, records, control, evidence_ref):
     settings.update({'control_note.%d' % i: note for i, note in enumerate(control['notes'])})
     if info.get('memory_definition'):
         settings['peak_memory_definition'] = info['memory_definition']
-    repetitions = []
-    for entry in (run['passes'] if run else []):
-        item = {'phase': entry['phase'], 'outcome': entry['outcome']}
-        if entry['outcome'] != 'succeeded':
-            item['failure_description'] = entry['failure_description'] or entry['outcome']
-        repetitions.append(item)
+    failures = ['%s pass %d %s: %s' % (p['phase'], p['index'], p['outcome'], p['failure_description'] or p['outcome'])
+                for p in passes if p['outcome'] != 'succeeded']
+    failed = len(formal) - len(succeeded)
     if records:
-        failed = '; '.join('%s: %s' % (name, ', '.join(r['problems'])) for name, r in records.items() if r['problems'])
-        repetitions.append({'phase': 'formal', 'outcome': 'failed' if failed else 'succeeded', **({'failure_description': failed} if failed else {})})
-    if not repetitions:
-        repetitions.append({'phase': 'formal', 'outcome': 'failed', 'failure_description': 'no part was run'})
+        broken = '; '.join('%s: %s' % (name, ', '.join(r['problems'])) for name, r in records.items() if r['problems'])
+        if broken:
+            failures.append('intelligence failed: %s' % broken)
+            failed += 1
+    if not passes and not records:
+        failures.append('no part was run')
+        failed += 1
+    scored, complete = intelligence_fields(definition, records)
+    env = info['environment']
     return {
-        'evaluation': {'evaluation_id': definition['evaluation_id'], 'revision': info['evaluation_revision'], 'sha256': sha256_file(DEFINITION)},
-        'role': info['role'], 'engine_name': info['engine_name'], 'environment': info['environment'],
-        'runtime_revision': info['runtime_revision'], 'artifacts': info['artifacts'], 'commands': info['commands'],
-        'settings': settings, 'repetitions': repetitions,
-        'metrics': {
-            'formal_repetitions': len(succeeded), 'preliminary': len(succeeded) <= 1,
-            'prefill': prefill['prefill'] if prefill else NOT_OBTAINED, 'decode': decode['decode'] if decode else NOT_OBTAINED,
-            'client_ttft_median_seconds': prefill['ttft_median_seconds'] if prefill else NOT_OBTAINED,
-            'requests_reconciled': bool(formal) and all(not r['problems'] for p in formal for r in p['records']),
-            'per_request_evidence': evidence_ref,
-        },
-        'throughput': results,
-        'resources': {'peak_memory_gib': NOT_OBTAINED if not run or run['peak_memory_gib'] is None else round(run['peak_memory_gib'], 3),
-                      'swap_out_delta_bytes': NOT_OBTAINED if not run or run['swap_out_delta_bytes'] is None else run['swap_out_delta_bytes']},
-        'quality': {'intelligence': intelligence_quality(definition, records, control) if records else NOT_OBTAINED},
+        'evaluation_id': definition['evaluation_id'], 'evaluation_revision': info['evaluation_revision'], 'evaluation_sha256': sha256_file(DEFINITION),
+        'experiment_id': info['experiment_id'], 'experiment_revision': info['experiment_revision'], 'experiment_sha256': info['experiment_sha256'],
+        'started_at': info['started_at'], 'role': info['role'], 'engine_name': info['engine_name'],
+        'runtime_revision': info['runtime_revision'], 'artifacts': ['%s=%s' % (a['name'], a['sha256']) for a in info['artifacts']],
+        'commands': info['commands'],
+        'environment_hardware_model': env['hardware_model'], 'environment_os_version': env['os_version'], 'environment_toolchain': env['toolchain'],
+        'environment_power_mode': env['power_mode'], 'environment_thermal_observations': env['thermal_observations'],
+        'environment_exclusive_gpu': env['exclusive_gpu'], 'environment_deviations': env['deviations_from_contract'],
+        **{'setting.%s' % key: value if isinstance(value, (str, int, float, bool)) else json.dumps(value, sort_keys=True)
+           for key, value in settings.items()},
+        'warmup_passes': len(passes) - len(formal), 'formal_passes_succeeded': len(succeeded), 'formal_passes_failed': failed,
+        'failures': failures, 'preliminary': len(succeeded) <= 1,
+        'prefill_tokens_per_second': rate(prefill['prefill']) if prefill else NOT_OBTAINED,
+        'prefill_basis': basis(prefill['prefill']) if prefill else NOT_OBTAINED,
+        'decode_tokens_per_second': rate(decode['decode']) if decode else NOT_OBTAINED,
+        'decode_basis': basis(decode['decode']) if decode else NOT_OBTAINED,
+        'client_ttft_median_seconds': prefill['ttft_median_seconds'] if prefill else NOT_OBTAINED,
+        'requests_reconciled': bool(formal) and all(not r['problems'] for p in formal for r in p['records']),
+        'peak_memory_gib': NOT_OBTAINED if not run or run['peak_memory_gib'] is None else round(run['peak_memory_gib'], 3),
+        'swap_out_delta_bytes': NOT_OBTAINED if not run or run['swap_out_delta_bytes'] is None else run['swap_out_delta_bytes'],
+        **throughput_fields(results), **scored,
+        'intelligence_complete': complete, 'negative_control_verified': control['verified'], 'restricted_environment': control['restricted'],
+        'evidence_sha256': evidence_ref['sha256'], 'evidence_access_limitation': evidence_ref['access_limitation'],
+        **info['declared'],
     }
 
 
@@ -545,7 +595,7 @@ def write_evidence(path, run, records, info):
     Path(path).write_text(json.dumps({'salt': info['salt'], 'levels': levels, 'intelligence': scored}, indent=2) + '\n')
     return {'description': 'Per-level EvalScope summaries with the gate outcomes, seeds, and benchmark scores; it holds no prompts or model output',
             'access': 'local-only', 'sha256': sha256_file(path),
-            'access_limitation': 'Kept next to the result document and not committed to the repository.'}
+            'access_limitation': 'Kept in the experiment\'s evidence directory, next to the evaluation record, and not committed to the repository.'}
 
 
 def validate_origin(value):
@@ -575,8 +625,8 @@ def parse_fields(items):
     fields = {}
     for item in items:
         key, separator, raw = item.partition('=')
-        if not separator or not key:
-            raise SystemExit('--request-field must look like KEY=JSON_VALUE.')
+        if not separator or not re.fullmatch(r'[A-Za-z0-9_.-]+', key):
+            raise SystemExit('--request-field must look like KEY=JSON_VALUE, with a key of letters, digits, dot, underscore, or hyphen.')
         if key in ('model', 'messages', 'max_tokens', 'temperature', 'stream', 'stream_options', 'seed', 'ignore_eos'):
             raise SystemExit('The request field %s is fixed by the evaluation.' % key)
         try:
@@ -594,6 +644,50 @@ def parse_parts(value):
     if not parts or any(p not in ('throughput', 'intelligence') for p in parts):
         raise SystemExit('--parts must be throughput, intelligence, or both separated by a comma.')
     return [p for p in ('throughput', 'intelligence') if p in parts]
+
+
+def parse_declarations(items):
+    """The run context the operator states. It is recorded as given, never measured, and defaults to unavailable or not demonstrated."""
+    unavailable = 'Unavailable: not declared by the operator'
+    declared = {'human_interventions': unavailable, 'builder_tokens': unavailable, 'elapsed_hours': unavailable, 'hardware_hours': unavailable,
+                'self_hosting_status': 'not-demonstrated'}
+    for item in items:
+        key, separator, raw = item.partition('=')
+        if not separator or key not in DECLARABLE:
+            raise SystemExit('--declare must look like KEY=VALUE with KEY one of: %s.' % ', '.join(DECLARABLE))
+        kind = DECLARABLE[key]
+        try:
+            if kind in ('count', 'number') and re.fullmatch(r'Unavailable: \S.*', raw):
+                value = raw
+            elif kind == 'count':
+                value = int(raw)
+            elif kind == 'number':
+                value = float(raw)
+                if not math.isfinite(value):
+                    raise ValueError(raw)
+            elif kind == 'bool':
+                value = {'true': True, 'false': False}[raw]
+            elif kind == 'timestamp':
+                parsed = datetime.datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                if parsed.tzinfo is None:
+                    raise ValueError(raw)
+                value = parsed.isoformat(timespec='seconds')
+            elif kind == 'sha256':
+                value = raw if re.fullmatch(r'[0-9a-f]{64}', raw) else None
+            elif kind == 'status':
+                value = raw if raw in SELF_HOSTING_STATES else None
+            else:
+                value = raw if raw.strip() else None
+            if value is None or (kind in ('count', 'number') and not isinstance(value, str) and value < 0):
+                raise ValueError(raw)
+        except (ValueError, KeyError):
+            raise SystemExit('--declare %s: %r is not a valid %s.' % (key, raw, kind))
+        declared[key] = value
+    if declared['self_hosting_status'] == 'demonstrated':
+        missing = [key for key in SELF_HOSTING_DETAILS if key not in declared]
+        if missing or declared.get('self_hosting_builder_matches_target') is not True:
+            raise SystemExit('Demonstrated self-hosting needs --declare for %s, with self_hosting_builder_matches_target=true.' % ', '.join(SELF_HOSTING_DETAILS))
+    return declared
 
 
 def parse_args():
@@ -625,14 +719,16 @@ def parse_args():
     parser.add_argument('--deviation', action='append', default=[], help='Deviation from the contract (repeatable)')
     parser.add_argument('--memory-pid', type=int, help='Process whose resident memory is sampled (loopback endpoints only)')
     parser.add_argument('--allow-remote', action='store_true', help='Permit a non-loopback endpoint and record it as a deviation')
-    parser.add_argument('--output', type=Path, help='New file for the result document')
+    parser.add_argument('--experiment-dir', type=Path, help='experiments/<experiment-id>; holds experiment.json and receives evaluation/<YYYYMMDD-HHMMSS>.json')
+    parser.add_argument('--experiment-revision', help='Full commit of the project repository that holds the frozen experiment.json')
+    parser.add_argument('--declare', action='append', default=[], help='KEY=VALUE run context stated by the operator, such as human_interventions=3 (repeatable)')
     return parser.parse_args()
 
 
 def prepare(args):
     """Validate the options for a real run before anything is measured."""
-    required = ('endpoint', 'model', 'tokenizer_path', 'role', 'engine_name', 'warmup', 'repetitions', 'evaluation_revision', 'output',
-                'hardware_model', 'toolchain', 'power_mode', 'thermal_observations')
+    required = ('endpoint', 'model', 'tokenizer_path', 'role', 'engine_name', 'warmup', 'repetitions', 'evaluation_revision', 'experiment_dir',
+                'experiment_revision', 'hardware_model', 'toolchain', 'power_mode', 'thermal_observations')
     missing = [name for name in required if getattr(args, name) in (None, '')]
     if missing:
         raise SystemExit('Missing required options: ' + ', '.join('--' + name.replace('_', '-') for name in missing))
@@ -642,9 +738,18 @@ def prepare(args):
         raise SystemExit('--warmup must be 0 or more and --repetitions must be 1 or more.')
     if args.runtime_revision and not re.fullmatch(r'[0-9a-f]{40}', args.runtime_revision):
         raise SystemExit('--runtime-revision must be a full 40-character commit SHA.')
-    evidence_path = args.output.with_name(args.output.stem + '.requests.evidence')
-    if args.output.exists() or evidence_path.exists():
-        raise SystemExit('--output and its .requests.evidence companion must be new files.')
+    if not re.fullmatch(r'[0-9a-f]{40}', args.experiment_revision):
+        raise SystemExit('--experiment-revision must be a full 40-character commit SHA.')
+    experiment_file = args.experiment_dir / 'experiment.json'
+    if not experiment_file.is_file():
+        raise SystemExit('--experiment-dir must hold experiment.json.')
+    started = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    stamp = started.strftime(STAMP_FORMAT)
+    output = args.experiment_dir / 'evaluation' / (stamp + '.json')
+    evidence_path = args.experiment_dir / 'evidence' / (stamp + '.requests.evidence')
+    if output.exists() or evidence_path.exists():
+        raise SystemExit('The evaluation record and its evidence file for %s already exist.' % stamp)
+    declared = parse_declarations(args.declare)
     origin, scheme, host_class = validate_origin(args.endpoint)
     if host_class == 'remote' and not args.allow_remote:
         raise SystemExit('The endpoint is not on loopback. Run the driver on the engine\'s machine, or pass --allow-remote.')
@@ -659,7 +764,9 @@ def prepare(args):
         raise SystemExit('\n'.join(problems))
     key = args.api_key_file.read_text().strip() if args.api_key_file else None
     return {'origin': origin, 'scheme': scheme, 'host_class': host_class, 'fields': fields, 'parts': parts, 'artifacts': artifacts,
-            'key': key, 'evidence_path': evidence_path, 'tokenizer_sha256': tokenizer_digest(args.tokenizer_path)}
+            'key': key, 'output': output, 'evidence_path': evidence_path, 'tokenizer_sha256': tokenizer_digest(args.tokenizer_path),
+            'declared': declared, 'started_at': started.isoformat(), 'experiment_id': args.experiment_dir.resolve().name,
+            'experiment_sha256': sha256_file(experiment_file)}
 
 
 def describe():
@@ -673,8 +780,10 @@ def reference_info(args, parts):
     return {
         'role': 'candidate', 'engine_name': 'reference-engine', 'warmup': 0, 'repetitions': 1, 'scheme': 'http', 'host_class': 'loopback',
         'evaluation_revision': args.evaluation_revision, 'fields': {}, 'parts': parts, 'salt': 'self-test',
-        'tokenizer_sha256': tokenizer_digest(args.tokenizer_path),
-        'runtime_revision': {'unavailable': True, 'reason': 'The reference engine is not versioned.'},
+        'tokenizer_sha256': tokenizer_digest(args.tokenizer_path), 'started_at': now(), 'experiment_id': 'self-test',
+        'experiment_revision': args.evaluation_revision, 'experiment_sha256': hashlib.sha256(b'self-test').hexdigest(),
+        'declared': parse_declarations([]),
+        'runtime_revision': 'Unavailable: The reference engine is not versioned.',
         'artifacts': [{'name': 'reference_engine.py', 'sha256': sha256_file(HERE / 'reference_engine.py')}],
         'commands': ['evaluate.py --self-test'],
         'environment': {'hardware_model': 'not applicable: reference engine', 'os_version': platform.platform(),
@@ -740,7 +849,9 @@ def main():
             'role': args.role, 'engine_name': args.engine_name, 'warmup': args.warmup, 'repetitions': args.repetitions, 'parts': parts,
             'scheme': prepared['scheme'], 'host_class': prepared['host_class'], 'fields': prepared['fields'], 'salt': salt,
             'tokenizer_sha256': prepared['tokenizer_sha256'], 'evaluation_revision': args.evaluation_revision,
-            'runtime_revision': args.runtime_revision or {'unavailable': True, 'reason': 'No runtime revision was supplied.'},
+            'runtime_revision': args.runtime_revision or 'Unavailable: No runtime revision was supplied.',
+            'started_at': prepared['started_at'], 'experiment_id': prepared['experiment_id'], 'experiment_revision': args.experiment_revision,
+            'experiment_sha256': prepared['experiment_sha256'], 'declared': prepared['declared'],
             'artifacts': prepared['artifacts'], 'commands': [' '.join(a for a in sys.argv if a != str(args.api_key_file))] + args.engine_command,
             'memory_definition': ('resident set size of PID %d sampled every %.1f seconds during the formal passes; it may not include GPU memory'
                                   % (args.memory_pid, MemorySampler.INTERVAL_SECONDS)) if args.memory_pid else None,
@@ -751,8 +862,10 @@ def main():
                             + (['The endpoint is remote, so timings include network transfer.'] if prepared['host_class'] == 'remote' else [])
                             + control['notes']},
         }
+        for folder in (prepared['output'].parent, prepared['evidence_path'].parent):
+            folder.mkdir(parents=True, exist_ok=True)
         evidence = write_evidence(prepared['evidence_path'], run, records, info)
-        args.output.write_text(json.dumps(build_result(info, definition, run, records, control, evidence), indent=2) + '\n')
+        prepared['output'].write_text(json.dumps(build_result(info, definition, run, records, control, evidence), indent=2) + '\n')
         if args.logs_dir:
             args.logs_dir.mkdir(parents=True, exist_ok=True)
             for log in scratch.glob('*.log'):

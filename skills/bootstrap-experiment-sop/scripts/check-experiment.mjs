@@ -1,70 +1,55 @@
-// Resolves a contract (following extends links), lists what a derived contract changes, and checks the result.
-// Usage: node scripts/check-experiment.mjs path/to/contract.json
+// Resolves an experiment.json (following extends links), lists what a derived experiment changes, and checks the result.
+// Usage: node scripts/check-experiment.mjs path/to/experiment.json
 // Exit 0: no problems. Exit 1: problems found. Exit 2: usage, unreadable input, or a base that cannot be resolved.
 import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveContractFile } from './resolve-contract.mjs';
+import { isDerived, resolveExperimentFile } from './resolve-experiment.mjs';
 import { errorsOf, loadValidators } from './validators.mjs';
 
-const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const OWN_FIELDS = ['experiment_id', 'status', 'description', 'contract_frozen_at', 'amends_revision', 'amends_reason'];
 const show = value => {
   const text = JSON.stringify(value);
   return text.length > 60 ? `${text.slice(0, 57)}...` : text;
 };
 
-// Leaf paths follow the merge rules: only objects are descended into; arrays and scalars are leaves.
-function leaves(value, prefix = '') {
-  if (!isObject(value)) return [[prefix, value]];
-  return Object.entries(value).flatMap(([key, child]) => leaves(child, prefix ? `${prefix}.${key}` : key));
-}
-
-export function unresolvedPaths(contract) {
-  return leaves(contract).filter(([, value]) => value === null).map(([path]) => path);
-}
+export const unresolvedFields = experiment => Object.entries(experiment).filter(([, value]) => value === null).map(([key]) => key);
 
 export function changesFrom(base, effective) {
-  const before = new Map(leaves(base));
-  const after = new Map(leaves(effective));
   const lines = [];
-  for (const [path, value] of after) {
-    if (!before.has(path)) lines.push(`+ ${path}: ${show(value)}`);
-    else if (JSON.stringify(before.get(path)) !== JSON.stringify(value)) {
-      lines.push(`~ ${path}: ${show(before.get(path))} -> ${show(value)}`);
-    }
+  for (const [key, value] of Object.entries(effective)) {
+    if (!(key in base)) lines.push(`+ ${key}: ${show(value)}`);
+    else if (JSON.stringify(base[key]) !== JSON.stringify(value)) lines.push(`~ ${key}: ${show(base[key])} -> ${show(value)}`);
   }
-  for (const path of before.keys()) if (!after.has(path)) lines.push(`- ${path}`);
+  for (const key of Object.keys(base)) if (!(key in effective)) lines.push(`- ${key}`);
   return lines;
 }
 
-async function schemaErrors(contract) {
+async function schemaErrors(experiment) {
   const validators = await loadValidators();
   if (!validators) return null;
-  const validate = validators.experiment.ExperimentContract;
-  return validate(contract) ? [] : errorsOf(validate);
+  const validate = validators.experiment.Experiment;
+  return validate(experiment) ? [] : errorsOf(validate);
 }
 
 export async function checkExperiment(path) {
   const out = [];
   const problems = [];
   const file = JSON.parse(readFileSync(path, 'utf8'));
-  const effective = resolveContractFile(path);
-  if ('extends' in file) {
-    const base = resolveContractFile(resolve(dirname(path), file.extends.path));
-    out.push(`derived from ${file.extends.path} (commit ${file.extends.revision}, sha256 ${file.extends.sha256.slice(0, 12)}...)`);
-    const changes = changesFrom(base, effective).filter(line => !/^[+~-] (experiment_id|status|description|contract_frozen_at|amends)\b/.test(line));
+  const effective = resolveExperimentFile(path);
+  if (isDerived(file)) {
+    const base = resolveExperimentFile(resolve(dirname(path), file.extends_path));
+    out.push(`derived from ${file.extends_path} (commit ${file.extends_revision}, sha256 ${file.extends_sha256.slice(0, 12)}...)`);
+    const changes = changesFrom(base, effective).filter(line => !OWN_FIELDS.includes(line.slice(2).split(':')[0]));
     out.push(`changes from the base (${changes.length}):`, ...changes.map(line => `  ${line}`));
-    if (JSON.stringify(base.target_model) !== JSON.stringify(effective.target_model)) {
-      problems.push('the target model differs from the base; a different model needs a new base experiment');
-    }
   } else {
-    out.push('base experiment (no extends)');
+    out.push('base experiment (no extends_path)');
   }
   out.push(`status: ${effective.status}`);
 
-  const unresolved = unresolvedPaths(effective);
+  const unresolved = unresolvedFields(effective);
   if (effective.status === 'frozen' && unresolved.length) {
-    problems.push(`a frozen contract has ${unresolved.length} unresolved fields: ${unresolved.join(', ')}`);
+    problems.push(`a frozen experiment has ${unresolved.length} unresolved fields: ${unresolved.join(', ')}`);
   } else if (unresolved.length) {
     out.push(`unresolved fields (${unresolved.length}): ${unresolved.join(', ')}`);
   }
@@ -72,13 +57,13 @@ export async function checkExperiment(path) {
   const errors = await schemaErrors(effective);
   if (errors === null) out.push('schema: not checked (ajv is not installed; run npm ci in the plugin repository to enable it)');
   else if (errors.length) problems.push(...errors.map(error => `schema: ${error}`));
-  else out.push('schema: valid ExperimentContract');
+  else out.push('schema: valid Experiment');
   return { out, problems };
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   if (!process.argv[2]) {
-    console.error('usage: node check-experiment.mjs <contract.json>');
+    console.error('usage: node check-experiment.mjs <experiment.json>');
     process.exit(2);
   }
   let result;

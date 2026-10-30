@@ -26,7 +26,7 @@ const entry = (overrides = {}) => {
     weights: 'q4', builder: 'b1', harness: 'h 1', evaluation: 'ev1', metrics: metrics(), quality_gate: 'passed',
     quality: { application_passed: 20, application_total: 20, negative_control_verified: true },
     autonomy: { human_interventions: 1, hardware_hours: 1, builder_tokens: 1e6, elapsed_hours: 2, self_hosting_status: 'not-in-scope', external_recovery_used: null },
-    deviations: [], acceptance: 'unverified', run_status: 'completed', evidence: [], source: { run: 'x', result: 'y' }, ...overrides,
+    deviations: [], evidence: [], source: { experiment: 'x', evaluation: 'y' }, ...overrides,
   };
 };
 const decode = (value, extra = {}) => entry({ metrics: metrics({ decode_tok_s: value, client_ttft_median_s: 100 / value }), ...extra });
