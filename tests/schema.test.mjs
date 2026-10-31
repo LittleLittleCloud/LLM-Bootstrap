@@ -68,7 +68,7 @@ test('the experiment schemas are flat: no field holds an object or a nested arra
   const components = spec.components.schemas;
   for (const name of ['Experiment', 'DerivedExperiment']) {
     const fields = { ...components[name].properties, ...components[name].patternProperties };
-    assert.ok(Object.keys(fields).length > 30 || name === 'DerivedExperiment', `${name} declares its fields`);
+    assert.ok(Object.keys(fields).length > 15 || name === 'DerivedExperiment', `${name} declares its fields`);
     for (const [key, schema] of Object.entries(fields)) {
       const nested = valueTypes(schema, components).filter(type => ['object', 'item:object', 'item:array'].includes(type));
       assert.deepEqual(nested, [], `${name}.${key} is nested`);
@@ -86,22 +86,25 @@ test('a fully resolved experiment can be frozen and unresolved or invalid fields
   accepts('Experiment', frozen);
   accepts('Experiment', { ...frozen, amends_revision: commit('5'), amends_reason: 'synthetic' });
   rejects('Experiment', { ...frozen, amends_revision: commit('5') }, 'an amendment names its reason');
-  rejects('Experiment', { ...frozen, hardware_os_version: null }, 'null in a frozen experiment');
-  rejects('Experiment', { ...frozen, skills_revision: 'abc1234' }, 'abbreviated SHA');
-  rejects('Experiment', { ...frozen, baseline_engines: [] }, 'no baselines');
-  rejects('Experiment', { ...frozen, baseline_engines: ['synthetic-baseline'] }, 'a baseline names its commit');
+  rejects('Experiment', { ...frozen, hardware_gpu_cores: null }, 'null in a frozen experiment');
+  rejects('Experiment', { ...frozen, target_revision: 'abc1234' }, 'abbreviated SHA');
+  rejects('Experiment', { ...frozen, engine_name: null }, 'a frozen experiment names its engine');
+  rejects('Experiment', { ...frozen, engine_commit: 'abc1234' }, 'an engine is pinned by a full commit');
+  rejects('Experiment', { ...frozen, engine_name: 'a/b' }, 'an engine name has no path separator');
+  rejects('Experiment', { ...frozen, engines: [`one=${commit('2')}`] }, 'one engine per experiment');
+  accepts('Experiment', { ...frozen, engine_name: 'mlx-lm', engine_commit: commit('3') });
+  for (const dropped of ['builder_model', 'harness_name', 'skills_revision', 'goal_quality_gate', 'baseline_engines', 'budget_wall_clock_hours', 'scope']) {
+    rejects('Experiment', { ...frozen, [dropped]: 'x' }, `${dropped} is not part of an experiment`);
+  }
   rejects('Experiment', { ...frozen, typo_field: 1 }, 'unknown field');
   rejects('Experiment', { ...frozen, hardware: { platform: 'x' } }, 'groups are key prefixes, not objects');
   rejects('Experiment', { ...frozen, hardware_platform: { name: 'x' } }, 'a field holds no object');
-  rejects('Experiment', { ...frozen, target_speculative_decoding: true }, 'draft not declared');
-  rejects('Experiment', { ...frozen, target_tokenizer_sha256: 'Not applicable: x' }, 'identity hash cannot be N/A');
   rejects('Experiment', { ...frozen, evaluation_sha256: null }, 'frozen evaluation must be pinned');
   rejects('Experiment', { ...frozen, goal_thresholds: ['decode throughput at least 1'] }, 'a threshold is metric, comparator, value');
   rejects('Experiment', { ...frozen, evaluation_formal_repetitions: 3 }, 'the evaluation fixes its own repetitions');
   rejects('Experiment', { ...frozen, goal_thresholds: [] }, 'at least one threshold');
   rejects('Experiment', { ...frozen, evaluation_scripts: ['run.sh'] }, 'an experiment cannot carry evaluation scripts');
   rejects('Experiment', { ...frozen, evaluation_task_ids: ['task-1'] }, 'an experiment cannot define the workload');
-  accepts('Experiment', { ...frozen, target_speculative_decoding: true, target_speculative_draft: 'draft-model q4, 4 tokens' });
 });
 
 test('a report holds what was measured and nothing about the machine, the experiment, or the engine', () => {
@@ -213,10 +216,9 @@ const derivedFrom = (overrides, extra = {}) => ({
 test('a derived experiment inherits its base, overrides all but the target model, and resolves to a valid experiment', () => {
   const base = frozenExperiment();
   const derived = derivedFrom({
-    skills_revision: commit('7'),
-    hardware_power: 'Battery',
+    hardware_memory_gib: 64,
     goal_thresholds: ['prefill_tokens_per_second_p50 >= 2'],
-    baseline_engines: [`other-baseline=${commit('8')}`],
+    engine_commit: commit('8'),
   });
   accepts('DerivedExperiment', derived);
 
@@ -224,13 +226,13 @@ test('a derived experiment inherits its base, overrides all but the target model
   accepts('Experiment', effective);
   for (const key of Object.keys(base).filter(name => name.startsWith('target_'))) assert.deepEqual(effective[key], base[key], key);
   assert.equal(effective.experiment_id, 'synthetic-derived');
-  assert.equal(effective.skills_revision, commit('7'));
-  assert.equal(effective.hardware_power, 'Battery');
+  assert.equal(effective.hardware_memory_gib, 64);
   assert.equal(effective.hardware_platform, base.hardware_platform);
   assert.deepEqual(effective.goal_thresholds, ['prefill_tokens_per_second_p50 >= 2']);
-  assert.equal(effective.goal_primary_metric, base.goal_primary_metric);
-  assert.deepEqual(effective.baseline_engines, [`other-baseline=${commit('8')}`]);
-  assert.equal(base.hardware_power, example.hardware_power, 'the base is not mutated');
+  assert.equal(effective.evaluation_id, base.evaluation_id);
+  assert.equal(effective.engine_commit, commit('8'));
+  assert.equal(effective.engine_name, base.engine_name);
+  assert.equal(base.hardware_memory_gib, example.hardware_memory_gib, 'the base is not mutated');
   assert.equal('extends_path' in effective, false, 'the effective experiment carries no extends fields');
 
   const amended = { ...base, amends_revision: commit('5'), amends_reason: 'synthetic' };
@@ -251,8 +253,8 @@ test('a derived experiment cannot override the target model, and its own identit
 test('misspelled or unresolved overrides fail validation of the effective experiment', () => {
   const base = frozenExperiment();
   rejects('Experiment', resolveExperiment(derivedFrom({ hardware_powr: 'x' }), base), 'unknown field');
-  rejects('Experiment', resolveExperiment(derivedFrom({ hardware_power: null }), base), 'frozen forbids null');
-  const draft = derivedFrom({ hardware_os_version: 'synthetic-os 2' }, { status: 'draft-not-run', contract_frozen_at: null });
+  rejects('Experiment', resolveExperiment(derivedFrom({ hardware_memory_gib: null }), base), 'frozen forbids null');
+  const draft = derivedFrom({ hardware_gpu_cores: 32 }, { status: 'draft-not-run', contract_frozen_at: null });
   accepts('Experiment', resolveExperiment(draft, example));
 });
 
@@ -266,20 +268,20 @@ test('derived experiment files resolve through a hash-pinned chain and reject a 
     };
     const base = frozenExperiment();
     const baseHash = write('base.json', base);
-    const middleHash = write('middle.json', derivedFrom({ hardware_power: 'Battery' }, {
+    const middleHash = write('middle.json', derivedFrom({ hardware_memory_gib: 64 }, {
       experiment_id: 'synthetic-middle',
       extends_sha256: baseHash,
     }));
-    write('leaf.json', derivedFrom({ budget_wall_clock_hours: 2 }, { extends_path: 'middle.json', extends_sha256: middleHash }));
+    write('leaf.json', derivedFrom({ hardware_gpu_cores: 32 }, { extends_path: 'middle.json', extends_sha256: middleHash }));
 
     const effective = resolveExperimentFile(join(dir, 'leaf.json'));
     accepts('Experiment', effective);
     assert.equal(effective.experiment_id, 'synthetic-derived');
-    assert.equal(effective.hardware_power, 'Battery');
-    assert.equal(effective.budget_wall_clock_hours, 2);
+    assert.equal(effective.hardware_memory_gib, 64);
+    assert.equal(effective.hardware_gpu_cores, 32);
     assert.equal(effective.target_repository, base.target_repository);
 
-    write('base.json', { ...base, hardware_power: 'Changed' });
+    write('base.json', { ...base, hardware_memory_gib: 128 });
     assert.throws(() => resolveExperimentFile(join(dir, 'leaf.json')), /sha256/);
   } finally {
     rmSync(dir, { recursive: true, force: true });

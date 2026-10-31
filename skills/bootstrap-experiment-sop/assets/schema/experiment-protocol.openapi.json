@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap experiment protocol schemas",
-    "version": "0.5.0",
-    "summary": "Flat schema for experiments/<experiment-id>/experiment.json.",
-    "description": "Machine-readable core of references/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate experiments/<experiment-id>/experiment.json against Experiment, or against DerivedExperiment before resolving it (scripts/resolve-experiment.mjs) and validating the result as Experiment, with any JSON Schema 2020-12 validator.\n\nEvery field is a top-level key whose value is a scalar or an array of strings. There are no nested objects: a group is a key prefix (hardware_, target_, builder_, harness_, evaluation_, implementation_, baseline, goal_, budget_), a list of pairs is an array of name=value strings, and a conditional declaration is a string that starts with 'Not applicable: ' or 'Unavailable: ' and gives the reason.\n\nThe report of each evaluation is a separate document, experiments/<experiment-id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json, defined by EvaluationReport in evaluation-protocol.openapi.json. An experiment only selects a repository-owned evaluation by reference.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It is not evidence of correct measurements, a followed procedure, SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. An experiment with status frozen forbids null in any field."
+    "version": "0.6.0",
+    "summary": "Flat, minimal schema for experiments/<experiment-id>/experiment.json.",
+    "description": "Machine-readable core of references/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate experiments/<experiment-id>/experiment.json against Experiment, or against DerivedExperiment before resolving it (scripts/resolve-experiment.mjs) and validating the result as Experiment, with any JSON Schema 2020-12 validator.\n\nEvery field is a top-level key whose value is a scalar or an array of strings. There are no nested objects: a group is a key prefix (hardware_, target_, evaluation_, goal_), a list of pairs is an array of name=value strings, and a conditional declaration is a string that starts with 'Not applicable: ' or 'Unavailable: ' and gives the reason.\n\nThe report of each evaluation is a separate document, experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json, defined by EvaluationReport in evaluation-protocol.openapi.json. An experiment measures one engine at one commit. A reference engine, a new commit, or a competing engine is another experiment, derived from this one or sharing its platform and evaluation. An experiment only selects a repository-owned evaluation by reference.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It is not evidence of correct measurements, a followed procedure, or SOTA performance.\n\nUnresolved draft fields are null. An experiment with status frozen forbids null in any field."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {},
@@ -41,10 +41,10 @@
         "pattern": "^[^=\\s][^=]*=[0-9a-f]{64}$"
       },
 
-      "EngineRevision": {
-        "description": "A baseline engine with the full commit that was evaluated, written name=commit.",
-        "type": "string",
-        "pattern": "^[^=\\s][^=]*=[0-9a-f]{40}$"
+      "EngineName": {
+        "description": "A plain name for the engine, such as mlx-lm or my-engine, without a path separator.",
+        "type": ["string", "null"],
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
       },
       "Threshold": {
         "description": "A threshold on a headline metric of the evaluation report (decode_tokens_per_second_p50, speed_ttft_ms_p50, and the others the evaluation protocol lists), written 'metric >= value' or 'metric <= value'. Units are those of the metric name.",
@@ -56,7 +56,7 @@
         "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotApplicable" }, { "type": "null" }]
       },
       "ComparisonTrack": {
-        "description": "A matched-configuration track compares engines at matched precision, workload, caching, speculation, and resources. A best-permitted-configuration track compares complete systems inside a fixed quality and resource envelope, disclosing every difference.",
+        "description": "How this experiment is to be compared with others. A matched-configuration track compares engines at matched precision, workload, caching, speculation, and resources. A best-permitted-configuration track compares complete systems inside a fixed quality and resource envelope, disclosing every difference.",
         "enum": ["matched-configuration", "best-permitted-configuration"]
       },
       "NoNullFields": {
@@ -66,156 +66,142 @@
       },
 
       "Experiment": {
-        "description": "The experiment, frozen before implementation. A draft keeps unresolved fields as null; status frozen requires every field to be resolved or declared not applicable. A submitted experiment.json is never edited; an amendment is a new experiment that names the amended revision and the reason.",
+        "description": "The experiment: the metadata that identifies it and makes it comparable with others. It is frozen before its first evaluation. A draft keeps unresolved fields as null; status frozen requires every field to be resolved. A submitted experiment.json is never edited; an amendment is a new experiment that names the amended revision and the reason.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "experiment_id", "status", "description", "skills_revision", "builder_instruction_sha256", "contract_frozen_at", "scope",
-          "hardware_platform", "hardware_gpu_cores", "hardware_memory_gib", "hardware_os_version", "hardware_toolchain", "hardware_power",
-          "hardware_gpu_memory_limit", "hardware_exclusive_gpu",
-          "target_repository", "target_revision", "target_files", "target_tokenizer_sha256", "target_chat_template_sha256", "target_weights",
-          "target_activation_precision", "target_kv_precision", "target_recurrent_state_precision", "target_speculative_decoding", "target_speculative_draft",
-          "builder_model", "builder_provider", "builder_revision", "builder_inference_location", "builder_sampling", "builder_network_and_source_access",
-          "harness_name", "harness_version", "harness_revision",
-          "evaluation_id", "evaluation_revision", "evaluation_sha256",
-          "implementation_starting_scaffold", "implementation_language_and_backend", "implementation_allowed_libraries",
-          "implementation_baseline_source_inspection_allowed", "implementation_existing_engine_backend_allowed",
-          "baseline_selection_date", "baseline_selection_method", "baseline_engines", "baseline_comparison_track",
-          "goal_primary_metric", "goal_thresholds", "goal_quality_gate", "goal_self_hosting_in_scope",
-          "budget_wall_clock_hours", "budget_builder_tokens", "budget_api_cost_limit", "budget_hardware_hours", "budget_stopping_rule"
+          "experiment_id",
+          "status",
+          "description",
+          "contract_frozen_at",
+          "hardware_platform",
+          "hardware_gpu_cores",
+          "hardware_memory_gib",
+          "target_repository",
+          "target_revision",
+          "target_weights",
+          "evaluation_id",
+          "evaluation_revision",
+          "evaluation_sha256",
+          "engine_name",
+          "engine_commit",
+          "comparison_track",
+          "goal_thresholds"
         ],
         "properties": {
-          "experiment_id": { "description": "Equals the directory name under experiments/.", "$ref": "#/components/schemas/Text" },
-          "status": { "enum": ["draft-not-run", "frozen"] },
-          "description": { "$ref": "#/components/schemas/Text" },
-          "skills_revision": {
-            "description": "Full commit of the skill repository supplied to the builder. A later skill revision defines a new treatment.",
+          "experiment_id": {
+            "description": "Equals the directory name under experiments/.",
+            "$ref": "#/components/schemas/Text"
+          },
+          "status": {
+            "enum": [
+              "draft-not-run",
+              "frozen"
+            ]
+          },
+          "description": {
+            "$ref": "#/components/schemas/Text"
+          },
+          "contract_frozen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "amends_revision": {
+            "description": "Full commit of the experiment this one amends.",
+            "$ref": "#/components/schemas/GitCommitSha"
+          },
+          "amends_reason": {
+            "$ref": "#/components/schemas/Text"
+          },
+          "hardware_platform": {
+            "$ref": "#/components/schemas/NullableText"
+          },
+          "hardware_gpu_cores": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "GPU cores of the platform, so that two configurations of one chip stay distinct."
+          },
+          "hardware_memory_gib": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "target_repository": {
+            "$ref": "#/components/schemas/NullableText"
+          },
+          "target_revision": {
             "$ref": "#/components/schemas/NullableCommit"
           },
-          "builder_instruction_sha256": {
-            "description": "Hashes of the exact instruction files provided to the builder, as path=sha256.",
-            "type": ["array", "null"],
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/Digest" }
-          },
-          "contract_frozen_at": { "type": ["string", "null"], "format": "date-time" },
-          "amends_revision": { "description": "Full commit of the experiment this one amends.", "$ref": "#/components/schemas/GitCommitSha" },
-          "amends_reason": { "$ref": "#/components/schemas/Text" },
-          "scope": {
-            "description": "What the experiment covers, which operating-system changes are permitted (none is a valid statement), and the user authorization that governs execution. Plugin installation authorizes nothing.",
+          "target_weights": {
+            "description": "Quantization method, group size, and weight precision of the target model.",
             "$ref": "#/components/schemas/NullableText"
           },
-
-          "hardware_platform": { "$ref": "#/components/schemas/NullableText" },
-          "hardware_gpu_cores": { "type": ["integer", "null"], "minimum": 1 },
-          "hardware_memory_gib": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-          "hardware_os_version": { "$ref": "#/components/schemas/NullableText" },
-          "hardware_toolchain": { "description": "Compiler and runtime versions.", "$ref": "#/components/schemas/NullableText" },
-          "hardware_power": { "$ref": "#/components/schemas/NullableText" },
-          "hardware_gpu_memory_limit": { "$ref": "#/components/schemas/NullableText" },
-          "hardware_exclusive_gpu": { "type": ["boolean", "null"] },
-
-          "target_repository": { "$ref": "#/components/schemas/NullableText" },
-          "target_revision": { "$ref": "#/components/schemas/NullableCommit" },
-          "target_files": {
-            "description": "Hashes of the weight files, as name=sha256.",
-            "type": ["array", "null"],
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/Digest" }
+          "evaluation_id": {
+            "description": "A repository-owned evaluation. Its code, scripts, dataset, tasks, and limits cannot be set or changed here.",
+            "$ref": "#/components/schemas/Text"
           },
-          "target_tokenizer_sha256": { "$ref": "#/components/schemas/NullableSha256" },
-          "target_chat_template_sha256": { "$ref": "#/components/schemas/NullableSha256" },
-          "target_weights": { "description": "Quantization method and group size with weight precision.", "$ref": "#/components/schemas/NullableText" },
-          "target_activation_precision": { "$ref": "#/components/schemas/NullableText" },
-          "target_kv_precision": { "$ref": "#/components/schemas/NullableText" },
-          "target_recurrent_state_precision": { "$ref": "#/components/schemas/NullableText" },
-          "target_speculative_decoding": { "type": ["boolean", "null"] },
-          "target_speculative_draft": {
-            "description": "Draft model identity and settings. Required unless speculative decoding is disabled; then 'Not applicable: reason'.",
-            "$ref": "#/components/schemas/NullableText"
+          "evaluation_revision": {
+            "description": "LLM Bootstrap repository commit of the evaluation. Null only while the experiment is a draft.",
+            "$ref": "#/components/schemas/NullableCommit"
           },
-
-          "builder_model": { "$ref": "#/components/schemas/NullableText" },
-          "builder_provider": { "description": "Or 'Unavailable: reason'.", "$ref": "#/components/schemas/NullableText" },
-          "builder_revision": { "description": "The provider-exposed revision or identifier, or 'Unavailable: reason'.", "$ref": "#/components/schemas/NullableText" },
-          "builder_inference_location": { "description": "Where the builder's initial inference runs.", "$ref": "#/components/schemas/NullableText" },
-          "builder_sampling": { "description": "Decoding settings, for example 'temperature=0.2, top_p=0.95'.", "$ref": "#/components/schemas/NullableText" },
-          "builder_network_and_source_access": { "$ref": "#/components/schemas/NullableText" },
-
-          "harness_name": {
-            "description": "The harness that drives engine development. Keep it distinct from the evaluation driver even when both use the same product.",
-            "$ref": "#/components/schemas/NullableText"
+          "evaluation_sha256": {
+            "description": "Hash of the evaluation definition file at that commit.",
+            "$ref": "#/components/schemas/NullableSha256"
           },
-          "harness_version": { "$ref": "#/components/schemas/NullableText" },
-          "harness_revision": { "description": "Revision or package hash, or 'Unavailable: reason'.", "$ref": "#/components/schemas/NullableText" },
-
-          "evaluation_id": { "description": "A repository-owned evaluation. Its code, scripts, dataset, tasks, and limits cannot be set or changed here.", "$ref": "#/components/schemas/Text" },
-          "evaluation_revision": { "description": "LLM Bootstrap repository commit of the evaluation. Null only while the experiment is a draft.", "$ref": "#/components/schemas/NullableCommit" },
-          "evaluation_sha256": { "description": "Hash of the evaluation definition file at that commit.", "$ref": "#/components/schemas/NullableSha256" },
-
-          "implementation_starting_scaffold": {
-            "description": "Starting engine or scaffold with its revision, and any permitted code reuse.",
-            "$ref": "#/components/schemas/NullableText"
+          "engine_name": {
+            "description": "The one engine this experiment measures. How it was written (an LLM, a person, vibe coding, or a published project) is not recorded.",
+            "$ref": "#/components/schemas/EngineName"
           },
-          "implementation_language_and_backend": { "$ref": "#/components/schemas/NullableText" },
-          "implementation_allowed_libraries": {
-            "description": "An empty array means no third-party implementation dependency is allowed.",
-            "type": ["array", "null"],
-            "uniqueItems": true,
-            "items": { "$ref": "#/components/schemas/Text" }
+          "engine_commit": {
+            "description": "Full commit of the engine that is measured. It exists before the experiment is frozen.",
+            "$ref": "#/components/schemas/NullableCommit"
           },
-          "implementation_baseline_source_inspection_allowed": { "type": ["boolean", "null"] },
-          "implementation_existing_engine_backend_allowed": {
-            "description": "Wrapping a baseline engine does not demonstrate building an inference backend.",
-            "type": ["boolean", "null"]
-          },
-
-          "baseline_selection_date": { "type": ["string", "null"], "format": "date" },
-          "baseline_selection_method": {
-            "description": "How the candidate set was chosen from dated primary sources, and which plausible alternatives could not be evaluated.",
-            "$ref": "#/components/schemas/NullableText"
-          },
-          "baseline_engines": {
-            "description": "Baseline engines with the evaluated commit, as name=commit. A frozen experiment names at least one.",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/EngineRevision" }
-          },
-          "baseline_comparison_track": { "$ref": "#/components/schemas/ComparisonTrack" },
-
-          "goal_primary_metric": {
-            "description": "Define which metric competitive refers to before tuning, including timing boundaries. Native command-level metrics are not interchangeable with N-1 interval metrics.",
-            "$ref": "#/components/schemas/NullableText"
+          "comparison_track": {
+            "$ref": "#/components/schemas/ComparisonTrack"
           },
           "goal_thresholds": {
-            "description": "Acceptance thresholds on headline metrics of the evaluation report, such as 'decode_tokens_per_second_p50 >= 100' or 'speed_ttft_ms_p50 <= 500'. Resource limits the evaluation cannot measure are stated in scope or the stopping rule instead. Relaxing them silently to pass is not allowed.",
-            "type": ["array", "null"],
+            "description": "Acceptance thresholds on headline metrics of the evaluation report, such as 'decode_tokens_per_second_p50 >= 100' or 'speed_ttft_ms_p50 <= 500'. A report that misses one is still recorded.",
+            "type": [
+              "array",
+              "null"
+            ],
             "minItems": 1,
-            "items": { "$ref": "#/components/schemas/Threshold" }
-          },
-          "goal_quality_gate": { "description": "Correctness gates and permitted quality loss.", "$ref": "#/components/schemas/NullableText" },
-          "goal_self_hosting_in_scope": { "type": ["boolean", "null"] },
-
-          "budget_wall_clock_hours": { "$ref": "#/components/schemas/NumberOrNotApplicable" },
-          "budget_builder_tokens": { "$ref": "#/components/schemas/NumberOrNotApplicable" },
-          "budget_api_cost_limit": { "description": "Amount with currency, or 'Not applicable: reason'.", "$ref": "#/components/schemas/NullableText" },
-          "budget_hardware_hours": { "$ref": "#/components/schemas/NumberOrNotApplicable" },
-          "budget_stopping_rule": { "$ref": "#/components/schemas/NullableText" }
+            "items": {
+              "$ref": "#/components/schemas/Threshold"
+            }
+          }
         },
         "dependentRequired": {
-          "amends_revision": ["amends_reason"],
-          "amends_reason": ["amends_revision"]
+          "amends_revision": [
+            "amends_reason"
+          ],
+          "amends_reason": [
+            "amends_revision"
+          ]
         },
         "allOf": [
           {
-            "if": { "required": ["status"], "properties": { "status": { "const": "frozen" } } },
+            "if": {
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "const": "frozen"
+                }
+              }
+            },
             "then": {
-              "$ref": "#/components/schemas/NoNullFields",
-              "properties": { "baseline_engines": { "minItems": 1 } }
+              "$ref": "#/components/schemas/NoNullFields"
             }
-          },
-          {
-            "if": { "required": ["target_speculative_decoding"], "properties": { "target_speculative_decoding": { "const": true } } },
-            "then": { "properties": { "target_speculative_draft": { "not": { "$ref": "#/components/schemas/NotApplicable" } } } }
           }
         ]
       },

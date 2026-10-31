@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GROUPS, METRICS, formatValue, frontier, lineageRoots, trendSeries } from './lib/model.js';
+import { GROUPS, METRICS, conformance, formatValue, frontier, lineageRoots, trendSeries } from './lib/model.js';
 
 const PALETTE = ['#2f5bea', '#e0701f', '#14a36b', '#b5469b', '#d9a300', '#3aa7d9', '#7a5195', '#8a8f98'];
 const SHAPES = ['circle', 'square', 'triangle', 'diamond'];
@@ -63,7 +63,7 @@ export function Trends({ runs, filtered, state, patch }) {
           <polyline key={item.label} points={item.points.map(p => `${x(p.t)},${y(p.value)}`).join(' ')} fill="none" stroke={item.color} strokeWidth="1.5" opacity="0.5" />
         ))}
         {visible.flatMap(item => item.points.map(point => {
-          const failed = point.run.quality_gate !== 'passed';
+          const failed = conformance(point.run) === 'failed';
           return (
             <Marker key={point.run.entry_id} shape={item.shape} x={x(point.t)} y={y(point.value)} className="pt"
               fill={failed ? 'var(--surface)' : item.color} stroke={item.color} strokeWidth={failed ? 1.8 : 1}>

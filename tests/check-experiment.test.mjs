@@ -32,7 +32,7 @@ test('a draft experiment lists its unresolved fields and passes the schema', () 
   const result = check(example);
   assert.equal(result.status, 0, result.text);
   assert.match(result.text, /status: draft-not-run/);
-  assert.match(result.text, /unresolved fields \(\d+\):.*goal_primary_metric/);
+  assert.match(result.text, /unresolved fields \(\d+\):.*goal_thresholds/);
   assert.match(result.text, /schema: valid Experiment/);
 });
 
@@ -55,16 +55,16 @@ test('a derived experiment lists exactly what it changes from its base', () => {
     cpSync(example, join(dir, 'base.json'));
     const path = join(dir, 'derived.json');
     writeFileSync(path, JSON.stringify(derived(fileHash(join(dir, 'base.json')), {
-      goal_primary_metric: 'decode tok/s',
-      goal_self_hosting_in_scope: true,
-      budget_wall_clock_hours: 8,
+      goal_thresholds: ['decode_tokens_per_second_p50 >= 100'],
+      hardware_memory_gib: 64,
+      engine_name: 'mine',
     })));
     const result = check(path);
     assert.equal(result.status, 0, result.text);
     assert.match(result.text, /changes from the base \(3\)/);
-    assert.match(result.text, /~ goal_primary_metric: null -> "decode tok\/s"/);
-    assert.match(result.text, /~ goal_self_hosting_in_scope: false -> true/);
-    assert.match(result.text, /~ budget_wall_clock_hours: null -> 8/);
+    assert.match(result.text, /~ goal_thresholds: null -> \["decode_tokens_per_second_p50 >= 100"\]/);
+    assert.match(result.text, /~ hardware_memory_gib: 48 -> 64/);
+    assert.match(result.text, /~ engine_name: null -> "mine"/);
     assert.doesNotMatch(result.text, /experiment_id/);
   } finally {
     rmSync(dir, { recursive: true, force: true });

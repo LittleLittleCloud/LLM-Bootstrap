@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Trends } from './Trends.jsx';
 import {
-  FACETS, METRICS, collapse, defaultState, filterRuns, formatValue, largestCohort, mixedConditions, rankRuns, orderRows, unrankedReason,
+  FACETS, METRICS, collapse, defaultState, filterRuns, formatValue, largestCohort, mixedConditions, rankRuns, orderRows, unrankedReason, conformance,
 } from './lib/model.js';
 
 const PAGE = 15;
 const SELECTS = ['hardware', 'target_model', 'evaluation'];
-const GATE = { passed: ['good', 'Passed'], failed: ['bad', 'Failed'], unverified: ['warn', 'Unverified'] };
+const CONFORM = { passed: ['good', 'Conforms'], failed: ['bad', 'Fails conform'], unchecked: ['warn', 'Unchecked'] };
 
 function Select({ label, value, onChange, options }) {
   return (
@@ -31,7 +31,7 @@ export function Board({ runs, state, patch, setState }) {
     patch({ filters });
     setShown(PAGE);
   };
-  const dirty = Boolean(state.query || state.from || state.to || state.includeNotPassed || Object.keys(state.filters).length);
+  const dirty = Boolean(state.query || state.from || state.to || Object.keys(state.filters).length);
 
   return (
     <main className="band board">
@@ -59,10 +59,6 @@ export function Board({ runs, state, patch, setState }) {
         })}
         <input className="search" type="search" placeholder="Search" value={state.query} aria-label="Search"
           onChange={event => { patch({ query: event.target.value }); setShown(PAGE); }} />
-        <label className="toggle">
-          <input type="checkbox" checked={state.includeNotPassed} onChange={event => patch({ includeNotPassed: event.target.checked })} />
-          Not passed
-        </label>
         {dirty && (
           <button type="button" className="text" onClick={() => setState(current => ({ ...defaultState(), metric: current.metric, tab: current.tab, groupBy: current.groupBy }))}>
             Reset
@@ -101,11 +97,11 @@ function Table({ rows, state, shown, onMore }) {
     <>
       <ol className="rows">
         <li className="head" aria-hidden="true">
-          <span>#</span><span>Experiment</span><span>Setup</span><span>{spec.label}</span><span>Gate</span><span>Date</span>
+          <span>#</span><span>Experiment</span><span>Setup</span><span>{spec.label}</span><span>Conformance</span><span>Date</span>
         </li>
         {ordered.slice(0, shown).map(run => {
           const rank = ranks.get(run);
-          const [tone, gate] = GATE[run.quality_gate];
+          const [tone, gate] = CONFORM[conformance(run)];
           return (
             <li key={run.entry_id} className={rank ? '' : 'unranked'} title={unrankedReason(run, state.metric) ?? undefined}>
               <span className="rank">{rank ?? '—'}</span>
@@ -113,7 +109,6 @@ function Table({ rows, state, shown, onMore }) {
                 <strong>{run.experiment_id}</strong>
                 <small>
                   {run.engine.name}{run.engine.revision ? ` · ${run.engine.revision.slice(0, 7)}` : ''}
-                  {run.role === 'baseline' && <em>baseline</em>}
                   {run.comparison_track !== 'matched-configuration' && <em>best permitted</em>}
                   {run.metrics.preliminary && <em title="A reduced profile or an incomplete test">preliminary</em>}
                 </small>

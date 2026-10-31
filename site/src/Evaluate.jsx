@@ -226,7 +226,7 @@ export default function Evaluate() {
             <button type="button" className="primary" onClick={() => download(result.fileName, text)}>Download report</button>
             <button type="button" className="ghost" onClick={() => navigator.clipboard.writeText(text)}>Copy report</button>
           </div>
-          <p className="muted">Commit it as experiments/&lt;experiment-id&gt;/evaluation/&lt;candidate or baseline name&gt;/{result.fileName}.</p>
+          <p className="muted">Commit it as experiments/&lt;experiment-id&gt;/evaluation/{result.fileName}.</p>
           <details><summary>Report JSON</summary><pre>{text}</pre></details>
         </section>
       )}
