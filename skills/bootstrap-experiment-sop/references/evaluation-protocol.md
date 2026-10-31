@@ -40,7 +40,7 @@ Earlier measurements with external drivers (the Infer.NET records) are prior evi
 
 `endpoint-bench` is modeled on [ZebraBench](https://sujee.github.io/zebrabench/), a browser benchmark for inference endpoints. It asks for an **endpoint URL** and an optional **token**, then a **model** from the list the endpoint reports. It asks for nothing else: no machine, no environment, no experiment, no engine. The evaluator is repository-owned code under `evaluations/endpoint-bench/src/`, served as the site's Evaluate page. A person, or an agent driving a browser by computer use, opens the page built from the pinned revision, enters those inputs, selects tests and a profile, and exports the report.
 
-- **Run the pinned revision.** The page shows the evaluation revision and definition hash it was built from. They must equal the experiment's `evaluation_revision` and `evaluation_sha256`. If the deployed site is at another revision, check out the pinned commit and serve the site from it (`cd site && npm ci && npm run dev`). Never run from a modified checkout: the page marks a build with uncommitted changes, and the report carries `build_dirty`.
+- **Run the pinned revision.** The page shows the evaluation revision and definition hash it was built from. They must equal the experiment's `evaluation_revision` and `evaluation_sha256`. If the deployed site is at another revision, check out the pinned commit and serve the site from it (`cd site && npm ci && npm run dev`). Never run from a modified checkout: the page marks a build with uncommitted changes, and the report carries `build_dirty: true`. Such a report does not identify the code that produced it, so it is not evidence for a result; commit the change or restore the checkout, rebuild, and run again.
 - **Browser requirements.** The endpoint must answer cross-origin requests from the page's origin and allow the `authorization` and `content-type` headers. A page served over https can reach a loopback http endpoint in Chrome and Firefox; Safari blocks it, so serve the page locally or use another browser. The token lives in memory for the run and is never stored or exported.
 - **Timing.** The browser's monotonic clock times each streamed request. Token counts come from the endpoint's reported `usage`; a request whose stream reports none fails. Percentiles are nearest-rank. A missing measurement is `null`, never zero. The runner can also stream each request's start, deltas, and end to a display as they happen; that feed is for watching only and is never part of the report.
 - **One model per report.** Evaluate each model, engine, or configuration separately, serially, on the same device, and keep every report.
@@ -125,6 +125,19 @@ Experiment thresholds (`goal_thresholds`) and the leaderboard read these names, 
 | `cache_hit_pct` | `cache` hit percent of the `padded` prompt |
 
 A threshold on a metric that the report lacks is unmet, not satisfied.
+
+### Reading a report
+
+Check these before trusting a number, and state the ones that apply in the results pull request description.
+
+- **`build_dirty`.** Present means the report is not evidence (see "Run the pinned revision").
+- **`context_window.source` is `assumed`.** Sizes above the guess were skipped, not failed, and `needle` was sized against the guess. Read the long-context results as covering only the sizes that ran.
+- **A `thinking` that did not think.** If `default` reports `reasoning_tokens` of 0 and gives the same answers as `no-thinking`, the endpoint did not reason, hides its reasoning, or ignores the switch. The accuracy then describes a non-reasoning mode and says nothing about thinking.
+- **A short `speed` run.** If `completion_tokens` is far below the plan's `max_tokens`, the model stopped on its own. The rate covers a few tokens and counts the first one without its time, so it runs high. For a rate to compare, read `decode`, which forces the length.
+- **Rates that fall with length.** `decode` at a longer output, and `prefill` and `needle` at a larger input, are slower than the short cases. Compare engines at the same lengths, never a short rate against a long one.
+- **`needle` size and certainty.** The actual `prompt_tokens` can exceed the target by several percent, because characters per token is an estimate; what matters is that the prompt fit. A perfect score has a standard error of 0 by construction, so a small sample still proves little.
+- **`cache`.** The `short` and `busted` prompts are controls and should show a hit near 0 and no TTFT gain. A `padded` hit of 0 with `cache_reported` true means the endpoint reports the field but does not reuse the prefix: prefix caching is off, unsupported, or reset between requests.
+- **Duration.** A `full` run against a slow endpoint takes over an hour, because each long-context request can take minutes. Use `quick` while developing and plan the time for a full run.
 
 ## Correctness gates
 
