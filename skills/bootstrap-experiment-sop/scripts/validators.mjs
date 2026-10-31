@@ -10,7 +10,7 @@ const SPECS = {
   evaluation: ['evaluation-protocol.openapi.json', 'https://llm-bootstrap.invalid/evaluation-protocol'],
 };
 
-// Returns { experiment: { Experiment: validate, ... }, evaluation: { EvaluationResult: validate, ... } } or null.
+// Returns { experiment: { Experiment: validate, ... }, evaluation: { EvaluationReport: validate, ... } } or null.
 export async function loadValidators() {
   let Ajv2020;
   let addFormats;

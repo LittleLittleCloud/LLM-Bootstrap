@@ -10,8 +10,10 @@ Results for experiment `<experiment-id>`: <one sentence on the question and the 
 
 ## Included
 - `experiments/<experiment-id>/experiment.json`: the frozen experiment (revision `<commit>` in the project repository, frozen <timestamp>)
-- `experiments/<experiment-id>/evaluation/`: <n> evaluation records (<baseline / candidate / failed or interrupted counts>), each named after its UTC start time
+- `experiments/<experiment-id>/evaluation/<subject>/`: <n> evaluation reports (<baseline / candidate / failed or interrupted counts>), each named after its UTC start time
 - Skills revision: `<full commit>`
+- Endpoints: <for each subject, how the engine was started (command, runtime and artifact hashes), on which hardware, and any deviation from the experiment; the reports record neither>
+- Run context: <human interventions, builder tokens, elapsed hours, and hardware hours so far, each a number or `Unavailable: reason`>
 
 ## Interpretation
 <Comparable conditions, differences, and limits of attribution. Variability and unresolved correctness or resource concerns. Self-hosting transition and development evidence, or not demonstrated. Failures, amendments, recovery, and next steps.>
@@ -28,12 +30,12 @@ Reviewed text only. Refer to private artifacts by hash and access limitation; do
 - Failures, interruptions, and their causes:
 - Preflight checks that would have caught them earlier:
 - Recurring human interventions and what would have avoided them:
-- Suggested changes to skills or evaluations (cite the evaluation record and evidence hash):
+- Suggested changes to skills or evaluations (cite the evaluation report and evidence hash):
 - Calibration notes for baselines, budgets, and thresholds (priors only; each experiment fixes its own before tuning):
 - Limits on generalizing: preliminary cohorts, unmatched comparisons, hardware-specific effects:
 
 ## Not verified
-<Single-cohort or preliminary results, unmatched comparison conditions, missing metrics, unreconciled requests, anything not independently checked.>
+<Single-cohort or preliminary results, unmatched comparison conditions, missing metrics, incomplete tests, reports of the quick profile, an assumed context window, anything not independently checked.>
 
 ## Validation
 - `npm ci && npm test`: <result>

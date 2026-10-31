@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Validator } from '@seriousme/openapi-schema-validator';
 import { resolveExperiment, resolveExperimentFile } from '../skills/bootstrap-experiment-sop/scripts/resolve-experiment.mjs';
 import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
-import { commit, draftExperiment as example, frozenExperiment, sha, syntheticResult, when } from './helpers/fixtures.mjs';
+import { commit, draftExperiment as example, frozenExperiment, sha, syntheticReport, when } from './helpers/fixtures.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = path => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
@@ -46,7 +46,7 @@ test('both OpenAPI documents pass the official OpenAPI 3.1 schema', async () => 
 
 test('primitive schemas shared by both protocols are identical', () => {
   const shared = Object.keys(spec.components.schemas).filter(name => name in evaluationSpec.components.schemas);
-  assert.ok(shared.length >= 11, `only ${shared.length} shared schemas`);
+  assert.ok(shared.length >= 4, `only ${shared.length} shared schemas`);
   for (const name of shared) assert.deepEqual(evaluationSpec.components.schemas[name], spec.components.schemas[name], name);
 });
 
@@ -64,16 +64,14 @@ function valueTypes(schema, components, seen = new Set()) {
   return [...own, ...nested];
 }
 
-test('the experiment and evaluation record schemas are flat: no field holds an object or a nested array', () => {
-  for (const [document, names] of [[spec, ['Experiment', 'DerivedExperiment']], [evaluationSpec, ['EvaluationResult']]]) {
-    const components = document.components.schemas;
-    for (const name of names) {
-      const fields = { ...components[name].properties, ...components[name].patternProperties };
-      assert.ok(Object.keys(fields).length > 30 || name === 'DerivedExperiment', `${name} declares its fields`);
-      for (const [key, schema] of Object.entries(fields)) {
-        const nested = valueTypes(schema, components).filter(type => ['object', 'item:object', 'item:array'].includes(type));
-        assert.deepEqual(nested, [], `${name}.${key} is nested`);
-      }
+test('the experiment schemas are flat: no field holds an object or a nested array', () => {
+  const components = spec.components.schemas;
+  for (const name of ['Experiment', 'DerivedExperiment']) {
+    const fields = { ...components[name].properties, ...components[name].patternProperties };
+    assert.ok(Object.keys(fields).length > 30 || name === 'DerivedExperiment', `${name} declares its fields`);
+    for (const [key, schema] of Object.entries(fields)) {
+      const nested = valueTypes(schema, components).filter(type => ['object', 'item:object', 'item:array'].includes(type));
+      assert.deepEqual(nested, [], `${name}.${key} is nested`);
     }
   }
 });
@@ -99,78 +97,46 @@ test('a fully resolved experiment can be frozen and unresolved or invalid fields
   rejects('Experiment', { ...frozen, target_tokenizer_sha256: 'Not applicable: x' }, 'identity hash cannot be N/A');
   rejects('Experiment', { ...frozen, evaluation_sha256: null }, 'frozen evaluation must be pinned');
   rejects('Experiment', { ...frozen, goal_thresholds: ['decode throughput at least 1'] }, 'a threshold is metric, comparator, value');
+  rejects('Experiment', { ...frozen, evaluation_formal_repetitions: 3 }, 'the evaluation fixes its own repetitions');
   rejects('Experiment', { ...frozen, goal_thresholds: [] }, 'at least one threshold');
   rejects('Experiment', { ...frozen, evaluation_scripts: ['run.sh'] }, 'an experiment cannot carry evaluation scripts');
   rejects('Experiment', { ...frozen, evaluation_task_ids: ['task-1'] }, 'an experiment cannot define the workload');
   accepts('Experiment', { ...frozen, target_speculative_decoding: true, target_speculative_draft: 'draft-model q4, 4 tokens' });
 });
 
-test('an evaluation record validates and metric, key-family, and pass rules reject unsupported records', () => {
-  const result = syntheticResult();
-  acceptsEvaluation('EvaluationResult', result);
-  acceptsEvaluation('EvaluationResult', {
-    ...result,
-    'throughput.decode.in128.out256.c1.decode_tokens_per_second': 200,
-    'throughput.decode.in128.out256.c1.requests': 4,
-    'throughput.decode.in128.out256.c1.cache_hit_ratio': 'Not obtained',
-    'throughput.decode.in128.out256.c1.pass_tokens_per_second': [199, 201],
-    'throughput.multi-turn.in8k.t5.c1.first_turn_ttft_seconds': 0.9,
-  });
-  acceptsEvaluation('EvaluationResult', { ...result, prefill_tokens_per_second: 'Not obtained', prefill_basis: 'Not obtained' });
-
-  for (const key of Object.keys(result).filter(name => name.startsWith('evaluation_') || name.startsWith('experiment_'))) {
-    rejectsEvaluation('EvaluationResult', mutate(result, r => { delete r[key]; }), `${key} pins the record`);
+test('a report holds what was measured and nothing about the machine, the experiment, or the engine', () => {
+  const report = syntheticReport();
+  acceptsEvaluation('EvaluationReport', report);
+  for (const key of ['evaluation_id', 'evaluation_revision', 'evaluation_sha256', 'started_at', 'endpoint_class', 'model', 'profile', 'seed', 'context_window', 'selected_tests', 'status', 'failures', 'tests']) {
+    rejectsEvaluation('EvaluationReport', mutate(report, r => { delete r[key]; }), `${key} is required`);
   }
-  rejectsEvaluation('EvaluationResult', { ...result, evaluation_revision: null }, 'a record pins its evaluation');
-  rejectsEvaluation('EvaluationResult', { ...result, prefill_tokens_per_second: null }, 'a missing metric is Not obtained');
-  rejectsEvaluation('EvaluationResult', { ...result, prefill_tokens_per_second: 'n/a' }, 'a missing metric is Not obtained');
-  rejectsEvaluation('EvaluationResult', { ...result, decode_basis: 'arithmetic-mean' }, 'unknown decode basis');
-  rejectsEvaluation('EvaluationResult', { ...result, formal_passes_succeeded: 1 }, 'a single cohort is preliminary');
-  rejectsEvaluation('EvaluationResult', { ...result, formal_passes_failed: 1 }, 'a failure needs a description');
-  acceptsEvaluation('EvaluationResult', { ...result, formal_passes_failed: 1, failures: ['formal pass 2 failed: timed out'] });
-  rejectsEvaluation('EvaluationResult', { ...result, artifacts: [] }, 'runtime identity needs hashes');
-  rejectsEvaluation('EvaluationResult', { ...result, artifacts: ['synthetic-engine'] }, 'an artifact names its hash');
-  rejectsEvaluation('EvaluationResult', { ...result, evidence_sha256: 'abc' }, 'evidence is referenced by hash');
-  rejectsEvaluation('EvaluationResult', { ...result, environment: { hardware_model: 'x' } }, 'groups are key prefixes, not objects');
-  rejectsEvaluation('EvaluationResult', { ...result, 'setting.nested': { a: 1 } }, 'a setting is a scalar');
-  rejectsEvaluation('EvaluationResult', { ...result, 'settings.weight_precision': 'x' }, 'only setting.* keys are settings');
-  rejectsEvaluation('EvaluationResult', { ...result, 'throughput.decode.in128.out256.c0.requests': 4 }, 'concurrency starts at 1');
-  rejectsEvaluation('EvaluationResult', { ...result, 'throughput.decode.in128.out256.c1.requests': 1.5 }, 'a request count is an integer');
-  rejectsEvaluation('EvaluationResult', { ...result, 'throughput.decode.in128.out256.c1.speed': 1 }, 'unknown throughput metric');
-  rejectsEvaluation('EvaluationResult', { ...result, 'intelligence.synthetic.score': 2 }, 'a score is a proportion');
-  rejectsEvaluation('EvaluationResult', { ...result, 'intelligence.synthetic.num_samples': 0 }, 'a benchmark scores at least one sample');
-  rejectsEvaluation('EvaluationResult', { ...result, extra: 1 }, 'unknown field');
+  for (const key of ['experiment_id', 'engine_name', 'environment_hardware_model', 'artifacts', 'endpoint', 'token', 'api_key', 'human_interventions']) {
+    rejectsEvaluation('EvaluationReport', { ...report, [key]: 'x' }, `a report has no ${key}`);
+  }
+  rejectsEvaluation('EvaluationReport', { ...report, evaluation_revision: 'abc1234' }, 'a report pins its evaluation by full commit');
+  rejectsEvaluation('EvaluationReport', { ...report, endpoint_class: 'http://127.0.0.1:8080' }, 'the address is never recorded');
+  rejectsEvaluation('EvaluationReport', { ...report, profile: 'turbo' }, 'unknown profile');
+  rejectsEvaluation('EvaluationReport', { ...report, seed: 'xyz' }, 'the seed is eight hex digits');
+  rejectsEvaluation('EvaluationReport', { ...report, selected_tests: [] }, 'at least one test');
+  rejectsEvaluation('EvaluationReport', { ...report, selected_tests: ['conform', 'conform'] }, 'a test is selected once');
+  rejectsEvaluation('EvaluationReport', { ...report, selected_tests: ['gsm8k'] }, 'unknown test');
+  rejectsEvaluation('EvaluationReport', { ...report, tests: { speed: { status: 'complete' } } }, 'a complete test carries its runs and summary');
+  rejectsEvaluation('EvaluationReport', { ...report, tests: { conform: { status: 'complete' } } }, 'a complete conformance test carries its checks');
+  rejectsEvaluation('EvaluationReport', { ...report, tests: { other: { status: 'complete' } } }, 'unknown test result');
+  rejectsEvaluation('EvaluationReport', { ...report, status: 'partial' }, 'an incomplete report lists its failures');
+  acceptsEvaluation('EvaluationReport', { ...report, status: 'partial', failures: ['speed: error (timeout)'], tests: { ...report.tests, speed: { status: 'error', error: 'timeout' } }, selected_tests: ['conform', 'speed'] });
+  rejectsEvaluation('EvaluationReport', { ...report, failures: ['speed: error'] }, 'a complete report has no failures');
+  acceptsEvaluation('EvaluationReport', { ...report, build_dirty: true });
+  rejectsEvaluation('EvaluationReport', { ...report, build_dirty: false }, 'the flag is present only when true');
+  rejectsEvaluation('EvaluationReport', { ...report, context_window: { tokens: 0, source: 'assumed' } }, 'a window has tokens');
+  rejectsEvaluation('EvaluationReport', { ...report, context_window: { tokens: 10, source: 'guessed' } }, 'a window says where it came from');
 });
 
-test('self-hosting claims need transition evidence and builder/target identity', () => {
-  const result = syntheticResult();
-  acceptsEvaluation('EvaluationResult', { ...result, self_hosting_status: 'not-demonstrated' });
-  rejectsEvaluation('EvaluationResult', { ...result, self_hosting_status: 'demonstrated' }, 'no evidence');
-  const demonstrated = {
-    ...result,
-    self_hosting_status: 'demonstrated',
-    self_hosting_transition_at: when,
-    self_hosting_builder_matches_target: true,
-    self_hosting_routing: 'synthetic',
-    self_hosting_external_recovery_used: false,
-    self_hosting_evidence_sha256: sha('7'),
-  };
-  acceptsEvaluation('EvaluationResult', demonstrated);
-  rejectsEvaluation('EvaluationResult', { ...demonstrated, self_hosting_builder_matches_target: false }, 'identity must match');
-});
-
+const realDefinition = JSON.parse(readFileSync(join(root, 'evaluations', 'endpoint-bench', 'evaluation.json'), 'utf8'));
 const releasedDefinition = scriptHash => ({
+  ...structuredClone(realDefinition),
   evaluation_id: 'synthetic-evaluation',
-  status: 'released',
   description: 'Synthetic fixture; not an evaluation.',
-  result_schema: 'EvaluationResult',
-  harness: { name: 'synthetic-harness', version: '1' },
-  datasets: [{ name: 'data', source: 'modelscope', repository: 'synthetic/data', files: [{ path: 'data.parquet', sha256: sha('b') }] }],
-  task_ids: ['task-1'],
-  seed: 0,
-  limits: { context_window: 1024, max_output_tokens_per_request: 128, timeout_seconds_per_task: 10, request_concurrency: 1 },
-  cache_policy: 'none',
-  sampling_settings: { temperature: 0 },
   scripts: [{ role: 'driver', path: 'scripts/run.sh', sha256: scriptHash }],
 });
 
@@ -199,12 +165,17 @@ test('repository evaluation definitions are valid, own their directory, and matc
 test('a released evaluation needs a driver, no unresolved fields, contained paths, and verified scripts', () => {
   const released = releasedDefinition(sha('1'));
   acceptsEvaluation('EvaluationDefinition', released);
-  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.cache_policy = null; }), 'released has no null');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.plan.speed.runs = 0; }), 'a test runs at least once');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { delete d.plan.cache; }), 'the plan covers every test');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.plan.speed.extra = 1; }), 'the plan has no unknown settings');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.profiles.slow = {}; }), 'only the quick profile exists');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts = []; }), 'released has scripts');
+  rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.result_schema = 'EvaluationResult'; }), 'the result is a report');
   rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts[0].role = 'assertion-evaluator'; }), 'released needs a driver');
   rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts[0].path = '../outside.sh'; }), 'no parent traversal');
   rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.scripts[0].path = '/etc/passwd'; }), 'no absolute path');
   rejectsEvaluation('EvaluationDefinition', mutate(released, d => { d.evaluation_id = 'Not Kebab'; }), 'kebab-case id');
-  acceptsEvaluation('EvaluationDefinition', mutate(released, d => { d.status = 'draft'; d.cache_policy = null; d.scripts = null; }));
+  acceptsEvaluation('EvaluationDefinition', mutate(released, d => { d.status = 'draft'; d.scripts = []; }));
 
   const base = mkdtempSync(join(tmpdir(), 'llm-bootstrap-evaluation-'));
   try {
@@ -244,7 +215,7 @@ test('a derived experiment inherits its base, overrides all but the target model
   const derived = derivedFrom({
     skills_revision: commit('7'),
     hardware_power: 'Battery',
-    goal_thresholds: ['prefill_tokens_per_second >= 2'],
+    goal_thresholds: ['prefill_tokens_per_second_p50 >= 2'],
     baseline_engines: [`other-baseline=${commit('8')}`],
   });
   accepts('DerivedExperiment', derived);
@@ -256,7 +227,7 @@ test('a derived experiment inherits its base, overrides all but the target model
   assert.equal(effective.skills_revision, commit('7'));
   assert.equal(effective.hardware_power, 'Battery');
   assert.equal(effective.hardware_platform, base.hardware_platform);
-  assert.deepEqual(effective.goal_thresholds, ['prefill_tokens_per_second >= 2']);
+  assert.deepEqual(effective.goal_thresholds, ['prefill_tokens_per_second_p50 >= 2']);
   assert.equal(effective.goal_primary_metric, base.goal_primary_metric);
   assert.deepEqual(effective.baseline_engines, [`other-baseline=${commit('8')}`]);
   assert.equal(base.hardware_power, example.hardware_power, 'the base is not mutated');

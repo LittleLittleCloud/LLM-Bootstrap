@@ -1,0 +1,187 @@
+{
+  "evaluation_id": "endpoint-bench",
+  "status": "released",
+  "description": "A quick benchmark of an OpenAI-compatible chat endpoint, run from a web page with only the endpoint URL and an optional token. It runs seven tests against one model: conform checks that the endpoint behaves like the API the other tests rely on; speed measures raw output speed from a short prompt; thinking asks a medium reasoning task with reasoning left on and switched off; decode measures output speed at fixed output lengths; prefill measures how fast long prompts are digested; needle hides one access code at several depths of a document that fills most of the context window; cache asks one question as a short prompt, a padded prompt, and a prompt with a nonce that defeats the cache. Time runs on the browser's monotonic clock and token counts come from the endpoint's reported usage. The report holds every measured request without prompts or model output.",
+  "result_schema": "EvaluationReport",
+  "plan": {
+    "conform": {
+      "timeout_seconds": 60
+    },
+    "speed": {
+      "warmup": 1,
+      "runs": 5,
+      "max_tokens": 512,
+      "timeout_seconds": 120,
+      "prompt": "Output lowercase English words separated by single spaces.\nDo not use punctuation, numbers, headings, explanations, or line breaks.\nBegin immediately.\nContinue generating words without stopping or concluding until the generation is stopped externally."
+    },
+    "thinking": {
+      "questions": 10,
+      "rows": 30,
+      "warmup": 1,
+      "max_tokens": 4096,
+      "timeout_seconds": 300
+    },
+    "decode": {
+      "lengths": [
+        100,
+        1000,
+        4000
+      ],
+      "runs": 3,
+      "warmup": 1,
+      "timeout_seconds": 300,
+      "prompt": "Generate a continuous stream of lowercase English words separated by single spaces. Do not use punctuation, numbers, headings, explanations, or formatting. Begin immediately and continue generating until stopped."
+    },
+    "prefill": {
+      "sizes": [
+        10000,
+        50000,
+        100000,
+        250000,
+        500000,
+        1000000
+      ],
+      "needle_percent": 90,
+      "runs": 1,
+      "timeout_seconds": 600
+    },
+    "needle": {
+      "fill_percent": 90,
+      "positions": [
+        5,
+        25,
+        50,
+        75,
+        90
+      ],
+      "runs": 2,
+      "timeout_seconds": 600
+    },
+    "cache": {
+      "padded_tokens": 50000,
+      "repeats": 5,
+      "timeout_seconds": 300
+    }
+  },
+  "profiles": {
+    "quick": {
+      "speed": {
+        "runs": 3
+      },
+      "thinking": {
+        "questions": 4
+      },
+      "decode": {
+        "lengths": [
+          100,
+          1000
+        ],
+        "runs": 2
+      },
+      "prefill": {
+        "sizes": [
+          10000
+        ]
+      },
+      "needle": {
+        "positions": [
+          10,
+          50,
+          90
+        ],
+        "runs": 1
+      },
+      "cache": {
+        "padded_tokens": 10000,
+        "repeats": 3
+      }
+    }
+  },
+  "scripts": [
+    {
+      "role": "driver",
+      "path": "src/cache.js",
+      "sha256": "a9cd277ace76aa144e5f358c8c2ac6ccc07ea28c31366e3e4daa7fa05fe2ffee"
+    },
+    {
+      "role": "driver",
+      "path": "src/client.js",
+      "sha256": "23a9362cc9410dd213ba6e465b88badaf9ff84476519a218d760ee82a415c345"
+    },
+    {
+      "role": "driver",
+      "path": "src/config.js",
+      "sha256": "58a760bcb9e2b5a890d976d3dc98c9a532237f5da8672a6ff5e3ceba3fd2d469"
+    },
+    {
+      "role": "driver",
+      "path": "src/conform.js",
+      "sha256": "6b5a25fed7b9a9ec1b47d6679eec084aa0e8b549cb42f46843039e274faca664"
+    },
+    {
+      "role": "driver",
+      "path": "src/context.js",
+      "sha256": "30778b6bcdc3c125ef62712806a13de4e76d05551d722b21033066342d6770a0"
+    },
+    {
+      "role": "driver",
+      "path": "src/decode.js",
+      "sha256": "c4a155487be232ba9fec528c5e15c3aead94a7393a425b2f7b03a8535919439b"
+    },
+    {
+      "role": "driver",
+      "path": "src/measure.js",
+      "sha256": "0e62cf03eb2be91e7afdb109e2d7c978ce8a97f638b43fd4419a19acab5e05e4"
+    },
+    {
+      "role": "driver",
+      "path": "src/models.js",
+      "sha256": "265a492b3f44eccfac6d8848a6c95332985212bb606ef043e77fc714efa238d8"
+    },
+    {
+      "role": "driver",
+      "path": "src/needle.js",
+      "sha256": "ed14c73c3360457f720c0c6f616898ad19382767d05ee4b258e8ed702701a364"
+    },
+    {
+      "role": "driver",
+      "path": "src/prefill.js",
+      "sha256": "6ee36603ac99ab07f7275043c6f767c7f7ff719a1f9ee56e0ab9c1d2fbcc0f6f"
+    },
+    {
+      "role": "driver",
+      "path": "src/report.js",
+      "sha256": "4ef353e0a9b9165a4a266f706f4af40eedf260aed817088d3ee131c06053a184"
+    },
+    {
+      "role": "driver",
+      "path": "src/retrieval.js",
+      "sha256": "a79c4e1d5a384c44415b260d898eb7af515184a0b7d7b455e57d307d56394ded"
+    },
+    {
+      "role": "driver",
+      "path": "src/run.js",
+      "sha256": "85882bf769f63537a30b91f65be3f57246caf9c52f50bc2cf6361b686c3179b8"
+    },
+    {
+      "role": "driver",
+      "path": "src/speed.js",
+      "sha256": "9e1deb7ee599f2f60b91da0440c2f04a8e37044457b48fdaa0c33e075e35d1f0"
+    },
+    {
+      "role": "driver",
+      "path": "src/thinking.js",
+      "sha256": "fd7e45b825a7260cde715a79a7a2ad949e36d72390e173a138900231dde01ffe"
+    },
+    {
+      "role": "driver",
+      "path": "src/util.js",
+      "sha256": "c81c7b541c7aedc3a9767d518555d30b5edaf5ae377f88d65ecc690d15d393fc"
+    },
+    {
+      "role": "assertion-evaluator",
+      "path": "reference/engine.js",
+      "sha256": "882fceb3010640550c6faa76ea28548c7f9f5b2d2f92324eb6c26f26ead9c071"
+    }
+  ]
+}

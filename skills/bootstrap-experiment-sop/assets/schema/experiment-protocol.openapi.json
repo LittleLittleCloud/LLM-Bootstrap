@@ -4,7 +4,7 @@
     "title": "LLM Bootstrap experiment protocol schemas",
     "version": "0.5.0",
     "summary": "Flat schema for experiments/<experiment-id>/experiment.json.",
-    "description": "Machine-readable core of references/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate experiments/<experiment-id>/experiment.json against Experiment, or against DerivedExperiment before resolving it (scripts/resolve-experiment.mjs) and validating the result as Experiment, with any JSON Schema 2020-12 validator.\n\nEvery field is a top-level key whose value is a scalar or an array of strings. There are no nested objects: a group is a key prefix (hardware_, target_, builder_, harness_, evaluation_, implementation_, baseline, goal_, budget_), a list of pairs is an array of name=value strings, and a conditional declaration is a string that starts with 'Not applicable: ' or 'Unavailable: ' and gives the reason.\n\nThe record of each evaluation is a separate flat document, experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json, defined by EvaluationResult in evaluation-protocol.openapi.json. An experiment only selects a repository-owned evaluation by reference.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It is not evidence of correct measurements, a followed procedure, SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. An experiment with status frozen forbids null in any field."
+    "description": "Machine-readable core of references/experiment-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate experiments/<experiment-id>/experiment.json against Experiment, or against DerivedExperiment before resolving it (scripts/resolve-experiment.mjs) and validating the result as Experiment, with any JSON Schema 2020-12 validator.\n\nEvery field is a top-level key whose value is a scalar or an array of strings. There are no nested objects: a group is a key prefix (hardware_, target_, builder_, harness_, evaluation_, implementation_, baseline, goal_, budget_), a list of pairs is an array of name=value strings, and a conditional declaration is a string that starts with 'Not applicable: ' or 'Unavailable: ' and gives the reason.\n\nThe report of each evaluation is a separate document, experiments/<experiment-id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json, defined by EvaluationReport in evaluation-protocol.openapi.json. An experiment only selects a repository-owned evaluation by reference.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only that a document has the required shape. It is not evidence of correct measurements, a followed procedure, SOTA performance, autonomy, or self-hosting.\n\nUnresolved draft fields are null. An experiment with status frozen forbids null in any field."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {},
@@ -47,7 +47,7 @@
         "pattern": "^[^=\\s][^=]*=[0-9a-f]{40}$"
       },
       "Threshold": {
-        "description": "A performance or resource threshold on a metric of EvaluationResult, written 'metric >= value' or 'metric <= value'. Units are those of the metric name.",
+        "description": "A threshold on a headline metric of the evaluation report (decode_tokens_per_second_p50, speed_ttft_ms_p50, and the others the evaluation protocol lists), written 'metric >= value' or 'metric <= value'. Units are those of the metric name.",
         "type": "string",
         "pattern": "^[a-z0-9][a-z0-9._-]* (>=|<=) [0-9]+(\\.[0-9]+)?$"
       },
@@ -77,7 +77,7 @@
           "target_activation_precision", "target_kv_precision", "target_recurrent_state_precision", "target_speculative_decoding", "target_speculative_draft",
           "builder_model", "builder_provider", "builder_revision", "builder_inference_location", "builder_sampling", "builder_network_and_source_access",
           "harness_name", "harness_version", "harness_revision",
-          "evaluation_id", "evaluation_revision", "evaluation_sha256", "evaluation_warmup_plan", "evaluation_formal_repetitions",
+          "evaluation_id", "evaluation_revision", "evaluation_sha256",
           "implementation_starting_scaffold", "implementation_language_and_backend", "implementation_allowed_libraries",
           "implementation_baseline_source_inspection_allowed", "implementation_existing_engine_backend_allowed",
           "baseline_selection_date", "baseline_selection_method", "baseline_engines", "baseline_comparison_track",
@@ -152,8 +152,6 @@
           "evaluation_id": { "description": "A repository-owned evaluation. Its code, scripts, dataset, tasks, and limits cannot be set or changed here.", "$ref": "#/components/schemas/Text" },
           "evaluation_revision": { "description": "LLM Bootstrap repository commit of the evaluation. Null only while the experiment is a draft.", "$ref": "#/components/schemas/NullableCommit" },
           "evaluation_sha256": { "description": "Hash of the evaluation definition file at that commit.", "$ref": "#/components/schemas/NullableSha256" },
-          "evaluation_warmup_plan": { "$ref": "#/components/schemas/NullableText" },
-          "evaluation_formal_repetitions": { "type": ["integer", "null"], "minimum": 1 },
 
           "implementation_starting_scaffold": {
             "description": "Starting engine or scaffold with its revision, and any permitted code reuse.",
@@ -189,7 +187,7 @@
             "$ref": "#/components/schemas/NullableText"
           },
           "goal_thresholds": {
-            "description": "Acceptance thresholds on metrics of EvaluationResult, including resource limits such as 'peak_memory_gib <= 40' and 'swap_out_delta_bytes <= 0'. Relaxing them silently to pass is not allowed.",
+            "description": "Acceptance thresholds on headline metrics of the evaluation report, such as 'decode_tokens_per_second_p50 >= 100' or 'speed_ttft_ms_p50 <= 500'. Resource limits the evaluation cannot measure are stated in scope or the stopping rule instead. Relaxing them silently to pass is not allowed.",
             "type": ["array", "null"],
             "minItems": 1,
             "items": { "$ref": "#/components/schemas/Threshold" }
