@@ -8,7 +8,7 @@ import { buildIndex, loadEvaluationIds, loadRecordFiles } from '../tools/leaderb
 import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const ACCEPTED = /^experiments\/[^/]+\/(experiment\.json|evaluation\/[^/]+\/\d{8}-\d{6}\.json)$/;
+const ACCEPTED = /^experiments\/[^/]+\/(experiment\.json|evaluation\/\d{8}-\d{6}\.json)$/;
 const MAX_BYTES = 1024 * 1024;
 
 function trackedRecords() {
@@ -23,13 +23,13 @@ const tracked = trackedRecords();
 
 test('the accepted record files are exactly the documented ones', () => {
   for (const path of [
-    'experiments/e1/experiment.json', 'experiments/e1/evaluation/candidate/20261028-080000.json', 'experiments/e1/evaluation/some-engine/20261028-080000.json',
+    'experiments/e1/experiment.json', 'experiments/e1/evaluation/20261028-080000.json', 'experiments/e2/evaluation/20261029-091500.json',
   ]) assert.match(path, ACCEPTED, path);
   for (const path of [
     'experiments/e1/contract.json', 'experiments/e1/report.md', 'experiments/e1/runs/r1/run.json',
     'experiments/e1/evidence/20261028-080000.requests.evidence', 'experiments/e1/evaluation/20261028:080000.json',
     'experiments/e1/evaluation/notes.json', 'experiments/e1/evaluation/20261028-080000.requests.evidence',
-    'experiments/e1/evaluation/20261028-080000.json', 'experiments/e1/evaluation/candidate/sub/20261028-080000.json', 'experiments/e1/evaluation/candidate/20261028-080000.requests.evidence', 'experiments/e1/notes.md', 'experiments/TEMPLATE.md', 'experiments/experiment.json',
+    'experiments/e1/evaluation/candidate/20261028-080000.json', 'experiments/e1/evaluation/candidate/sub/20261028-080000.json', 'experiments/e1/evaluation/candidate/20261028-080000.requests.evidence', 'experiments/e1/notes.md', 'experiments/TEMPLATE.md', 'experiments/experiment.json',
   ]) assert.doesNotMatch(path, ACCEPTED, path);
 });
 
@@ -38,7 +38,7 @@ test('committed experiment records validate and build into the leaderboard index
   assert.ok(validators, 'schema validation needs the dev dependencies (npm ci)');
   const files = loadRecordFiles(root);
   const index = buildIndex(files, { validators, evaluationIds: loadEvaluationIds(root) });
-  const records = [...files.keys()].filter(path => /\/evaluation\/[^/]+\/[^/]+\.json$/.test(path));
+  const records = [...files.keys()].filter(path => /\/evaluation\/[^/]+\.json$/.test(path));
   const listed = new Set(index.entries.map(entry => entry.source.evaluation));
   for (const path of records) assert.ok(listed.has(path) || index.retired_runs.includes(path), `${path} is neither listed nor retired`);
 });
@@ -53,6 +53,6 @@ test('only accepted, small record files are committed, and every experiment has 
   }
   for (const [id, paths] of byExperiment) {
     assert.ok(paths.includes('experiment.json'), `${id} has no experiment.json`);
-    assert.ok(paths.some(path => /^evaluation\/[^/]+\/[^/]+\.json$/.test(path)), `${id} has no evaluation report`);
+    assert.ok(paths.some(path => /^evaluation\/[^/]+\.json$/.test(path)), `${id} has no evaluation report`);
   }
 });
