@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="t d">
   <title id="t">LLM Bootstrap: can an LLM build its own inference engine?</title>
-  <desc id="d">Hero banner showing the Build, Optimize, Self-host loop for LLM-built inference engines.</desc>
+  <desc id="d">Hero banner showing the Assist, Learn, Self-host path for local LLM inference engines.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0b1020"/>
@@ -28,18 +28,18 @@
   <rect width="1280" height="420" rx="20" fill="url(#glow)"/>
 
   <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-    <text x="80" y="110" font-size="18" font-weight="600" letter-spacing="3" fill="#38bdf8">AGENT SKILLS FOR LLM-BUILT INFERENCE ENGINES</text>
+    <text x="80" y="110" font-size="18" font-weight="600" letter-spacing="3" fill="#38bdf8">HILL-CLIMB DATA POINTS FOR LOCAL LLM INFERENCE ENGINES</text>
     <text x="80" y="195" font-size="84" font-weight="800" fill="#f8fafc">LLM Bootstrap</text>
     <rect x="80" y="214" width="150" height="6" rx="3" fill="url(#accent)"/>
     <text x="80" y="268" font-size="34" font-weight="500" fill="#e2e8f0">Can an LLM build its own inference engine?</text>
-    <text x="80" y="312" font-size="20" fill="#94a3b8">Reproducible experiments on fixed hardware, model, harness, and workload.</text>
+    <text x="80" y="312" font-size="20" fill="#94a3b8">One engine, one commit, one platform, one evaluation.</text>
 
     <g font-size="20" font-weight="600" text-anchor="middle">
       <rect x="80" y="345" width="150" height="42" rx="21" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.6"/>
-      <text x="155" y="372" fill="#7dd3fc">Build</text>
+      <text x="155" y="372" fill="#7dd3fc">Assist</text>
       <path d="M236 366H264" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
       <rect x="270" y="345" width="150" height="42" rx="21" fill="#818cf8" fill-opacity="0.15" stroke="#818cf8" stroke-opacity="0.6"/>
-      <text x="345" y="372" fill="#a5b4fc">Optimize</text>
+      <text x="345" y="372" fill="#a5b4fc">Learn</text>
       <path d="M426 366H454" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
       <rect x="460" y="345" width="150" height="42" rx="21" fill="#a78bfa" fill-opacity="0.15" stroke="#a78bfa" stroke-opacity="0.6"/>
       <text x="535" y="372" fill="#c4b5fd">Self-host</text>
