@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="t d">
+  <title id="t">LLM Bootstrap: can an LLM build its own inference engine?</title>
+  <desc id="d">Hero banner showing the Build, Optimize, Self-host loop for LLM-built inference engines.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="0.55" stop-color="#141a3a"/>
+      <stop offset="1" stop-color="#1d1245"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.1" r="0.7">
+      <stop offset="0" stop-color="#7c3aed" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="420" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="20" fill="url(#grid)"/>
+  <rect width="1280" height="420" rx="20" fill="url(#glow)"/>
+
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="80" y="110" font-size="18" font-weight="600" letter-spacing="3" fill="#38bdf8">AGENT SKILLS FOR LLM-BUILT INFERENCE ENGINES</text>
+    <text x="80" y="195" font-size="84" font-weight="800" fill="#f8fafc">LLM Bootstrap</text>
+    <rect x="80" y="214" width="150" height="6" rx="3" fill="url(#accent)"/>
+    <text x="80" y="268" font-size="34" font-weight="500" fill="#e2e8f0">Can an LLM build its own inference engine?</text>
+    <text x="80" y="312" font-size="20" fill="#94a3b8">Reproducible experiments on fixed hardware, model, harness, and workload.</text>
+
+    <g font-size="20" font-weight="600" text-anchor="middle">
+      <rect x="80" y="345" width="150" height="42" rx="21" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.6"/>
+      <text x="155" y="372" fill="#7dd3fc">Build</text>
+      <path d="M236 366H264" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+      <rect x="270" y="345" width="150" height="42" rx="21" fill="#818cf8" fill-opacity="0.15" stroke="#818cf8" stroke-opacity="0.6"/>
+      <text x="345" y="372" fill="#a5b4fc">Optimize</text>
+      <path d="M426 366H454" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+      <rect x="460" y="345" width="150" height="42" rx="21" fill="#a78bfa" fill-opacity="0.15" stroke="#a78bfa" stroke-opacity="0.6"/>
+      <text x="535" y="372" fill="#c4b5fd">Self-host</text>
+    </g>
+  </g>
+
+  <g transform="translate(985 205)" fill="none" stroke-linecap="round">
+    <circle r="150" stroke="#ffffff" stroke-opacity="0.06" stroke-width="2"/>
+    <circle r="110" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2" stroke-dasharray="4 10"/>
+    <path d="M-110 0A110 110 0 0 1 80 -76" stroke="url(#accent)" stroke-width="6"/>
+    <path d="M110 0A110 110 0 0 1 -80 76" stroke="url(#accent)" stroke-width="6" stroke-opacity="0.6"/>
+    <rect x="-52" y="-52" width="104" height="104" rx="18" fill="#0b1020" stroke="url(#accent)" stroke-width="3"/>
+    <rect x="-26" y="-26" width="52" height="52" rx="8" fill="#38bdf8" fill-opacity="0.2" stroke="#7dd3fc" stroke-width="2"/>
+    <g stroke="#7dd3fc" stroke-width="3">
+      <path d="M-24 -52V-72M0 -52V-72M24 -52V-72M-24 52V72M0 52V72M24 52V72"/>
+      <path d="M-52 -24H-72M-52 0H-72M-52 24H-72M52 -24H72M52 0H72M52 24H72"/>
+    </g>
+    <circle cx="80" cy="-76" r="9" fill="#a78bfa"/>
+    <circle cx="-80" cy="76" r="9" fill="#38bdf8"/>
+  </g>
+</svg>

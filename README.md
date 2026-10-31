@@ -1,8 +1,8 @@
 <div align="center">
 
-# LLM Bootstrap
+<img src="docs/assets/hero.svg" alt="LLM Bootstrap: can an LLM build its own inference engine? Build, Optimize, Self-host." width="100%">
 
-### Can an LLM build its own inference engine?
+<h1>LLM Bootstrap</h1>
 
 **Agent skills and reproducible experiment protocols for LLM-built inference engines: plan, build, optimize, and evaluate on fixed hardware, model, and workload.**
 
