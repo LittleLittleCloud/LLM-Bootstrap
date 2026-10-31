@@ -33,6 +33,14 @@ test('the synthetic demo index is flagged, internally consistent, and covers the
   assert.equal(mock.counts.entries, mock.entries.length);
   assert.equal(new Set(mock.entries.map(e => e.entry_id)).size, mock.entries.length);
   assert.equal(new Set(mock.entries.map(e => e.run_id)).size, mock.counts.runs);
+  for (const e of mock.entries) {
+    const stamp = e.entry_id.split('/').at(-1);
+    assert.equal(e.entry_id, `${e.experiment_id}/${stamp}`, 'an entry id is <experiment>/<YYYYMMDD-HHMMSS>');
+    assert.match(stamp, /^\d{8}-\d{6}$/);
+    assert.equal(e.run_id, e.entry_id, 'one report is one run');
+    assert.deepEqual(e.source, { experiment: `experiments/${e.experiment_id}/experiment.json`, evaluation: `experiments/${e.experiment_id}/evaluation/${stamp}.json` });
+    assert.ok(stamp.startsWith(e.date.replaceAll('-', '')), `${e.entry_id} is not named after its date`);
+  }
   const experiments = new Set(mock.entries.map(e => e.experiment_id));
   assert.equal(experiments.size, mock.counts.experiments);
   const models = new Map(mock.entries.map(e => [e.experiment_id, e.target_model]));
