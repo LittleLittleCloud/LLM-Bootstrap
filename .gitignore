@@ -7,4 +7,6 @@ experiments/*/evidence/
 __pycache__/
 .DS_Store
 node_modules/
+site/dist/
+.wrangler/
 .venv-evalscope/

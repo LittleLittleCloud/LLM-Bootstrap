@@ -2,7 +2,7 @@
 
 Stage 1 and 2 of the [experiment SOP](../SKILL.md) for an improvement of an existing experiment. Resolve links relative to this file. The rules for derived experiments are in [the experiment protocol](experiment-protocol.md).
 
-1. **Pin the base.** Record the base experiment's path, full commit, and file hash. The base must be a frozen experiment. Read its evaluation records first: if it has none, say that the derived experiment has no evidence to improve on.
+1. **Pin the base.** Record the base experiment's path, full commit, and file hash. The base must be a frozen experiment. Read its evaluation reports first: if it has none, say that the derived experiment has no evidence to improve on.
 2. **Find the gap.** State which result or failure in the base motivates the change, and quote the base evidence for it. The hypothesis must come from that evidence, not from preference.
 3. **Define the delta.** Write one hypothesis and the smallest set of overrides that tests it.
    - The target model cannot be overridden. If the user wants another model, stop and use the new experiment steps.

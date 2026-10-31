@@ -4,12 +4,12 @@ const read = path => run => path.reduce((value, key) => value?.[key], run);
 
 export const METRICS = {
   decode_tok_s: { label: 'Decode tok/s', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'decode_tok_s']) },
-  prefill_tok_s: { label: 'Prefill tok/s', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'prefill_tok_s']) },
-  client_ttft_median_s: { label: 'Client TTFT (median)', unit: 's', better: 'lower', digits: 3, read: read(['metrics', 'client_ttft_median_s']) },
-  concurrent_output_tok_s: { label: 'Output tok/s at concurrency 8', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'concurrent_output_tok_s']) },
-  peak_memory_gib: { label: 'Peak memory', unit: 'GiB', better: 'lower', digits: 1, read: read(['metrics', 'peak_memory_gib']) },
-  human_interventions: { label: 'Human interventions', unit: '', better: 'lower', digits: 0, read: read(['autonomy', 'human_interventions']) },
-  hardware_hours: { label: 'Hardware hours', unit: 'h', better: 'lower', digits: 1, read: read(['autonomy', 'hardware_hours']) },
+  prefill_tok_s: { label: 'Prefill tok/s', unit: 'tok/s', better: 'higher', digits: 0, read: read(['metrics', 'prefill_tok_s']) },
+  speed_tok_s: { label: 'Speed tok/s', unit: 'tok/s', better: 'higher', digits: 1, read: read(['metrics', 'speed_tok_s']) },
+  ttft_ms: { label: 'TTFT', unit: 'ms', better: 'lower', digits: 0, read: read(['metrics', 'ttft_ms']) },
+  cache_hit_pct: { label: 'Cache hit', unit: '%', better: 'higher', digits: 1, read: read(['metrics', 'cache_hit_pct']) },
+  needle_accuracy: { label: 'Needle accuracy', unit: '', better: 'higher', digits: 2, read: read(['metrics', 'needle_accuracy']) },
+  thinking_accuracy: { label: 'Thinking accuracy', unit: '', better: 'higher', digits: 2, read: read(['metrics', 'thinking_accuracy']) },
 };
 
 export const FACETS = [
@@ -18,10 +18,10 @@ export const FACETS = [
   { key: 'evaluation', label: 'Evaluation', read: run => run.evaluation },
   { key: 'builder', label: 'Builder LLM', read: run => run.builder ?? 'n/a (baseline)' },
   { key: 'harness', label: 'Development harness', read: run => run.harness },
-  { key: 'decode_basis', label: 'Decode timing basis', read: run => run.metrics.decode_basis ?? 'not obtained' },
   { key: 'comparison_track', label: 'Comparison track', read: run => run.comparison_track },
   { key: 'role', label: 'Role', read: run => run.role },
   { key: 'engine', label: 'Engine', read: run => run.engine.name },
+  { key: 'profile', label: 'Profile', read: run => run.profile },
 ];
 
 export const GROUPS = {
@@ -34,8 +34,8 @@ export const GROUPS = {
 };
 
 export const defaultState = () => ({
-  metric: 'decode_tok_s', filters: {}, includeNotPassed: false, selfHosting: false, query: '', from: '', to: '',
-  view: 'best', tab: 'leaderboard', sort: 'rank', groupBy: 'lineage', frontier: true,
+  metric: 'decode_tok_s', filters: {}, includeNotPassed: false, query: '', from: '', to: '',
+  view: 'best', tab: 'leaderboard', sort: 'rank', groupBy: 'lineage', frontier: true, page: 'home',
 });
 
 export function formatValue(metric, value, withUnit = true) {
@@ -49,18 +49,16 @@ const isBetter = (metric, a, b) => (METRICS[metric].better === 'higher' ? a > b 
 const haystack = run => [run.run_id, run.experiment_id, run.derived_from, run.engine.name, run.engine.revision, run.hardware,
   run.target_model, run.builder, run.harness, run.evaluation].filter(Boolean).join(' ').toLowerCase();
 
-// Why an entry is not ranked on a metric, or null when it is. Only verified, reconciled measurements are ranked.
+// Why an entry is not ranked on a metric, or null when it is. Only entries that passed the quality gate are ranked.
 export function unrankedReason(run, metric) {
-  if (run.quality_gate === 'failed') return 'Failed the quality gate';
-  if (run.quality_gate === 'unverified') return 'The quality gate was not verified (interrupted run or negative control not verified)';
-  if (!run.metrics.requests_reconciled) return 'Request counts were not reconciled with the evaluation harness, so the metrics are not complete';
-  if (METRICS[metric].read(run) == null) return `No ${METRICS[metric].label} was obtained`;
+  if (run.quality_gate === 'failed') return 'Failed the quality gate: a required conformance check failed, or its accuracy is below the baseline';
+  if (run.quality_gate === 'unverified') return 'The quality gate could not be verified: conformance, an accuracy test, or a baseline is missing';
+  if (METRICS[metric].read(run) == null) return `No ${METRICS[metric].label} was measured`;
   return null;
 }
 
 function matches(run, state, skipFacet) {
   if (!state.includeNotPassed && run.quality_gate !== 'passed') return false;
-  if (state.selfHosting && run.autonomy.self_hosting_status !== 'demonstrated') return false;
   if (state.from && run.date < state.from) return false;
   if (state.to && run.date > state.to) return false;
   if (state.query && !haystack(run).includes(state.query.trim().toLowerCase())) return false;
@@ -84,7 +82,7 @@ export function facetCounts(runs, state, facetKey) {
 
 // Is `run` the better entry to show for its experiment: a passing run beats a failing one, then the better metric, then the later date.
 function preferred(metric, run, current) {
-  const passed = r => r.quality_gate === 'passed' && r.metrics.requests_reconciled;
+  const passed = r => r.quality_gate === 'passed';
   if (passed(run) !== passed(current)) return passed(run);
   if (!passed(run)) return run.date > current.date;
   const [a, b] = [METRICS[metric].read(run), METRICS[metric].read(current)];
@@ -135,51 +133,37 @@ export function summarize(runs, metric) {
   const middle = values.length >> 1;
   const median = !values.length ? null : values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
   const best = passed.reduce((top, run) => (!top || isBetter(metric, spec.read(run), spec.read(top)) ? run : top), null);
-  const interventions = runs.map(run => run.autonomy.human_interventions).filter(value => value != null).sort((a, b) => a - b);
   return {
     runs: runs.length,
     experiments: new Set(runs.map(run => run.experiment_id)).size,
     passRate: runs.length ? runs.filter(run => run.quality_gate === 'passed').length / runs.length : null,
     notPassed: runs.filter(run => run.quality_gate !== 'passed').length,
     best, median,
-    medianInterventions: interventions.length ? interventions[interventions.length >> 1] : null,
-    selfHosted: new Set(runs.filter(run => run.autonomy.self_hosting_status === 'demonstrated').map(run => run.experiment_id)).size,
   };
 }
 
 // Distinct conditions in a set of rows. More than one value in any of them makes ranks an uncontrolled comparison.
-const BASIS = { decode_tok_s: 'decode_basis', prefill_tok_s: 'prefill_basis' };
-
-export function mixedConditions(runs, metric) {
+export function mixedConditions(runs) {
   const counts = {
     hardware: new Set(runs.map(run => run.hardware)).size,
     'target model': new Set(runs.map(run => run.target_model)).size,
     weights: new Set(runs.map(run => run.weights)).size,
     evaluation: new Set(runs.map(run => run.evaluation)).size,
     'comparison track': new Set(runs.map(run => run.comparison_track)).size,
+    profile: new Set(runs.map(run => run.profile)).size,
   };
-  // Throughput measured on different timing bases is not comparable.
-  if (BASIS[metric]) counts['timing basis'] = new Set(runs.map(run => run.metrics[BASIS[metric]]).filter(Boolean)).size;
   return Object.entries(counts).filter(([, count]) => count > 1).map(([name, count]) => ({ name, count }));
 }
 
-// The most populous combination of hardware, model, weights, evaluation, and track, as filters. For a throughput
-// metric it also fixes the most common timing basis within that cohort.
-export function largestCohort(runs, metric) {
-  const mostCommon = (items, keyOf) => {
-    const counts = new Map();
-    for (const item of items) counts.set(keyOf(item), (counts.get(keyOf(item)) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
-  };
-  const keyOf = run => JSON.stringify([run.hardware, run.target_model, run.weights, run.evaluation, run.comparison_track]);
-  const top = mostCommon(runs, keyOf);
+// The most populous combination of hardware, model, weights, evaluation, track, and profile, as filters.
+export function largestCohort(runs) {
+  const counts = new Map();
+  const keyOf = run => JSON.stringify([run.hardware, run.target_model, run.weights, run.evaluation, run.comparison_track, run.profile]);
+  for (const run of runs) counts.set(keyOf(run), (counts.get(keyOf(run)) ?? 0) + 1);
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
   if (!top) return {};
-  const [hardware, target_model, , evaluation, comparison_track] = JSON.parse(top[0]);
-  const cohort = runs.filter(run => keyOf(run) === top[0]);
-  const filters = { hardware: [hardware], target_model: [target_model], evaluation: [evaluation], comparison_track: [comparison_track] };
-  const basis = BASIS[metric] && mostCommon(cohort.filter(run => run.metrics[BASIS[metric]]), run => run.metrics[BASIS[metric]]);
-  if (metric === 'decode_tok_s' && basis) filters.decode_basis = [basis[0]];
-  return filters;
+  const [hardware, target_model, , evaluation, comparison_track, profile] = JSON.parse(top[0]);
+  return { hardware: [hardware], target_model: [target_model], evaluation: [evaluation], comparison_track: [comparison_track], profile: [profile] };
 }
 
 // Maps every experiment to the root of its derive chain.
@@ -239,21 +223,19 @@ export function deriveDeltas(runs, metric) {
     const child = bestOf(experiment);
     const base = bestOf(parent);
     const change = child && base && spec.read(base) ? ((spec.read(child) - spec.read(base)) / spec.read(base)) * 100 * (spec.better === 'higher' ? 1 : -1) : null;
-    const basisKey = BASIS[metric];
     const differs = child && base ? [
-      ...['hardware', 'evaluation', 'comparison_track'].filter(key => child[key] !== base[key]),
-      ...(basisKey && child.metrics[basisKey] !== base.metrics[basisKey] ? ['timing basis'] : []),
+      ...['hardware', 'evaluation', 'comparison_track', 'profile'].filter(key => child[key] !== base[key]),
     ] : [];
     return { experiment, parent, child, base, change, differs };
   });
 }
 
-const FLAGS = { includeNotPassed: 'notpassed', selfHosting: 'selfhosted' };
+const FLAGS = { includeNotPassed: 'notpassed' };
 
 export function stateToHash(state) {
   const defaults = defaultState();
   const params = new URLSearchParams();
-  for (const key of ['metric', 'view', 'tab', 'sort', 'groupBy', 'query', 'from', 'to']) {
+  for (const key of ['page', 'metric', 'view', 'tab', 'sort', 'groupBy', 'query', 'from', 'to']) {
     if (state[key] !== defaults[key]) params.set(key, state[key]);
   }
   if (state.frontier !== defaults.frontier) params.set('frontier', state.frontier ? '1' : '0');
@@ -266,6 +248,7 @@ export function hashToState(hash) {
   const state = defaultState();
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const choose = (key, allowed) => { const value = params.get(key); if (value && allowed.includes(value)) state[key] = value; };
+  choose('page', ['home', 'leaderboard', 'evaluate']);
   choose('metric', Object.keys(METRICS));
   choose('view', ['best', 'all']);
   choose('tab', ['leaderboard', 'trends']);

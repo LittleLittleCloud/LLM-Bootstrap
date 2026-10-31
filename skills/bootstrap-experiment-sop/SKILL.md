@@ -29,15 +29,15 @@ Each gate must hold before the next stage starts. If it does not, stop and say w
 | 1. Define | Mode-specific steps; [the planning reference](references/plan.md) for experiment content. | The check command reports no problems, the status is `frozen`, and no field is unresolved. |
 | 2. Freeze | Commit `experiment.json` on a codex/ branch and record its commit. | The commit exists before any engine work. An amendment is a new experiment with a reason. |
 | 3. Build | [The build reference](references/build.md), in a separate engine workspace. | The engine loads the target model and serves the endpoint the evaluation will call. |
-| 4. Evaluate | [The evaluation reference](references/evaluate.md) with the pinned evaluation. | The negative control of the evaluation is verified before any result is reported. |
-| 5. Report | Check each evaluation record, then write the interpretation and feedback for the results PR description. | Every acceptance threshold is marked passed, failed, or open, and the feedback is written. |
+| 4. Evaluate | [The evaluation reference](references/evaluate.md) with the pinned evaluation. | Every selected test is complete, or its failures are listed. No report is edited. |
+| 5. Report | Check each evaluation report, then write the interpretation and feedback for the results PR description. | Every acceptance threshold is marked passed, failed, or open, and the feedback is written. |
 | 6. Submit | Use bootstrap-submit-results to open a results PR against the LLM Bootstrap repository, separate from any implementation change. | The user authorized the PR; the PR is open. Merging is the maintainers' decision. |
 
 Keep implementation and results in separate changes. Publishing results does not imply acceptance and does not authorize a merge. Costly runs and operating-system changes need the user's authorization even when the experiment names them in scope.
 
 ## Workspace layout
 
-In the user's project workspace, keep one directory per experiment, `experiments/<experiment-id>/`, with `experiment.json` (the experiment's metadata, frozen before tuning), `evaluation/<YYYYMMDD-HHMMSS>.json` (one record per evaluation, written by the evaluation driver and named after its UTC start time), and `evidence/` for local-only raw evidence that is never committed. Only `experiment.json` and `evaluation/*.json` are submitted. Both files are flat JSON: top-level scalars and arrays of strings, no nested objects. The layout is defined in [the experiment protocol](references/experiment-protocol.md), so records can be submitted unchanged. Write `experiment.json` against `Experiment` in [the protocol schema](assets/schema/experiment-protocol.openapi.json); unresolved fields stay null until it is frozen.
+In the user's project workspace, keep one directory per experiment, `experiments/<experiment-id>/`, with `experiment.json` (the experiment's metadata, frozen before tuning), `evaluation/<subject>/<YYYYMMDD-HHMMSS>.json` (one report per evaluation run, exported by the evaluator page and named after its UTC start time; the subject is `candidate` or the name of a baseline engine of the experiment), and `evidence/` for local-only raw evidence that is never committed. Only `experiment.json` and `evaluation/<subject>/*.json` are submitted. `experiment.json` is flat JSON: top-level scalars and arrays of strings, no nested objects. A report is the evaluator's own document. The layout is defined in [the experiment protocol](references/experiment-protocol.md), so reports can be submitted unchanged. Write `experiment.json` against `Experiment` in [the protocol schema](assets/schema/experiment-protocol.openapi.json); unresolved fields stay null until it is frozen.
 
 ## Evaluations
 

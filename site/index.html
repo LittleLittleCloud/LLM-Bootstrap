@@ -3,69 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LLM Bootstrap leaderboard</title>
-  <meta name="description" content="Runs of LLM-built inference engines under frozen experiment contracts, with filters and trends.">
-  <link rel="stylesheet" href="css/style.css">
+  <title>LLM Bootstrap</title>
+  <meta name="description" content="Runs of LLM-built inference engines under frozen experiment contracts.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%232f5bea'/%3E%3C/svg%3E">
 </head>
 <body>
-  <div id="banner" class="banner" role="status" hidden></div>
-  <header class="top">
-    <h1>LLM Bootstrap leaderboard</h1>
-    <p class="lede">Runs of LLM-built inference engines under frozen experiment contracts. Filter by any condition, then compare ranks and follow trends over time.</p>
-  </header>
-
-  <div class="layout">
-    <aside class="filters" aria-label="Filters">
-      <div class="filters-head">
-        <h2>Filters</h2>
-        <button type="button" id="reset" class="link">Reset</button>
-      </div>
-      <label class="field">Search
-        <input id="query" type="search" placeholder="Experiment, engine, revision" autocomplete="off">
-      </label>
-      <div class="dates">
-        <label class="field">From <input id="from" type="date"></label>
-        <label class="field">To <input id="to" type="date"></label>
-      </div>
-      <label class="check"><input id="failed" type="checkbox"> Include runs that did not pass the quality gate</label>
-      <label class="check"><input id="selfhosted" type="checkbox"> Self-hosted runs only</label>
-      <div id="facets"></div>
-    </aside>
-
-    <main class="content">
-      <div id="notice" class="notice" hidden></div>
-      <section id="cards" class="cards" aria-label="Summary"></section>
-
-      <div class="toolbar">
-        <div class="tabs" role="tablist" aria-label="Views">
-          <button type="button" role="tab" id="tab-leaderboard" data-tab="leaderboard">Leaderboard</button>
-          <button type="button" role="tab" id="tab-trends" data-tab="trends">Trends</button>
-        </div>
-        <label class="inline">Rank by
-          <select id="metric"></select>
-        </label>
-        <label class="inline" id="view-wrap">Show
-          <select id="view">
-            <option value="best">Best run per experiment</option>
-            <option value="all">Every run</option>
-          </select>
-        </label>
-        <label class="inline" id="group-wrap" hidden>Group by
-          <select id="group"></select>
-        </label>
-        <label class="check" id="frontier-wrap" hidden><input id="frontier" type="checkbox"> Best so far</label>
-      </div>
-
-      <section id="panel-leaderboard" role="tabpanel" aria-labelledby="tab-leaderboard"></section>
-      <section id="panel-trends" role="tabpanel" aria-labelledby="tab-trends" hidden></section>
-    </main>
-  </div>
-
-  <footer class="foot">
-    <p>Only entries that passed a verified quality gate and reconciled their request counts are ranked. A rank is a controlled comparison only when hardware, target model, weights, evaluation, comparison track, and timing basis match. Matched comparisons and best-permitted-system comparisons are different tracks.</p>
-  </footer>
-
-  <dialog id="detail" aria-labelledby="detail-title"></dialog>
-  <script type="module" src="js/app.js"></script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

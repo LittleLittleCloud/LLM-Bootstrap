@@ -3,37 +3,39 @@
 // Usage: node tools/leaderboard/build-index.mjs <repo-root> --out <file> [--synthetic] [--require-validation]
 //
 // Reads experiments/<id>/experiment.json (an Experiment, or a DerivedExperiment that is resolved against its pinned base) and
-// every experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json (an EvaluationResult) under <repo-root>. A record pins its experiment.json
-// by sha256, a base is pinned by its derived experiment, and a record's name is its started_at in UTC. One entry is written for each
-// evaluation record.
+// every experiments/<id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json (an EvaluationReport) under <repo-root>. A report names no engine,
+// role, or machine: the subject directory says what was measured (candidate, or the name of a baseline engine of the experiment),
+// and the experiment says everything else. A report's name is its started_at in UTC. One entry is written for each report.
 //
 // The index is a projection for display. It is not a record: the documents under experiments/ stay authoritative.
-// Two rules are leaderboard policy, not schema facts:
-//   - quality_gate is the intelligence check that the engine still computes the model correctly. It is "passed" only when every
-//     benchmark was scored in full, the negative control was verified, generated programs ran in a restricted environment, and,
-//     for a candidate, every benchmark score is within two standard errors of the best score of the baselines of the same
-//     experiment. A baseline defines that reference, so it passes on verification alone. It is "failed" when a candidate scores
-//     lower than that tolerance allows, and "unverified" otherwise. Only "passed" entries are ranked.
-//   - Missing values stay null. They are never replaced by zero or inferred (an unavailable intervention log is not "none").
+// Rules that are leaderboard policy, not schema facts:
+//   - quality_gate says whether the endpoint can be trusted and the model still answers correctly. It is "failed" when a required
+//     conformance check fails, or when a candidate's accuracy (thinking, needle) is lower than a baseline's by more than two standard
+//     errors of the difference. It is "passed" when conformance holds, at least one accuracy was scored in full, and no candidate
+//     accuracy falls short. A baseline defines the reference, so it passes on verification alone. It is "unverified" otherwise.
+//     Only "passed" entries are ranked.
+//   - A report of a reduced profile, or one with an incomplete test, is preliminary.
+//   - Missing values stay null. They are never replaced by zero or inferred.
 //   - An experiment that pins an evaluation which no longer exists in evaluations/ is history, not a failure: it stays in the
-//     repository, its records are not listed, and they are named in retired_runs so they are never dropped silently.
+//     repository, its reports are not listed, and they are named in retired_runs so they are never dropped silently.
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { headlineMetrics, qualityScores } from '../../evaluations/endpoint-bench/src/report.js';
 import { isDerived, resolveExperiment } from '../../skills/bootstrap-experiment-sop/scripts/resolve-experiment.mjs';
 import { errorsOf, loadValidators } from '../../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 
-export const INDEX_VERSION = '0.5.0';
+export const INDEX_VERSION = '1.0.0';
 const EXPERIMENT_PATH = /^experiments\/([^/]+)\/experiment\.json$/;
 const EVALUATION_DIR = /^experiments\/([^/]+)\/evaluation\//;
-const EVALUATION_PATH = /^experiments\/([^/]+)\/evaluation\/(\d{8}-\d{6})\.json$/;
+const EVALUATION_PATH = /^experiments\/([^/]+)\/evaluation\/([^/]+)\/(\d{8}-\d{6})\.json$/;
 const sha256 = text => createHash('sha256').update(text).digest('hex');
-// Display precision only; the records keep the exact ratio of sums.
+// Display precision only; the reports keep the exact values.
 const numberOrNull = value => (typeof value === 'number' ? Math.round(value * 1e4) / 1e4 : null);
 const day = timestamp => new Date(timestamp).toISOString().slice(0, 10);
 
-// The file name of an evaluation record: its started_at in UTC.
+// The file name of a report: its started_at in UTC.
 export const evaluationStamp = timestamp => new Date(timestamp).toISOString().replace(/\.\d+Z$/, '').replace(/[-:]/g, '').replace('T', '-');
 
 export class IndexError extends Error {
@@ -43,41 +45,25 @@ export class IndexError extends Error {
   }
 }
 
-// The scored benchmarks of a record, from its flat intelligence.<benchmark>.<field> keys.
-export function benchmarksOf(result) {
-  const ids = new Set();
-  for (const key of Object.keys(result)) {
-    const match = /^intelligence\.(.+)\.(metric|score|num_samples|stderr)$/.exec(key);
-    if (match) ids.add(match[1]);
-  }
-  return [...ids].sort().map(id => ({
-    benchmark_id: id,
-    metric: result[`intelligence.${id}.metric`],
-    score: result[`intelligence.${id}.score`],
-    num_samples: result[`intelligence.${id}.num_samples`],
-    stderr: result[`intelligence.${id}.stderr`],
-  }));
-}
-
-export function qualityGate(result, baselines = []) {
-  const own = benchmarksOf(result);
-  if (!own.length || !(result.intelligence_complete && result.negative_control_verified && result.restricted_environment)) return 'unverified';
-  if (result.role === 'baseline') return 'passed';
-  for (const benchmark of own) {
-    const references = baselines.flatMap(baseline => benchmarksOf(baseline).filter(item => item.benchmark_id === benchmark.benchmark_id));
+// 'failed' when a required conformance check failed, 'unverified' without conformance or any scored accuracy.
+export function qualityGate(report, baselines = []) {
+  const conform = report.tests?.conform;
+  if (conform?.status !== 'complete') return 'unverified';
+  if (!conform.required_passed) return 'failed';
+  const own = qualityScores(report);
+  if (!own.length) return 'unverified';
+  if (report.subject === 'baseline') return 'passed';
+  for (const score of own) {
+    const references = baselines.flatMap(baseline => qualityScores(baseline).filter(item => item.benchmark_id === score.benchmark_id));
     if (!references.length) return 'unverified';
     const best = references.reduce((a, b) => (b.score > a.score ? b : a));
-    const tolerance = Math.max(2 * Math.hypot(benchmark.stderr, best.stderr), 1 / Math.min(benchmark.num_samples, best.num_samples));
-    if (benchmark.score < best.score - tolerance) return 'failed';
+    const tolerance = Math.max(2 * Math.hypot(score.stderr, best.stderr), 1 / Math.min(score.num_samples, best.num_samples));
+    if (score.score < best.score - tolerance) return 'failed';
   }
   return 'passed';
 }
 
-const levelMetric = (result, workload, concurrency, metric) => result[`throughput.${workload}.c${concurrency}.${metric}`];
-const multiTurnCacheRatio = result => result[Object.keys(result).find(key => /^throughput\.multi-turn\..*\.c\d+\.cache_hit_ratio$/.test(key))];
-const basisOrNull = value => (value === 'Not obtained' ? null : value);
-
-// files: Map of repository-relative POSIX path -> file text. evaluationIds: ids of the evaluations that exist now, or null to list every record.
+// files: Map of repository-relative POSIX path -> file text. evaluationIds: ids of the evaluations that exist now, or null to list every report.
 export function buildIndex(files, { synthetic = false, validators = null, evaluationIds = null } = {}) {
   const problems = [];
   const retired = [];
@@ -125,86 +111,75 @@ export function buildIndex(files, { synthetic = false, validators = null, evalua
   const entries = [];
   for (const experimentPath of [...files.keys()].filter(path => EXPERIMENT_PATH.test(path)).sort()) {
     const id = EXPERIMENT_PATH.exec(experimentPath)[1];
-    const experimentText = files.get(experimentPath);
     const recordPaths = [...files.keys()].filter(path => EVALUATION_DIR.test(path) && path.startsWith(`experiments/${id}/`)).sort();
-    for (const path of recordPaths) if (!EVALUATION_PATH.test(path)) fail(`${path} is not named <YYYYMMDD-HHMMSS>.json`);
-    // An experiment without evaluation records has nothing to list.
+    for (const path of recordPaths) if (!EVALUATION_PATH.test(path)) fail(`${path} is not named <subject>/<YYYYMMDD-HHMMSS>.json`);
+    // An experiment without reports has nothing to list.
     if (!recordPaths.length) continue;
-    const loaded = loadExperiment(experimentPath, experimentText, 0);
+    const loaded = loadExperiment(experimentPath, files.get(experimentPath), 0);
     if (!loaded) continue;
     const { experiment, parent } = loaded;
     if (experiment.experiment_id !== id) { fail(`${experimentPath} declares experiment_id ${experiment.experiment_id}, not its directory name ${id}`); continue; }
-    if (experiment.status !== 'frozen') { fail(`${experimentPath} is not frozen, so its evaluation records cannot be listed`); continue; }
+    if (experiment.status !== 'frozen') { fail(`${experimentPath} is not frozen, so its reports cannot be listed`); continue; }
     if (evaluationIds && !evaluationIds.has(experiment.evaluation_id)) { retired.push(...recordPaths); continue; }
 
-    const records = [];
+    const baselineEngines = new Map(experiment.baseline_engines.map(item => item.split('=')));
+    const reports = [];
     for (const path of recordPaths.filter(item => EVALUATION_PATH.test(item))) {
-      const result = parse(files.get(path), path);
-      if (!result || !validate('evaluation', 'EvaluationResult', result, path)) continue;
-      if (result.experiment_id !== id || result.experiment_sha256 !== sha256(experimentText)) {
-        fail(`${experimentPath} does not match the experiment_id and sha256 pinned in ${path}`);
+      const [, , subject, stamp] = EVALUATION_PATH.exec(path);
+      const report = parse(files.get(path), path);
+      if (!report || !validate('evaluation', 'EvaluationReport', report, path)) continue;
+      if (subject !== 'candidate' && !baselineEngines.has(subject)) {
+        fail(`${path}: the subject ${subject} is neither candidate nor a baseline engine of ${experimentPath}`);
         continue;
       }
-      if (evaluationStamp(result.started_at) !== EVALUATION_PATH.exec(path)[2]) {
-        fail(`${path} is not named after its started_at (${evaluationStamp(result.started_at)})`);
-        continue;
-      }
-      if (['evaluation_id', 'evaluation_revision', 'evaluation_sha256'].some(key => result[key] !== experiment[key])) {
+      if (evaluationStamp(report.started_at) !== stamp) { fail(`${path} is not named after its started_at (${evaluationStamp(report.started_at)})`); continue; }
+      if (['evaluation_id', 'evaluation_revision', 'evaluation_sha256'].some(key => report[key] !== experiment[key])) {
         fail(`${path} cites a different evaluation than ${experimentPath}`);
         continue;
       }
-      records.push({ path, result });
+      reports.push({ path, report: { ...report, subject: subject === 'candidate' ? 'candidate' : 'baseline' }, subject, stamp });
     }
-    const baselines = records.filter(item => item.result.role === 'baseline').map(item => item.result);
+    const baselines = reports.filter(item => item.report.subject === 'baseline').map(item => item.report);
 
-    for (const { path, result } of records) {
+    for (const { path, report, subject, stamp } of reports) {
       try {
-        const runId = `${id}/${EVALUATION_PATH.exec(path)[2]}`;
-        const benchmarks = benchmarksOf(result);
+        const metrics = headlineMetrics(report);
+        const candidate = subject === 'candidate';
+        const complete = report.status === 'complete' && report.profile === 'full';
         entries.push({
-          entry_id: `${runId}/${result.role}/${result.engine_name}`,
-          run_id: runId,
+          entry_id: `${id}/${subject}/${stamp}`,
+          run_id: `${id}/${stamp}`,
           experiment_id: id,
           derived_from: parent,
-          date: day(result.started_at),
-          role: result.role,
+          date: day(report.started_at),
+          role: candidate ? 'candidate' : 'baseline',
           comparison_track: experiment.baseline_comparison_track,
-          engine: { name: result.engine_name, revision: /^[0-9a-f]{40}$/.test(result.runtime_revision) ? result.runtime_revision : null },
-          hardware: result.environment_hardware_model,
+          engine: { name: candidate ? id : subject, revision: candidate ? null : baselineEngines.get(subject) },
+          hardware: experiment.hardware_platform,
           target_model: experiment.target_repository,
           weights: experiment.target_weights,
-          builder: result.role === 'candidate' ? experiment.builder_model : null,
+          builder: candidate ? experiment.builder_model : null,
           harness: `${experiment.harness_name} ${experiment.harness_version}`,
-          evaluation: result.evaluation_id,
+          evaluation: report.evaluation_id,
+          profile: report.profile,
+          endpoint_class: report.endpoint_class,
+          context_window: report.context_window,
           metrics: {
-            decode_tok_s: numberOrNull(result.decode_tokens_per_second),
-            decode_basis: basisOrNull(result.decode_basis),
-            prefill_tok_s: numberOrNull(result.prefill_tokens_per_second),
-            prefill_basis: basisOrNull(result.prefill_basis),
-            client_ttft_median_s: numberOrNull(result.client_ttft_median_seconds),
-            concurrent_output_tok_s: numberOrNull(levelMetric(result, 'concurrency.in512.out64', 8, 'output_tokens_per_second')),
-            cache_hit_ratio: numberOrNull(multiTurnCacheRatio(result)),
-            peak_memory_gib: numberOrNull(result.peak_memory_gib),
-            formal_repetitions: result.formal_passes_succeeded,
-            preliminary: result.preliminary,
-            requests_reconciled: result.requests_reconciled,
+            decode_tok_s: numberOrNull(metrics.decode_tokens_per_second_p50),
+            prefill_tok_s: numberOrNull(metrics.prefill_tokens_per_second_p50),
+            speed_tok_s: numberOrNull(metrics.speed_tokens_per_second_p50),
+            ttft_ms: numberOrNull(metrics.speed_ttft_ms_p50),
+            cache_hit_pct: numberOrNull(metrics.cache_hit_pct),
+            needle_accuracy: numberOrNull(metrics.needle_accuracy),
+            thinking_accuracy: numberOrNull(metrics.thinking_accuracy),
+            preliminary: !complete,
           },
-          quality_gate: qualityGate(result, baselines),
+          quality_gate: qualityGate(report, baselines),
           quality: {
-            benchmarks: benchmarks.length ? benchmarks.map(({ benchmark_id, score, stderr, num_samples }) => ({ benchmark_id, score: numberOrNull(score), stderr: numberOrNull(stderr), num_samples })) : null,
-            complete: benchmarks.length ? result.intelligence_complete : null,
-            negative_control_verified: benchmarks.length ? result.negative_control_verified : null,
+            conform_passed: metrics.conform_passed === null ? null : metrics.conform_passed === 1,
+            benchmarks: qualityScores(report).map(({ benchmark_id, score, stderr, num_samples }) => ({ benchmark_id, score: numberOrNull(score), stderr: numberOrNull(stderr), num_samples })),
           },
-          autonomy: {
-            human_interventions: numberOrNull(result.human_interventions),
-            hardware_hours: numberOrNull(result.hardware_hours),
-            builder_tokens: numberOrNull(result.builder_tokens),
-            elapsed_hours: numberOrNull(result.elapsed_hours),
-            self_hosting_status: result.self_hosting_status,
-            external_recovery_used: result.self_hosting_external_recovery_used ?? null,
-          },
-          deviations: result.environment_deviations,
-          evidence: [{ description: 'Per-request evidence, referenced by hash and not published', access: 'local-only' }],
+          failures: report.failures,
           source: { experiment: experimentPath, evaluation: path },
         });
       } catch (error) {
@@ -275,7 +250,7 @@ function main(argv) {
     try {
       const index = buildIndex(loadRecordFiles(root), { synthetic: argv.includes('--synthetic'), validators, evaluationIds: loadEvaluationIds(root) });
       writeFileSync(out, serializeIndex(index));
-      console.log(`wrote ${index.counts.entries} entries from ${index.counts.runs} evaluation records to ${out}`);
+      console.log(`wrote ${index.counts.entries} entries from ${index.counts.runs} evaluation reports to ${out}`);
       return 0;
     } catch (error) {
       console.error(error instanceof IndexError ? error.message : `error: ${error.message}`);

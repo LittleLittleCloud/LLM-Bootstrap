@@ -2,9 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLM Bootstrap evaluation protocol schemas",
-    "version": "0.4.0",
-    "summary": "Structural schemas for repository-owned evaluation definitions and the flat record of each evaluation.",
-    "description": "Machine-readable core of references/evaluation-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a definition at evaluations/<id>/evaluation.json against EvaluationDefinition and a record at experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json against EvaluationResult with any JSON Schema 2020-12 validator.\n\nEvaluations are owned by the LLM Bootstrap repository. Experiments select one by reference and never carry or change evaluation code. EvaluationResult is flat: every field is a top-level key whose value is a scalar or an array of strings. Settings, per-workload throughput, and per-benchmark scores are key families (setting.*, throughput.<workload>.c<concurrency>.*, intelligence.<benchmark>.*) rather than nested objects.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only the required shape. It does not show that scripts exist or match their hashes (the repository tests check that), that measurements are correct, or that arithmetic is consistent. Primitive schemas shared with the experiment protocol schema are kept identical, and a test enforces that."
+    "version": "1.0.0",
+    "summary": "Structural schemas for repository-owned evaluation definitions and the report a run of an evaluation produces.",
+    "description": "Machine-readable core of references/evaluation-protocol.md. This document defines no HTTP operations; the Schema Objects under components.schemas are the deliverable. Validate a definition at evaluations/<id>/evaluation.json against EvaluationDefinition and a report at experiments/<experiment-id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json against EvaluationReport with any JSON Schema 2020-12 validator.\n\nEvaluations are owned by the LLM Bootstrap repository. Experiments select one by reference and never carry or change evaluation code. A report is what the evaluator page exports after a person gives it an endpoint, an optional token, and a model. It asks for nothing about the machine, the experiment, or the engine, so it holds none of them: it holds what was measured, the evaluator revision that measured it, and every measured request without prompts or model output. A missing measurement is null, never zero.\n\nThe prose protocol and the skills remain authoritative. A passing validation shows only the required shape. It does not show that scripts exist or match their hashes (the repository tests check that), that measurements are correct, or that the numbers agree with one another. Primitive schemas shared with the experiment protocol schema are kept identical, and a test enforces that."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "paths": {},
@@ -18,57 +18,18 @@
         "pattern": "^[0-9a-f]{40}$"
       },
       "Timestamp": { "description": "RFC 3339 timestamp with an explicit UTC offset.", "type": "string", "format": "date-time" },
-      "NullableText": { "type": ["string", "null"], "pattern": "\\S" },
-      "NullableSha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
-      "NullableCommit": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
-      "NotApplicable": {
-        "description": "Explicit declaration that a field does not apply, as text that gives the reason.",
-        "type": "string",
-        "pattern": "^Not applicable: \\S"
-      },
-      "Unavailable": {
-        "description": "A provider or historical detail that cannot be obtained, as text that gives the reason. Never substitute a fabricated identifier.",
-        "type": "string",
-        "pattern": "^Unavailable: \\S"
-      },
-      "NotObtained": {
-        "description": "Marker for a metric that was not measured. A missing metric is never zero.",
-        "const": "Not obtained"
-      },
-      "Digest": {
-        "description": "A named file, executable, kernel, or image with its content hash, written name=sha256.",
-        "type": "string",
-        "pattern": "^[^=\\s][^=]*=[0-9a-f]{64}$"
-      },
-      "NoNullValues": {
-        "description": "Matches any JSON value containing no null at any depth. Used to require that a released definition has no unresolved fields.",
-        "anyOf": [
-          { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/NoNullValues" } },
-          { "type": "array", "items": { "$ref": "#/components/schemas/NoNullValues" } },
-          { "type": ["string", "number", "boolean"] }
-        ]
-      },
-      "CommitOrUnavailable": {
-        "anyOf": [{ "$ref": "#/components/schemas/GitCommitSha" }, { "$ref": "#/components/schemas/Unavailable" }]
-      },
-      "ScalarSettings": {
-        "description": "Settings as scalar key-value pairs, such as sampling parameters or the precision, speculation, and caching settings used.",
-        "type": "object",
-        "minProperties": 1,
-        "additionalProperties": { "type": ["string", "number", "boolean"] }
-      },
       "EvaluationId": {
         "description": "Kebab-case id that equals the directory name under evaluations/.",
         "type": "string",
         "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
       },
       "EvaluationScript": {
-        "description": "A script or code file that carries out part of the evaluation. It lives inside the evaluation's own directory in this repository and is checked against its hash before use.",
+        "description": "A script or code file that carries out part of the evaluation. It lives inside the evaluation's own directory in this repository and is checked against its hash. A driver runs the evaluation; an assertion evaluator verifies the driver against reference engines.",
         "type": "object",
         "additionalProperties": false,
         "required": ["role", "path", "sha256"],
         "properties": {
-          "role": { "enum": ["driver", "assertion-evaluator", "dependency-lock"] },
+          "role": { "enum": ["driver", "assertion-evaluator"] },
           "path": {
             "description": "Relative to evaluations/<evaluation_id>/. Absolute paths and parent traversal are not allowed.",
             "type": "string",
@@ -77,176 +38,107 @@
           "sha256": { "$ref": "#/components/schemas/Sha256" }
         }
       },
-      "DatasetPin": {
-        "description": "An external dataset, pinned by the hashes of the files the evaluation reads. The driver refuses a file that does not match.",
+      "Positive": { "type": "integer", "minimum": 1 },
+      "TimeoutSeconds": { "description": "Per request.", "type": "number", "exclusiveMinimum": 0 },
+      "EvaluationPlan": {
+        "description": "What each test of the evaluation does. The evaluator builds every request from it, so an experiment cannot change a test.",
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "source", "repository", "files"],
+        "required": ["conform", "speed", "thinking", "decode", "prefill", "needle", "cache"],
         "properties": {
-          "name": { "$ref": "#/components/schemas/Text" },
-          "source": { "enum": ["modelscope"] },
-          "repository": { "$ref": "#/components/schemas/Text" },
-          "files": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["path", "sha256"],
-              "properties": {
-                "path": { "$ref": "#/components/schemas/Text" },
-                "sha256": { "$ref": "#/components/schemas/Sha256" }
-              }
-            }
-          }
-        }
-      },
-      "ThroughputPlanItem": {
-        "description": "One throughput workload: an EvalScope perf shape run at one or more concurrency levels. Prompts are random tokens of exactly input_tokens, and every request must produce exactly output_tokens.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "kind", "input_tokens", "output_tokens", "levels"],
-        "properties": {
-          "id": { "$ref": "#/components/schemas/Text" },
-          "kind": { "enum": ["prefill", "decode", "concurrency", "multi-turn"] },
-          "input_tokens": { "description": "Prompt tokens of each request. For a multi-turn workload, the tokens added by each turn.", "type": "integer", "minimum": 1 },
-          "output_tokens": { "type": "integer", "minimum": 1 },
-          "turns": { "description": "Turns per conversation of a multi-turn workload.", "type": "integer", "minimum": 2 },
-          "timeout_seconds": { "type": "number", "exclusiveMinimum": 0 },
-          "levels": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["parallel", "number", "warmup"],
-              "properties": {
-                "parallel": { "description": "Closed-loop concurrency.", "type": "integer", "minimum": 1 },
-                "number": { "description": "Measured requests, or conversations for a multi-turn workload.", "type": "integer", "minimum": 1 },
-                "warmup": { "description": "Unmeasured requests sent first.", "type": "integer", "minimum": 0 }
-              }
-            }
-          }
-        }
-      },
-      "IntelligencePlanItem": {
-        "description": "One rule-scored benchmark. No judge model is involved. The score only shows that the engine still computes the model correctly.",
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "benchmark", "expected_samples", "sandbox", "metric"],
-        "properties": {
-          "id": { "$ref": "#/components/schemas/Text" },
-          "benchmark": { "description": "The EvalScope benchmark name.", "$ref": "#/components/schemas/Text" },
-          "limit": { "description": "Score only the first N samples. Omitted means all of them.", "type": "integer", "minimum": 1 },
-          "expected_samples": { "type": "integer", "minimum": 1 },
-          "sandbox": { "description": "Whether generated code runs in the Docker sandbox.", "type": "boolean" },
-          "metric": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "aggregation", "dimensions"],
+          "conform": {
+            "type": "object", "additionalProperties": false, "required": ["timeout_seconds"],
+            "properties": { "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" } }
+          },
+          "speed": {
+            "description": "Raw output speed from a short prompt: warm-up requests are excluded, each measured run is one value.",
+            "type": "object", "additionalProperties": false, "required": ["warmup", "runs", "max_tokens", "timeout_seconds", "prompt"],
             "properties": {
-              "name": { "$ref": "#/components/schemas/Text" },
-              "aggregation": { "$ref": "#/components/schemas/Text" },
-              "dimensions": { "type": "object", "additionalProperties": { "type": ["string", "number"] } }
+              "warmup": { "type": "integer", "minimum": 0 }, "runs": { "$ref": "#/components/schemas/Positive" },
+              "max_tokens": { "$ref": "#/components/schemas/Positive" }, "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" },
+              "prompt": { "$ref": "#/components/schemas/Text" }
+            }
+          },
+          "thinking": {
+            "description": "A medium reasoning task: name the row with the highest score. Asked with reasoning left on and with it switched off.",
+            "type": "object", "additionalProperties": false, "required": ["questions", "rows", "warmup", "max_tokens", "timeout_seconds"],
+            "properties": {
+              "questions": { "$ref": "#/components/schemas/Positive" }, "rows": { "type": "integer", "minimum": 2 },
+              "warmup": { "type": "integer", "minimum": 0 }, "max_tokens": { "$ref": "#/components/schemas/Positive" },
+              "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" }
+            }
+          },
+          "decode": {
+            "description": "Output speed at fixed output lengths.",
+            "type": "object", "additionalProperties": false, "required": ["lengths", "runs", "warmup", "timeout_seconds", "prompt"],
+            "properties": {
+              "lengths": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/components/schemas/Positive" } },
+              "runs": { "$ref": "#/components/schemas/Positive" }, "warmup": { "type": "integer", "minimum": 0 },
+              "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" }, "prompt": { "$ref": "#/components/schemas/Text" }
+            }
+          },
+          "prefill": {
+            "description": "Input sizes that fit the context window, each with the needle pinned near the end.",
+            "type": "object", "additionalProperties": false, "required": ["sizes", "needle_percent", "runs", "timeout_seconds"],
+            "properties": {
+              "sizes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/components/schemas/Positive" } },
+              "needle_percent": { "type": "integer", "minimum": 0, "maximum": 100 }, "runs": { "$ref": "#/components/schemas/Positive" },
+              "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" }
+            }
+          },
+          "needle": {
+            "description": "A document filling a percent of the context window hides one access code at each position.",
+            "type": "object", "additionalProperties": false, "required": ["fill_percent", "positions", "runs", "timeout_seconds"],
+            "properties": {
+              "fill_percent": { "type": "integer", "minimum": 10, "maximum": 100 },
+              "positions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer", "minimum": 0, "maximum": 100 } },
+              "runs": { "$ref": "#/components/schemas/Positive" }, "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" }
+            }
+          },
+          "cache": {
+            "description": "One question as a short prompt, a padded prompt, and a padded prompt with a nonce that defeats the cache.",
+            "type": "object", "additionalProperties": false, "required": ["padded_tokens", "repeats", "timeout_seconds"],
+            "properties": {
+              "padded_tokens": { "$ref": "#/components/schemas/Positive" }, "repeats": { "$ref": "#/components/schemas/Positive" },
+              "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" }
             }
           }
         }
       },
       "EvaluationDefinition": {
-        "description": "A repository-owned evaluation, stored at evaluations/<evaluation_id>/evaluation.json. Experiments select it by EvaluationReference and cannot change it. A draft keeps unresolved fields as null and cannot be used for formal runs. A released definition has no null, and a driver script.",
+        "description": "A repository-owned evaluation, stored at evaluations/<evaluation_id>/evaluation.json. Experiments select it by id, repository commit, and the hash of this file, and cannot change it. A draft cannot be used for formal runs. A released definition has at least one driver script, and every script exists and matches its hash.",
         "type": "object",
         "additionalProperties": false,
-        "required": ["evaluation_id", "status", "description", "result_schema", "harness", "datasets", "task_ids", "seed", "limits", "cache_policy", "sampling_settings", "scripts"],
+        "required": ["evaluation_id", "status", "description", "result_schema", "plan", "profiles", "scripts"],
         "properties": {
           "evaluation_id": { "$ref": "#/components/schemas/EvaluationId" },
           "status": { "enum": ["draft", "released"] },
           "description": { "$ref": "#/components/schemas/Text" },
-          "result_schema": {
-            "description": "The result document the scripts emit.",
-            "enum": ["EvaluationResult"]
-          },
-          "harness": {
-            "description": "The tool or agent harness that drives the endpoint under test, with its exact version, or not applicable when the driver script talks to the endpoint directly.",
-            "anyOf": [
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["name", "version"],
-                "properties": {
-                  "name": { "$ref": "#/components/schemas/NullableText" },
-                  "version": { "$ref": "#/components/schemas/NullableText" }
-                }
-              },
-              { "$ref": "#/components/schemas/NotApplicable" }
-            ]
-          },
-          "datasets": {
-            "description": "The external datasets, each pinned by the hashes of the files the evaluation reads, or not applicable when the workload is built into the scripts.",
-            "anyOf": [
-              {
-                "type": "array",
-                "minItems": 1,
-                "items": { "$ref": "#/components/schemas/DatasetPin" }
-              },
-              { "$ref": "#/components/schemas/NotApplicable" }
-            ]
-          },
-          "task_ids": {
-            "description": "Exact task identifiers: the workload and benchmark ids of the plan.",
-            "type": ["array", "null"],
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": { "$ref": "#/components/schemas/Text" }
-          },
-          "seed": { "type": ["integer", "null"] },
-          "limits": {
+          "result_schema": { "description": "The document a run produces.", "const": "EvaluationReport" },
+          "plan": { "$ref": "#/components/schemas/EvaluationPlan" },
+          "profiles": {
+            "description": "Named reductions of the plan. A report of a profile other than the full plan is preliminary evidence. The full plan is the one without a name.",
             "type": "object",
             "additionalProperties": false,
-            "required": ["context_window", "max_output_tokens_per_request", "timeout_seconds_per_task", "request_concurrency"],
             "properties": {
-              "context_window": { "type": ["integer", "null"], "minimum": 1 },
-              "max_output_tokens_per_request": { "type": ["integer", "null"], "minimum": 1 },
-              "timeout_seconds_per_task": { "type": ["number", "null"], "exclusiveMinimum": 0 },
-              "request_concurrency": { "type": ["integer", "null"], "minimum": 1 }
-            }
-          },
-          "cache_policy": { "$ref": "#/components/schemas/NullableText" },
-          "sampling_settings": { "anyOf": [{ "$ref": "#/components/schemas/ScalarSettings" }, { "type": "null" }] },
-          "plan": {
-            "description": "What a performance evaluation measures: the throughput workloads, the rule-scored intelligence benchmarks, and the sandbox for generated code. The driver builds every EvalScope invocation from it.",
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["throughput", "intelligence", "sandbox"],
-            "properties": {
-              "throughput": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/ThroughputPlanItem" } },
-              "intelligence": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/IntelligencePlanItem" } },
-              "sandbox": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["engine", "image", "network", "memory", "cpus"],
+              "quick": {
+                "type": "object", "additionalProperties": false,
                 "properties": {
-                  "engine": { "const": "docker" },
-                  "image": { "description": "Image pinned by digest.", "type": "string", "pattern": "@sha256:[0-9a-f]{64}$" },
-                  "network": { "const": "disabled" },
-                  "memory": { "$ref": "#/components/schemas/Text" },
-                  "cpus": { "type": "number", "exclusiveMinimum": 0 }
+                  "speed": { "type": "object" }, "thinking": { "type": "object" }, "decode": { "type": "object" },
+                  "prefill": { "type": "object" }, "needle": { "type": "object" }, "cache": { "type": "object" }
                 }
               }
             }
           },
-          "scripts": {
-            "type": ["array", "null"],
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/EvaluationScript" }
-          }
+          "scripts": { "type": "array", "items": { "$ref": "#/components/schemas/EvaluationScript" } }
         },
         "allOf": [
           {
             "if": { "required": ["status"], "properties": { "status": { "const": "released" } } },
             "then": {
-              "$ref": "#/components/schemas/NoNullValues",
               "properties": {
                 "scripts": {
+                  "minItems": 1,
                   "contains": { "required": ["role"], "properties": { "role": { "const": "driver" } } }
                 }
               }
@@ -254,175 +146,318 @@
           }
         ]
       },
-      "NumberOrNotObtained": {
-        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
+      "Millis": { "description": "Milliseconds, null when not measured.", "type": ["number", "null"], "minimum": 0 },
+      "Rate": { "description": "Tokens per second, null when not measured.", "type": ["number", "null"], "minimum": 0 },
+      "Ratio": { "description": "A share between 0 and 1, null when there was nothing to divide.", "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+      "TestStatus": {
+        "description": "complete: every planned request ran and succeeded. partial: some failed. error: all failed or the test could not run. cancelled: the person stopped the run. skipped: nothing in the plan fit this model.",
+        "enum": ["complete", "partial", "error", "cancelled", "skipped"]
       },
-      "NumberOrUnavailable": {
-        "anyOf": [{ "type": "number", "minimum": 0 }, { "$ref": "#/components/schemas/Unavailable" }]
+      "RunError": { "type": "object", "required": ["ok", "error"], "properties": { "ok": { "const": false }, "error": { "$ref": "#/components/schemas/Text" } } },
+      "ConformCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "required", "status", "detail"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Text" }, "title": { "$ref": "#/components/schemas/Text" }, "required": { "type": "boolean" },
+          "status": { "enum": ["pass", "fail", "skip"] }, "detail": { "type": "string" }
+        }
       },
-      "ThroughputBasis": {
-        "description": "Decode definitions are never mixed. For n-minus-1-intervals, tokens are the sum of N-1 over requests with at least two output tokens. Native command-level metrics are never relabeled N-1.",
+      "ConformResult": {
+        "description": "Whether the endpoint behaves like the API the other tests rely on. A failed required check means the other results cannot be trusted.",
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" },
+          "required_passed": { "type": "boolean" },
+          "checks": { "type": "array", "items": { "$ref": "#/components/schemas/ConformCheck" } }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "const": "complete" } }, "required": ["status"] }, "then": { "required": ["required_passed", "checks"] } }]
+      },
+      "SpeedRun": {
+        "description": "tokens_per_second is completion tokens over the streaming time after the first delta, reasoning included.",
         "anyOf": [
-          { "enum": ["processed-input-tokens", "n-minus-1-intervals", "native-command-timing", "native-speculative-multi-token"] },
-          { "$ref": "#/components/schemas/NotObtained" }
+          { "$ref": "#/components/schemas/RunError" },
+          {
+            "type": "object", "additionalProperties": false, "required": ["ok", "ttft_ms", "e2e_ms", "tokens_per_second", "completion_tokens", "reasoning_tokens"],
+            "properties": {
+              "ok": { "const": true }, "ttft_ms": { "$ref": "#/components/schemas/Millis" }, "e2e_ms": { "$ref": "#/components/schemas/Millis" },
+              "tokens_per_second": { "$ref": "#/components/schemas/Rate" }, "completion_tokens": { "type": "integer", "minimum": 0 },
+              "reasoning_tokens": { "type": "integer", "minimum": 0 }
+            }
+          }
         ]
       },
-      "EvaluationResult": {
-        "description": "The flat record one evaluation of one engine, measured serially on the same device. The pinned evaluation scripts emit it; do not edit it by hand. It is stored at experiments/<experiment_id>/evaluation/<YYYYMMDD-HHMMSS>.json, where the name is started_at in UTC. Every field is a top-level scalar or array of strings. Key families: setting.<name> (settings actually used, such as precision, speculation, caching, and memory limits); throughput.<workload>.c<concurrency>.<metric> (the measurement of every workload level, summed over the formal passes whose requests all met the workload's gates: every request succeeded, reached its target input length, and produced exactly its target output length; all rates are ratios of sums, never means of per-request speeds, and prefill and decode follow the definitions in the settings); intelligence.<benchmark>.<metric|score|num_samples|stderr> (rule-scored benchmark results that show the engine still computes the model correctly; they are compared with a baseline engine of the same model, not with an absolute floor, and are not numerical equivalence). A missing value is the string 'Not obtained', never zero. Per-request records stay in local-only evidence referenced by hash.",
+      "SpeedSummary": {
+        "type": "object", "additionalProperties": false,
+        "required": ["completed_runs", "failed_runs", "ttft_ms_p50", "ttft_ms_p90", "e2e_ms_p50", "e2e_ms_p90", "tokens_per_second_min", "tokens_per_second_p50", "tokens_per_second_max"],
+        "properties": {
+          "completed_runs": { "type": "integer", "minimum": 0 }, "failed_runs": { "type": "integer", "minimum": 0 },
+          "ttft_ms_p50": { "$ref": "#/components/schemas/Millis" }, "ttft_ms_p90": { "$ref": "#/components/schemas/Millis" },
+          "e2e_ms_p50": { "$ref": "#/components/schemas/Millis" }, "e2e_ms_p90": { "$ref": "#/components/schemas/Millis" },
+          "tokens_per_second_min": { "$ref": "#/components/schemas/Rate" }, "tokens_per_second_p50": { "$ref": "#/components/schemas/Rate" },
+          "tokens_per_second_max": { "$ref": "#/components/schemas/Rate" }
+        }
+      },
+      "SpeedResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "runs": { "type": "array", "items": { "$ref": "#/components/schemas/SpeedRun" } }, "summary": { "$ref": "#/components/schemas/SpeedSummary" }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "runs", "summary"] } }]
+      },
+      "ThinkingRun": {
+        "description": "A failed request counts as incorrect and non-compliant. answer is the response, cut to 80 characters.",
+        "anyOf": [
+          { "type": "object", "required": ["ok", "error", "correct", "compliant"], "properties": { "ok": { "const": false }, "error": { "$ref": "#/components/schemas/Text" }, "correct": { "const": false }, "compliant": { "const": false } } },
+          {
+            "type": "object", "additionalProperties": false, "required": ["ok", "correct", "compliant", "answer", "ttft_ms", "e2e_ms", "reasoning_tokens", "answer_tokens"],
+            "properties": {
+              "ok": { "const": true }, "correct": { "type": "boolean" }, "compliant": { "type": "boolean" }, "answer": { "type": "string", "maxLength": 80 },
+              "ttft_ms": { "$ref": "#/components/schemas/Millis" }, "e2e_ms": { "$ref": "#/components/schemas/Millis" },
+              "reasoning_tokens": { "type": "integer", "minimum": 0 }, "answer_tokens": { "type": "integer", "minimum": 0 }
+            }
+          }
+        ]
+      },
+      "ThinkingSummary": {
+        "type": "object", "additionalProperties": false,
+        "required": ["attempted", "correct", "failed", "accuracy", "stderr", "format_compliance", "ttft_ms_p50", "ttft_ms_p95", "e2e_ms_p50", "e2e_ms_p95", "reasoning_tokens_p50", "answer_tokens_p50"],
+        "properties": {
+          "attempted": { "type": "integer", "minimum": 0 }, "correct": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 },
+          "accuracy": { "$ref": "#/components/schemas/Ratio" },
+          "stderr": { "description": "Standard error of a proportion, sqrt(accuracy * (1 - accuracy) / attempted).", "type": ["number", "null"], "minimum": 0 },
+          "format_compliance": { "$ref": "#/components/schemas/Ratio" },
+          "ttft_ms_p50": { "$ref": "#/components/schemas/Millis" }, "ttft_ms_p95": { "$ref": "#/components/schemas/Millis" },
+          "e2e_ms_p50": { "$ref": "#/components/schemas/Millis" }, "e2e_ms_p95": { "$ref": "#/components/schemas/Millis" },
+          "reasoning_tokens_p50": { "type": ["number", "null"], "minimum": 0 }, "answer_tokens_p50": { "type": ["number", "null"], "minimum": 0 }
+        }
+      },
+      "ThinkingVariant": {
+        "type": "object", "additionalProperties": false, "required": ["runs", "summary"],
+        "properties": { "runs": { "type": "array", "items": { "$ref": "#/components/schemas/ThinkingRun" } }, "summary": { "$ref": "#/components/schemas/ThinkingSummary" } }
+      },
+      "ThinkingResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "variants": {
+            "description": "default leaves the endpoint's own thinking behavior; no-thinking sends chat_template_kwargs.enable_thinking = false.",
+            "type": "object", "additionalProperties": false, "required": ["default"],
+            "properties": { "default": { "$ref": "#/components/schemas/ThinkingVariant" }, "no-thinking": { "$ref": "#/components/schemas/ThinkingVariant" } }
+          }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "variants"] } }]
+      },
+      "DecodeRun": {
+        "description": "decode_tokens_per_second is visible output tokens minus one over the time from the first to the last visible token; reasoning is excluded.",
+        "anyOf": [
+          { "$ref": "#/components/schemas/RunError" },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["ok", "ttft_ms", "decode_ms", "total_latency_ms", "decode_tokens_per_second", "visible_tokens", "reasoning_tokens", "reasoning_required", "fixed_length", "finish_reason"],
+            "properties": {
+              "ok": { "const": true }, "ttft_ms": { "$ref": "#/components/schemas/Millis" }, "decode_ms": { "$ref": "#/components/schemas/Millis" },
+              "total_latency_ms": { "$ref": "#/components/schemas/Millis" }, "decode_tokens_per_second": { "$ref": "#/components/schemas/Rate" },
+              "visible_tokens": { "type": "integer", "minimum": 0 }, "reasoning_tokens": { "type": "integer", "minimum": 0 },
+              "reasoning_required": { "type": "boolean" }, "fixed_length": { "type": "boolean" }, "finish_reason": { "type": ["string", "null"] }
+            }
+          }
+        ]
+      },
+      "DecodeSummary": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "completed_runs", "failed_runs", "decode_tokens_per_second_p50", "decode_tokens_per_second_p90", "ttft_ms_p50", "ttft_ms_p90",
+          "total_latency_ms_p50", "total_latency_ms_p90", "visible_tokens_p50", "reasoning_tokens_p50", "reasoning_required", "fixed_length_applied"
+        ],
+        "properties": {
+          "completed_runs": { "type": "integer", "minimum": 0 }, "failed_runs": { "type": "integer", "minimum": 0 },
+          "decode_tokens_per_second_p50": { "$ref": "#/components/schemas/Rate" }, "decode_tokens_per_second_p90": { "$ref": "#/components/schemas/Rate" },
+          "ttft_ms_p50": { "$ref": "#/components/schemas/Millis" }, "ttft_ms_p90": { "$ref": "#/components/schemas/Millis" },
+          "total_latency_ms_p50": { "$ref": "#/components/schemas/Millis" }, "total_latency_ms_p90": { "$ref": "#/components/schemas/Millis" },
+          "visible_tokens_p50": { "type": ["number", "null"], "minimum": 0 }, "reasoning_tokens_p50": { "type": ["number", "null"], "minimum": 0 },
+          "reasoning_required": { "type": "boolean" },
+          "fixed_length_applied": { "description": "min_tokens and ignore_eos were sent, so the model could not stop early.", "type": "boolean" }
+        }
+      },
+      "DecodeResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "lengths": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["output_tokens", "runs", "summary"],
+              "properties": {
+                "output_tokens": { "$ref": "#/components/schemas/Positive" },
+                "runs": { "type": "array", "items": { "$ref": "#/components/schemas/DecodeRun" } }, "summary": { "$ref": "#/components/schemas/DecodeSummary" }
+              }
+            }
+          }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "lengths"] } }]
+      },
+      "RetrievalRun": {
+        "description": "input_tokens_per_second is the prompt tokens the endpoint reported over the time to the first token, so it includes network and queueing.",
+        "anyOf": [
+          { "type": "object", "required": ["ok", "error", "correct", "compliant"], "properties": { "ok": { "const": false }, "error": { "$ref": "#/components/schemas/Text" }, "correct": { "const": false }, "compliant": { "const": false } } },
+          {
+            "type": "object", "additionalProperties": false, "required": ["ok", "correct", "compliant", "answer", "prompt_tokens", "ttft_ms", "e2e_ms", "input_tokens_per_second"],
+            "properties": {
+              "ok": { "const": true }, "correct": { "type": "boolean" }, "compliant": { "type": "boolean" }, "answer": { "type": "string", "maxLength": 40 },
+              "prompt_tokens": { "type": ["integer", "null"], "minimum": 0 }, "ttft_ms": { "$ref": "#/components/schemas/Millis" },
+              "e2e_ms": { "$ref": "#/components/schemas/Millis" }, "input_tokens_per_second": { "$ref": "#/components/schemas/Rate" }
+            }
+          }
+        ]
+      },
+      "RetrievalSummary": {
+        "type": "object", "additionalProperties": false,
+        "required": ["attempted", "correct", "failed", "accuracy", "stderr", "format_compliance", "prompt_tokens_p50", "ttft_ms_p50", "ttft_ms_p90", "input_tokens_per_second_p50"],
+        "properties": {
+          "attempted": { "type": "integer", "minimum": 0 }, "correct": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 },
+          "accuracy": { "$ref": "#/components/schemas/Ratio" }, "stderr": { "type": ["number", "null"], "minimum": 0 }, "format_compliance": { "$ref": "#/components/schemas/Ratio" },
+          "prompt_tokens_p50": { "type": ["number", "null"], "minimum": 0 }, "ttft_ms_p50": { "$ref": "#/components/schemas/Millis" },
+          "ttft_ms_p90": { "$ref": "#/components/schemas/Millis" }, "input_tokens_per_second_p50": { "$ref": "#/components/schemas/Rate" }
+        }
+      },
+      "PrefillResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "sizes": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["input_tokens", "status", "runs", "summary"],
+              "properties": {
+                "input_tokens": { "$ref": "#/components/schemas/Positive" }, "status": { "$ref": "#/components/schemas/TestStatus" }, "reason": { "type": "string" },
+                "runs": { "type": "array", "items": { "$ref": "#/components/schemas/RetrievalRun" } }, "summary": { "$ref": "#/components/schemas/RetrievalSummary" }
+              }
+            }
+          }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial", "skipped"] } }, "required": ["status"] }, "then": { "required": ["config", "sizes"] } }]
+      },
+      "NeedleResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "positions": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["percent", "runs", "summary"],
+              "properties": {
+                "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+                "runs": { "type": "array", "items": { "$ref": "#/components/schemas/RetrievalRun" } }, "summary": { "$ref": "#/components/schemas/RetrievalSummary" }
+              }
+            }
+          },
+          "summary": { "$ref": "#/components/schemas/RetrievalSummary" }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "positions", "summary"] } }]
+      },
+      "CacheRequest": {
+        "anyOf": [
+          { "$ref": "#/components/schemas/RunError" },
+          {
+            "type": "object", "additionalProperties": false, "required": ["ok", "ttft_ms", "prompt_tokens", "cached_tokens", "correct", "e2e_ms"],
+            "properties": {
+              "ok": { "const": true }, "ttft_ms": { "$ref": "#/components/schemas/Millis" }, "prompt_tokens": { "type": ["integer", "null"], "minimum": 0 },
+              "cached_tokens": { "description": "As the endpoint reports it; null when it reports none.", "type": ["integer", "null"], "minimum": 0 },
+              "correct": { "type": "boolean" }, "e2e_ms": { "$ref": "#/components/schemas/Millis" }
+            }
+          }
+        ]
+      },
+      "CacheVariant": {
+        "type": "object", "additionalProperties": false, "required": ["cold", "warm", "summary"],
+        "properties": {
+          "cold": { "$ref": "#/components/schemas/CacheRequest" },
+          "warm": { "type": "array", "items": { "$ref": "#/components/schemas/CacheRequest" } },
+          "summary": {
+            "type": "object", "additionalProperties": false,
+            "required": ["cache_reported", "cache_hit_pct", "cold_ttft_ms", "warm_ttft_ms_p50", "ttft_reduction_pct", "prompt_tokens", "completed_runs", "failed_runs", "correct"],
+            "properties": {
+              "cache_reported": { "type": "boolean" },
+              "cache_hit_pct": { "description": "Cached tokens over prompt tokens of the repeats, as the endpoint reports them.", "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+              "cold_ttft_ms": { "$ref": "#/components/schemas/Millis" }, "warm_ttft_ms_p50": { "$ref": "#/components/schemas/Millis" },
+              "ttft_reduction_pct": { "type": ["number", "null"] }, "prompt_tokens": { "type": ["integer", "null"], "minimum": 0 },
+              "completed_runs": { "type": "integer", "minimum": 0 }, "failed_runs": { "type": "integer", "minimum": 0 }, "correct": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      },
+      "CacheResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "variants": {
+            "type": "object", "additionalProperties": false, "required": ["short", "padded", "busted"],
+            "properties": {
+              "short": { "$ref": "#/components/schemas/CacheVariant" }, "padded": { "$ref": "#/components/schemas/CacheVariant" },
+              "busted": { "$ref": "#/components/schemas/CacheVariant" }
+            }
+          }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "variants"] } }]
+      },
+      "EvaluationReport": {
+        "description": "What one run of the evaluation measured for one model of one endpoint. It is exported by the evaluator page and stored at experiments/<experiment-id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json, where the name is started_at in UTC and subject is candidate or the name of a baseline engine of the experiment. It pins the evaluation by id, repository commit, and definition hash, and must cite the evaluation of its experiment. Do not edit it by hand. The endpoint is recorded only as a class, never its address, and the token is never recorded. Only the tests that were selected appear under tests.",
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "evaluation_id", "evaluation_revision", "evaluation_sha256", "experiment_id", "experiment_revision", "experiment_sha256", "started_at",
-          "role", "engine_name", "runtime_revision", "artifacts", "commands",
-          "environment_hardware_model", "environment_os_version", "environment_toolchain", "environment_power_mode",
-          "environment_thermal_observations", "environment_exclusive_gpu", "environment_deviations",
-          "warmup_passes", "formal_passes_succeeded", "formal_passes_failed", "failures", "preliminary",
-          "prefill_tokens_per_second", "prefill_basis", "decode_tokens_per_second", "decode_basis", "client_ttft_median_seconds", "requests_reconciled",
-          "peak_memory_gib", "swap_out_delta_bytes",
-          "intelligence_complete", "negative_control_verified", "restricted_environment",
-          "evidence_sha256", "evidence_access_limitation",
-          "human_interventions", "builder_tokens", "elapsed_hours", "hardware_hours", "self_hosting_status"
+          "report_version", "evaluation_id", "evaluation_revision", "evaluation_sha256", "started_at", "finished_at", "endpoint_class", "model",
+          "profile", "seed", "context_window", "chars_per_token", "selected_tests", "status", "failures", "tests"
         ],
         "properties": {
-          "evaluation_id": { "description": "The evaluation that ran, with the repository commit and definition hash that pin it.", "$ref": "#/components/schemas/EvaluationId" },
+          "report_version": { "const": 1 },
+          "evaluation_id": { "$ref": "#/components/schemas/EvaluationId" },
           "evaluation_revision": { "$ref": "#/components/schemas/GitCommitSha" },
           "evaluation_sha256": { "$ref": "#/components/schemas/Sha256" },
-          "experiment_id": { "description": "The experiment this record belongs to, with the commit and file hash of its experiment.json when the evaluation ran.", "$ref": "#/components/schemas/Text" },
-          "experiment_revision": { "$ref": "#/components/schemas/GitCommitSha" },
-          "experiment_sha256": { "$ref": "#/components/schemas/Sha256" },
+          "build_dirty": { "description": "Present and true when the evaluator build had uncommitted changes, so evaluation_revision does not identify it.", "const": true },
           "started_at": { "$ref": "#/components/schemas/Timestamp" },
-          "role": { "enum": ["baseline", "candidate"] },
-          "engine_name": { "$ref": "#/components/schemas/Text" },
-          "runtime_revision": { "description": "Full commit of the engine, or 'Unavailable: reason'.", "$ref": "#/components/schemas/CommitOrUnavailable" },
-          "artifacts": {
-            "description": "Hashes of the deployed executables and kernels, as name=sha256. A checkout commit does not prove the deployed build.",
-            "type": "array",
-            "minItems": 1,
-            "items": { "$ref": "#/components/schemas/Digest" }
+          "finished_at": { "$ref": "#/components/schemas/Timestamp" },
+          "endpoint_class": { "description": "Where the endpoint is, as a class: loopback is this machine, private-network is a local network address, remote is anywhere else. The address itself is never recorded.", "enum": ["loopback", "private-network", "remote"] },
+          "model": { "$ref": "#/components/schemas/Text" },
+          "profile": { "description": "full is the whole plan; any other profile is a reduction and the report is preliminary evidence.", "enum": ["full", "quick"] },
+          "seed": { "description": "Seeds the generated questions and documents, so a run can be reproduced.", "type": "string", "pattern": "^[0-9a-f]{8}$" },
+          "context_window": {
+            "description": "The window the long-context tests were sized against: reported by the endpoint's model list, or assumed when it reports none.",
+            "type": "object", "additionalProperties": false, "required": ["tokens", "source"],
+            "properties": { "tokens": { "$ref": "#/components/schemas/Positive" }, "source": { "enum": ["models-metadata", "assumed"] } }
           },
-          "commands": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/Text" } },
-
-          "environment_hardware_model": { "description": "What was actually observed, which may differ from the experiment. Record deviations rather than hiding them.", "$ref": "#/components/schemas/Text" },
-          "environment_os_version": { "$ref": "#/components/schemas/Text" },
-          "environment_toolchain": { "$ref": "#/components/schemas/Text" },
-          "environment_power_mode": { "$ref": "#/components/schemas/Text" },
-          "environment_thermal_observations": { "$ref": "#/components/schemas/Text" },
-          "environment_exclusive_gpu": { "type": "boolean" },
-          "environment_deviations": {
-            "description": "Deviations from the experiment. Include any CPU fallback, offloading, SSD streaming, or multi-host participation.",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Text" }
+          "chars_per_token": { "description": "Characters per token of the generated documents, from one probe; null when the probe failed.", "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "compat": {
+            "description": "Request fields the endpoint rejected and the evaluator then changed, such as max_completion_tokens in place of max_tokens.",
+            "type": "object"
           },
-
-          "warmup_passes": { "description": "Unmeasured warm-up passes over the throughput plan.", "type": "integer", "minimum": 0 },
-          "formal_passes_succeeded": { "type": "integer", "minimum": 0 },
-          "formal_passes_failed": { "description": "Formal passes, and the intelligence part, that failed, timed out, or were interrupted.", "type": "integer", "minimum": 0 },
-          "failures": {
-            "description": "One description for every warm-up or formal pass or part that did not succeed.",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Text" }
-          },
-          "preliminary": { "description": "A single cohort is preliminary evidence, not a stability study.", "type": "boolean" },
-
-          "prefill_tokens_per_second": { "description": "Headline: the single-stream 2k-prompt workload, processed input tokens over time to first token.", "$ref": "#/components/schemas/NumberOrNotObtained" },
-          "prefill_basis": { "$ref": "#/components/schemas/ThroughputBasis" },
-          "decode_tokens_per_second": { "description": "Headline: the single-stream 128-token-context workload, output tokens minus one over time per output token.", "$ref": "#/components/schemas/NumberOrNotObtained" },
-          "decode_basis": { "$ref": "#/components/schemas/ThroughputBasis" },
-          "client_ttft_median_seconds": {
-            "description": "The median time from dispatch to the first output token of the 2k-token prefill workload, as EvalScope measures it.",
-            "$ref": "#/components/schemas/NumberOrNotObtained"
-          },
-          "requests_reconciled": {
-            "description": "Every throughput request in the formal passes succeeded and reached its target input and output lengths. Metrics are not complete until they do.",
-            "type": "boolean"
-          },
-          "peak_memory_gib": { "$ref": "#/components/schemas/NumberOrNotObtained" },
-          "swap_out_delta_bytes": {
-            "description": "Whole-machine swap-out delta over bracketed boundaries. It is not attributed to a process without evidence.",
-            "anyOf": [{ "type": "integer", "minimum": 0 }, { "$ref": "#/components/schemas/NotObtained" }]
-          },
-
-          "intelligence_complete": { "description": "Every benchmark in the pinned plan was scored on its expected samples.", "type": "boolean" },
-          "negative_control_verified": { "type": "boolean" },
-          "restricted_environment": {
-            "description": "True only if the control showed that generated programs ran without network access and with bounded resources.",
-            "type": "boolean"
-          },
-
-          "evidence_sha256": { "description": "Hash of the local-only per-request evidence file: EvalScope summaries, gate outcomes, and seeds, with no prompts or model output.", "$ref": "#/components/schemas/Sha256" },
-          "evidence_access_limitation": { "$ref": "#/components/schemas/Text" },
-
-          "human_interventions": { "description": "Count of human interventions so far, or 'Unavailable: reason'. Unavailable historical data is never inferred as none.", "$ref": "#/components/schemas/NumberOrUnavailable" },
-          "builder_tokens": { "$ref": "#/components/schemas/NumberOrUnavailable" },
-          "elapsed_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" },
-          "hardware_hours": { "$ref": "#/components/schemas/NumberOrUnavailable" },
-
-          "self_hosting_status": {
-            "description": "Self-hosting requires the builder's inference to move onto the generated engine. Improving an engine while still using an unrelated hosted builder is engine construction, not self-hosting.",
-            "enum": ["not-in-scope", "not-demonstrated", "demonstrated"]
-          },
-          "self_hosting_transition_at": { "$ref": "#/components/schemas/Timestamp" },
-          "self_hosting_builder_matches_target": { "type": "boolean" },
-          "self_hosting_routing": { "description": "The actual harness endpoint routing observed after the transition.", "$ref": "#/components/schemas/Text" },
-          "self_hosting_external_recovery_used": { "description": "True means the run was not uninterrupted self-hosting.", "type": "boolean" },
-          "self_hosting_evidence_sha256": { "description": "Hash of local-only evidence of development steps executed through the generated engine. A successful chat alone is not enough.", "$ref": "#/components/schemas/Sha256" }
-        },
-        "patternProperties": {
-          "^setting\\.[A-Za-z0-9_.-]+$": { "type": ["string", "number", "boolean"] },
-          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.(prefill_tokens_per_second|decode_tokens_per_second|ttft_median_seconds|output_tokens_per_second|total_tokens_per_second|requests_per_second|pass_tokens_per_second_stddev)$": {
-            "$ref": "#/components/schemas/NumberOrNotObtained"
-          },
-          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.cache_hit_ratio$": {
-            "description": "Cached input tokens over input tokens as the engine reports them. Not obtained when the engine reports no cached tokens.",
-            "anyOf": [{ "type": "number", "minimum": 0, "maximum": 1 }, { "$ref": "#/components/schemas/NotObtained" }]
-          },
-          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.(requests|succeeded_requests)$": {
-            "description": "Formal requests dispatched, including failures, and those EvalScope counted as successful.",
-            "type": "integer",
-            "minimum": 0
-          },
-          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.(first_turn_ttft_seconds|subsequent_turn_ttft_seconds)$": {
-            "description": "Mean time to the first token of the cold first turn and of the later turns of a multi-turn workload.",
-            "type": "number",
-            "minimum": 0
-          },
-          "^throughput\\.[a-z0-9][a-z0-9._-]*\\.c[1-9][0-9]*\\.pass_tokens_per_second$": {
-            "description": "The workload's headline tokens per second for each pass that met the gates.",
-            "type": "array",
-            "minItems": 1,
-            "items": { "type": "number", "minimum": 0 }
-          },
-          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.metric$": { "$ref": "#/components/schemas/Text" },
-          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.score$": { "type": "number", "minimum": 0, "maximum": 1 },
-          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.num_samples$": {
-            "description": "The denominator, including samples the model failed to answer.",
-            "type": "integer",
-            "minimum": 1
-          },
-          "^intelligence\\.[a-z0-9][a-z0-9._-]*\\.stderr$": {
-            "description": "Standard error of a proportion, sqrt(score * (1 - score) / num_samples).",
-            "type": "number",
-            "minimum": 0
+          "selected_tests": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["conform", "speed", "thinking", "decode", "prefill", "needle", "cache"] } },
+          "status": { "description": "complete only when every selected test is complete.", "enum": ["complete", "partial", "error", "cancelled"] },
+          "failures": { "description": "One line for each selected test that was not complete.", "type": "array", "items": { "$ref": "#/components/schemas/Text" } },
+          "tests": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "conform": { "$ref": "#/components/schemas/ConformResult" }, "speed": { "$ref": "#/components/schemas/SpeedResult" },
+              "thinking": { "$ref": "#/components/schemas/ThinkingResult" }, "decode": { "$ref": "#/components/schemas/DecodeResult" },
+              "prefill": { "$ref": "#/components/schemas/PrefillResult" }, "needle": { "$ref": "#/components/schemas/NeedleResult" },
+              "cache": { "$ref": "#/components/schemas/CacheResult" }
+            }
           }
         },
         "allOf": [
           {
-            "if": { "required": ["formal_passes_failed"], "properties": { "formal_passes_failed": { "minimum": 1 } } },
-            "then": { "properties": { "failures": { "minItems": 1 } } }
-          },
-          {
-            "if": { "required": ["formal_passes_succeeded"], "properties": { "formal_passes_succeeded": { "maximum": 1 } } },
-            "then": { "properties": { "preliminary": { "const": true } } }
-          },
-          {
-            "if": { "required": ["self_hosting_status"], "properties": { "self_hosting_status": { "const": "demonstrated" } } },
-            "then": {
-              "required": [
-                "self_hosting_transition_at", "self_hosting_builder_matches_target", "self_hosting_routing",
-                "self_hosting_external_recovery_used", "self_hosting_evidence_sha256"
-              ],
-              "properties": { "self_hosting_builder_matches_target": { "const": true } }
-            }
+            "if": { "required": ["status"], "properties": { "status": { "const": "complete" } } },
+            "then": { "properties": { "failures": { "maxItems": 0 } } },
+            "else": { "properties": { "failures": { "minItems": 1 } } }
           }
         ]
       }

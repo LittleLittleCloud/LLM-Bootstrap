@@ -1,38 +1,35 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   collapse, defaultState, deriveDeltas, facetCounts, filterRuns, frontier, hashToState, largestCohort, lineageRoots,
   mixedConditions, orderRows, rankRuns, stateToHash, summarize, trendSeries, unrankedReason,
-} from '../site/js/model.js';
+} from '../site/src/lib/model.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const site = join(root, 'site');
-const mock = JSON.parse(readFileSync(join(site, 'data', 'leaderboard.mock.json'), 'utf8'));
+const mock = JSON.parse(readFileSync(join(site, 'public', 'data', 'leaderboard.mock.json'), 'utf8'));
 
 let counter = 0;
-const metrics = (patch = {}) => ({
-  decode_tok_s: 100, decode_basis: 'n-minus-1-intervals', prefill_tok_s: 1000, prefill_basis: 'processed-input-tokens',
-  client_ttft_median_s: 0.2, application_duration_s: 500, peak_memory_gib: 10, formal_repetitions: 3, preliminary: false,
-  requests_reconciled: true, ...patch,
-});
 const entry = (overrides = {}) => {
   counter += 1;
   return {
-    entry_id: `r${counter}/candidate/eng`, run_id: `r${counter}`, experiment_id: 'e1', derived_from: null, date: '2026-07-01', role: 'candidate',
-    comparison_track: 'matched-configuration', engine: { name: 'eng', revision: 'a'.repeat(40) }, hardware: 'hw1', target_model: 'm1',
-    weights: 'q4', builder: 'b1', harness: 'h 1', evaluation: 'ev1', metrics: metrics(), quality_gate: 'passed',
-    quality: { application_passed: 20, application_total: 20, negative_control_verified: true },
-    autonomy: { human_interventions: 1, hardware_hours: 1, builder_tokens: 1e6, elapsed_hours: 2, self_hosting_status: 'not-in-scope', external_recovery_used: null },
-    deviations: [], evidence: [], source: { experiment: 'x', evaluation: 'y' }, ...overrides,
+    entry_id: `e${counter}/candidate/eng`, run_id: `r${counter}`, experiment_id: 'e1', derived_from: null, date: '2026-07-01', role: 'candidate',
+    comparison_track: 'matched-configuration', engine: { name: 'eng', revision: null }, hardware: 'hw1', target_model: 'm1', weights: 'q4', builder: 'b1',
+    harness: 'h 1', evaluation: 'ev1', profile: 'full', endpoint_class: 'loopback', context_window: { tokens: 32768, source: 'models-metadata' },
+    metrics: {
+      decode_tok_s: 100, prefill_tok_s: 1000, speed_tok_s: 98, ttft_ms: 200, cache_hit_pct: 90, needle_accuracy: 1, thinking_accuracy: 1, preliminary: false,
+    },
+    quality_gate: 'passed', quality: { conform_passed: true, benchmarks: [] }, failures: [], source: { experiment: 'x', evaluation: 'y' }, ...overrides,
   };
 };
-const decode = (value, extra = {}) => entry({ metrics: metrics({ decode_tok_s: value, client_ttft_median_s: 100 / value }), ...extra });
+const decode = (value, extra = {}) => entry({ metrics: { ...entry().metrics, decode_tok_s: value, ttft_ms: 20000 / value }, ...extra });
 
 test('the synthetic demo index is flagged, internally consistent, and covers the awkward cases', () => {
   assert.equal(mock.synthetic, true);
+  assert.equal(mock.schema_version, '1.0.0');
   assert.equal(mock.counts.entries, mock.entries.length);
   assert.equal(new Set(mock.entries.map(e => e.entry_id)).size, mock.entries.length);
   assert.equal(new Set(mock.entries.map(e => e.run_id)).size, mock.counts.runs);
@@ -43,27 +40,37 @@ test('the synthetic demo index is flagged, internally consistent, and covers the
     assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(['passed', 'failed', 'unverified'].includes(e.quality_gate));
     assert.ok(['baseline', 'candidate'].includes(e.role));
+    assert.ok(['full', 'quick'].includes(e.profile));
+    assert.equal(e.evaluation, 'endpoint-bench');
+    assert.ok(['loopback', 'private-network', 'remote'].includes(e.endpoint_class));
+    assert.ok(e.context_window.tokens > 0);
     if (e.derived_from) {
       assert.ok(experiments.has(e.derived_from), `${e.entry_id} derives from an unknown experiment`);
       // The protocol forbids changing the target model in a derived experiment.
       assert.equal(models.get(e.derived_from), e.target_model, `${e.experiment_id} changes the target model`);
     }
     if (e.role === 'baseline') assert.equal(e.builder, null);
+    if (e.quality_gate === 'passed') assert.equal(e.quality.conform_passed, true, `${e.entry_id} passed without conformance`);
   }
   assert.ok(mock.entries.some(e => e.quality_gate === 'failed'));
   assert.ok(mock.entries.some(e => e.quality_gate === 'unverified'));
-  assert.ok(mock.entries.some(e => e.autonomy.human_interventions === null), 'an unavailable intervention log stays null');
-  assert.ok(new Set(mock.entries.map(e => e.metrics.decode_basis).filter(Boolean)).size >= 2, 'more than one decode timing basis');
+  assert.ok(mock.entries.some(e => e.metrics.decode_tok_s === null), 'a missing measurement stays null');
+  assert.ok(mock.entries.some(e => e.profile === 'quick'));
+  assert.doesNotMatch(JSON.stringify(mock), /autonomy|human_interventions|peak_memory|\b(?:\d{1,3}\.){3}\d{1,3}\b/);
 });
 
-test('the page loads nothing from outside the site and builds the DOM without markup injection', () => {
+test('the page loads nothing from outside the site and never injects markup', () => {
   const html = readFileSync(join(site, 'index.html'), 'utf8');
   assert.doesNotMatch(html, /(?:src|href)="(?:https?:)?\/\//);
-  for (const [, path] of html.matchAll(/(?:src|href)="([^"#]+)"/g)) assert.ok(existsSync(join(site, path)), `missing ${path}`);
-  for (const file of readdirSync(join(site, 'js'))) {
-    const code = readFileSync(join(site, 'js', file), 'utf8');
-    assert.doesNotMatch(code, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function/, file);
-    assert.doesNotMatch(code, /https?:\/\/(?!www\.w3\.org)[a-z0-9]/i, `${file} references an external URL`);
+  for (const file of readdirSync(join(site, 'src'), { recursive: true }).filter(name => /\.(?:jsx?|css)$/.test(name))) {
+    const code = readFileSync(join(site, 'src', file), 'utf8');
+    assert.doesNotMatch(code, /innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML|document\.write|\beval\(|new Function/, file);
+    assert.doesNotMatch(code, /https?:\/\/(?!www\.w3\.org|github\.com\/LittleLittleCloud\/LLM-Bootstrap|127\.0\.0\.1)[a-z0-9]/i, `${file} references an external URL`);
+  }
+  // The evaluator runs in the page, so it follows the same rules. It stores nothing and sends nothing but the requests of the test.
+  const evaluator = join(root, 'evaluations', 'endpoint-bench');
+  for (const file of readdirSync(evaluator, { recursive: true }).filter(name => name.endsWith('.js'))) {
+    assert.doesNotMatch(readFileSync(join(evaluator, file), 'utf8'), /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function|localStorage|sendBeacon|XMLHttpRequest|WebSocket/, file);
   }
 });
 
@@ -78,8 +85,8 @@ test('entries that did not pass the gate are hidden by default, and a facet\'s c
   assert.deepEqual([...facetCounts(runs, state, 'builder')], [['b1', 1], ['b2', 1]]);
   assert.equal(filterRuns(runs, { ...defaultState(), query: 'NOPE' }).length, 0);
   assert.equal(filterRuns(runs, { ...defaultState(), from: '2026-07-02' }).length, 0);
-  const hosted = [entry({ autonomy: { ...entry().autonomy, self_hosting_status: 'demonstrated' } }), entry()];
-  assert.equal(filterRuns(hosted, { ...defaultState(), selfHosting: true }).length, 1);
+  const quick = [entry({ profile: 'quick' }), entry()];
+  assert.equal(filterRuns(quick, { ...defaultState(), filters: { profile: ['quick'] } }).length, 1);
 });
 
 test('ranking uses competition ranks and honors direction, and unranked entries say why', () => {
@@ -88,17 +95,15 @@ test('ranking uses competition ranks and honors direction, and unranked entries 
   const c = decode(90);
   const failed = decode(500, { quality_gate: 'failed' });
   const unverified = decode(400, { quality_gate: 'unverified' });
-  const unreconciled = entry({ metrics: metrics({ decode_tok_s: 300, requests_reconciled: false }) });
-  const missing = entry({ metrics: metrics({ decode_tok_s: null, decode_basis: null }) });
-  const ranks = rankRuns([c, failed, b, a, unverified, unreconciled, missing], 'decode_tok_s');
+  const missing = entry({ metrics: { ...entry().metrics, decode_tok_s: null } });
+  const ranks = rankRuns([c, failed, b, a, unverified, missing], 'decode_tok_s');
   assert.deepEqual([a, b, c].map(r => ranks.get(r)), [1, 1, 3]);
   assert.equal(ranks.size, 3);
   assert.match(unrankedReason(failed, 'decode_tok_s'), /Failed the quality gate/);
-  assert.match(unrankedReason(unverified, 'decode_tok_s'), /not verified/);
-  assert.match(unrankedReason(unreconciled, 'decode_tok_s'), /not reconciled/);
-  assert.match(unrankedReason(missing, 'decode_tok_s'), /No Decode tok\/s was obtained/);
+  assert.match(unrankedReason(unverified, 'decode_tok_s'), /could not be verified/);
+  assert.match(unrankedReason(missing, 'decode_tok_s'), /No Decode tok\/s was measured/);
   assert.equal(unrankedReason(a, 'decode_tok_s'), null);
-  const lower = rankRuns([a, c], 'client_ttft_median_s');
+  const lower = rankRuns([a, c], 'ttft_ms');
   assert.ok(lower.get(a) < lower.get(c), 'a lower TTFT must rank first');
   assert.deepEqual(orderRows([c, failed, a], rankRuns([c, failed, a], 'decode_tok_s'), 'rank'), [a, c, failed]);
 });
@@ -117,24 +122,18 @@ test('collapsing keeps the best entry per experiment and shows each baseline onc
   assert.equal(kept.find(e => e.role === 'baseline').metrics.decode_tok_s, 95);
 });
 
-test('summaries, mixed-condition detection (including timing basis), and the largest cohort', () => {
+test('summaries, mixed-condition detection (including the profile), and the largest cohort', () => {
   const runs = [decode(100), decode(200, { experiment_id: 'e2' }), decode(50, { quality_gate: 'failed' })];
   const summary = summarize(runs, 'decode_tok_s');
   assert.deepEqual([summary.runs, summary.experiments, summary.notPassed], [3, 2, 1]);
   assert.equal(summary.median, 150);
   assert.equal(summary.best.metrics.decode_tok_s, 200);
   assert.equal(Math.round(summary.passRate * 100), 67);
-  assert.deepEqual(mixedConditions(runs, 'decode_tok_s'), []);
-  const native = decode(70, { metrics: metrics({ decode_tok_s: 70, decode_basis: 'native-command-timing' }) });
-  assert.deepEqual(mixedConditions([...runs, native], 'decode_tok_s'), [{ name: 'timing basis', count: 2 }]);
-  assert.deepEqual(mixedConditions([...runs, native], 'peak_memory_gib'), [], 'timing basis only matters for throughput');
-  assert.deepEqual(mixedConditions([...runs, entry({ weights: 'q8' })], 'client_ttft_median_s'), [{ name: 'weights', count: 2 }]);
-  const cohort = largestCohort([...runs, native, entry({ hardware: 'hw2' })], 'decode_tok_s');
-  assert.deepEqual(cohort, {
-    hardware: ['hw1'], target_model: ['m1'], evaluation: ['ev1'], comparison_track: ['matched-configuration'], decode_basis: ['n-minus-1-intervals'],
-  });
-  assert.equal('decode_basis' in largestCohort(runs, 'peak_memory_gib'), false);
-  assert.equal(summarize([entry({ autonomy: { ...entry().autonomy, human_interventions: null } })], 'decode_tok_s').medianInterventions, null);
+  assert.deepEqual(mixedConditions(runs), []);
+  assert.deepEqual(mixedConditions([...runs, entry({ profile: 'quick' })]), [{ name: 'profile', count: 2 }]);
+  assert.deepEqual(mixedConditions([...runs, entry({ weights: 'q8' })]), [{ name: 'weights', count: 2 }]);
+  const cohort = largestCohort([...runs, entry({ hardware: 'hw2' }), entry({ profile: 'quick' })]);
+  assert.deepEqual(cohort, { hardware: ['hw1'], target_model: ['m1'], evaluation: ['ev1'], comparison_track: ['matched-configuration'], profile: ['full'] });
 });
 
 test('lineage roots, trend series, and a best-so-far frontier that ignores unranked entries', () => {
@@ -144,7 +143,7 @@ test('lineage roots, trend series, and a best-so-far frontier that ignores unran
     decode(80, { experiment_id: 'r-d1', derived_from: 'r', date: '2026-07-01' }),
     decode(70, { experiment_id: 'r-d2', derived_from: 'r-d1', date: '2026-08-01' }),
     decode(90, { experiment_id: 'q', date: '2026-07-15', quality_gate: 'failed' }),
-    entry({ experiment_id: 'q', date: '2026-07-16', metrics: metrics({ decode_tok_s: 95, requests_reconciled: false }) }),
+    decode(95, { experiment_id: 'q', date: '2026-07-16', quality_gate: 'unverified' }),
   ];
   const roots = lineageRoots(runs);
   assert.deepEqual(['r', 'r-d1', 'r-d2', 'q'].map(e => roots.get(e)), ['r', 'r', 'r', 'q']);
@@ -154,25 +153,26 @@ test('lineage roots, trend series, and a best-so-far frontier that ignores unran
   assert.deepEqual(frontier(runs, 'decode_tok_s').map(p => p.value), [60, 80]);
 });
 
-test('derived experiments are compared with their base, with positive meaning better, and a changed timing basis is flagged', () => {
+test('derived experiments are compared with their base, with positive meaning better, and a changed profile is flagged', () => {
   const runs = [decode(100, { experiment_id: 'base' }), decode(125, { experiment_id: 'child', derived_from: 'base', hardware: 'hw2' })];
   const [fast] = deriveDeltas(runs, 'decode_tok_s');
   assert.equal(Math.round(fast.change), 25);
   assert.deepEqual(fast.differs, ['hardware']);
-  const slower = [entry({ experiment_id: 'base' }), entry({ experiment_id: 'child', derived_from: 'base', metrics: metrics({ client_ttft_median_s: 0.25 }) })];
-  assert.equal(Math.round(deriveDeltas(slower, 'client_ttft_median_s')[0].change), -25);
-  assert.ok(deriveDeltas(runs, 'client_ttft_median_s')[0].change > 0, 'a lower TTFT is better');
+  const slower = [entry({ experiment_id: 'base' }), entry({ experiment_id: 'child', derived_from: 'base', metrics: { ...entry().metrics, ttft_ms: 250 } })];
+  assert.equal(Math.round(deriveDeltas(slower, 'ttft_ms')[0].change), -25);
+  assert.ok(deriveDeltas(runs, 'ttft_ms')[0].change > 0, 'a lower TTFT is better');
   assert.equal(deriveDeltas(runs.slice(1), 'decode_tok_s')[0].change, null, 'no base entry, no comparison');
-  const rebased = [decode(100, { experiment_id: 'base' }), decode(125, { experiment_id: 'child', derived_from: 'base', metrics: metrics({ decode_tok_s: 125, decode_basis: 'native-command-timing' }) })];
-  assert.deepEqual(deriveDeltas(rebased, 'decode_tok_s')[0].differs, ['timing basis']);
+  const reduced = [decode(100, { experiment_id: 'base' }), decode(125, { experiment_id: 'child', derived_from: 'base', profile: 'quick' })];
+  assert.deepEqual(deriveDeltas(reduced, 'decode_tok_s')[0].differs, ['profile']);
 });
 
 test('the URL hash round-trips the view state and ignores unknown or malformed values', () => {
   const state = {
-    ...defaultState(), metric: 'client_ttft_median_s', tab: 'trends', groupBy: 'engine', frontier: false, includeNotPassed: true, selfHosting: true,
-    query: 'a&b=c', from: '2026-06-01', to: '2026-09-30', filters: { hardware: ['Mock · 48 GiB', 'x'], role: ['baseline'] },
+    ...defaultState(), page: 'leaderboard', metric: 'ttft_ms', tab: 'trends', groupBy: 'engine', frontier: false, includeNotPassed: true,
+    query: 'a&b=c', from: '2026-06-01', to: '2026-09-30', filters: { hardware: ['Mock · 48 GiB', 'x'], role: ['baseline'], profile: ['quick'] },
   };
   assert.deepEqual(hashToState(`#${stateToHash(state)}`), state);
   assert.equal(stateToHash(defaultState()), '');
-  assert.deepEqual(hashToState('#metric=__proto__&tab=evil&from=yesterday&f.nonsense=1'), defaultState());
+  assert.deepEqual(hashToState('#metric=__proto__&tab=evil&page=admin&from=yesterday&f.nonsense=1'), defaultState());
+  assert.equal(hashToState('#page=evaluate').page, 'evaluate');
 });
