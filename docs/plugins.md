@@ -15,7 +15,7 @@ The package ships two skills:
 
 | Skill | Purpose | Claude invocation |
 | --- | --- | --- |
-| [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run a new or derived experiment end to end: plan, build, evaluate, and report, with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
+| [bootstrap-experiment-sop](../skills/bootstrap-experiment-sop/SKILL.md) | Run an experiment in one of three modes (add an engine, evaluate an engine, or improve an existing experiment): plan, build, evaluate, and report, with gates between stages. | `/llm-bootstrap:bootstrap-experiment-sop` |
 | [bootstrap-submit-results](../skills/bootstrap-submit-results/SKILL.md) | Submit finished experiment results to this repository as a reviewable pull request. | `/llm-bootstrap:bootstrap-submit-results` |
 
 Other clients control their own menus and command names; use their skill picker rather than assuming Claude's namespace syntax. There are no bundled custom agents, hooks, MCP servers, auto-running commands, or weights. The only scripts are the dependency-free [experiment resolver](../skills/bootstrap-experiment-sop/scripts/resolve-experiment.mjs) and the [experiment check](../skills/bootstrap-experiment-sop/scripts/check-experiment.mjs) built on it, which the experiment SOP asks the agent to run, and the browser-run evaluator under [evaluations/](../evaluations/endpoint-bench/evaluation.json), which needs no installation beyond serving the site (Node.js 22 or newer to build it) and a browser. Nothing runs it automatically, and the repository tests check its files against their recorded hashes. These skills guide an existing agent; they do not supply a separate agent runtime or automatically grant tool permissions.
@@ -75,7 +75,7 @@ Each skill is self-contained. The experiment skill carries its protocols, schema
 
 Treat the plugin installation/cache as read-only. Create a new experiment directory in the user's project, write and resolve the draft `experiment.json` there, and keep implementation code and new evidence in that workspace. Updates may replace plugin files. Do not place weights, credentials, private prompts, or unreviewed trajectories in the distributable package. A root AGENTS.md is not automatically injected by plugin installation; essential workflow constraints are included in the skill and its protocol.
 
-Record the exact plugin repository revision and hashes of the instructions actually supplied to the builder. The plugin version alone is not an immutable experiment treatment. Planned targets and prior Infer.NET measurements remain separate from results produced using these skills.
+Record the exact plugin repository revision when it matters to a result. The plugin version alone is not an immutable identifier. Planned targets and prior Infer.NET measurements remain separate from results produced using these skills.
 
 ## Validate and maintain
 

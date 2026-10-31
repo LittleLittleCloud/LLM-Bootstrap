@@ -6,7 +6,7 @@ This protocol defines how an endpoint is evaluated. It is separate from the [exp
 
 Evaluations are defined by the LLM Bootstrap repository (`https://github.com/LittleLittleCloud/LLM-Bootstrap`), not by individual experiments. An evaluation's definition and its code live under `evaluations/<evaluation-id>/` in that repository and change only through reviewed pull requests to it. An experiment selects an evaluation by id, repository revision, and definition hash. It does not carry, replace, or patch evaluation code, and it does not set the evaluation's repetitions or sizes.
 
-The builder LLM does not write or edit evaluation definitions, code, or scoring during an experiment, so it cannot shape how its own engine is judged. A needed change is made in this repository outside any experiment and produces a new revision, which is a different evaluation. Earlier results stay tied to the revision they used.
+Whoever writes an engine does not write or edit evaluation definitions, code, or scoring during an experiment, so no engine's author can shape how it is judged. A needed change is made in this repository outside any experiment and produces a new revision, which is a different evaluation. Earlier results stay tied to the revision they used.
 
 ## Obtaining an evaluation
 
@@ -105,9 +105,9 @@ The question is `What is the capital of France? Answer with the city name only.`
 
 ## The report
 
-One report is the measurement of one run: one model of one endpoint. It is stored at `experiments/<experiment-id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json`, where the name is `started_at` in UTC and the subject is `candidate` or the name of one of the experiment's `baseline_engines`. The report pins the evaluation (id, repository commit, definition hash) and must cite the evaluation of its experiment. It holds the seed, the context window, the profile, the status and failures, and for each selected test its plan settings, every measured request (timings and token counts, with a short answer where one is graded), and a summary. It holds no prompt, no model output beyond a graded answer of at most 80 characters, no token, and no address: the endpoint is recorded only as `loopback`, `private-network`, or `remote`.
+One report is the measurement of one run: one model of one endpoint. It is stored at `experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json`, where the name is `started_at` in UTC. The report pins the evaluation (id, repository commit, definition hash) and must cite the evaluation of its experiment. It holds the seed, the context window, the profile, the status and failures, and for each selected test its plan settings, every measured request (timings and token counts, with a short answer where one is graded), and a summary. It holds no prompt, no model output beyond a graded answer of at most 80 characters, no token, and no address: the endpoint is recorded only as `loopback`, `private-network`, or `remote`.
 
-What a report does not say matters as much. It does not say which engine, hardware, or weights served the endpoint, because the evaluator cannot see them. The experiment states those, and the person who submits the report states in the pull request how the endpoint was started and why it is the engine of the subject. A baseline and a candidate are separate reports, and so is every repeated, failed, or interrupted run. A correction is a new report, never an edit.
+What a report does not say matters as much. It does not say which engine, hardware, or weights served the endpoint, because the evaluator cannot see them. The experiment states those, and the person who submits the report states in the pull request how the endpoint was started and why it is the engine and commit the experiment records. Every repeated, failed, or interrupted run is its own report. A correction is a new report, never an edit.
 
 ### Headline metrics
 
@@ -139,9 +139,9 @@ Check these before trusting a number, and state the ones that apply in the resul
 - **`cache`.** The `short` and `busted` prompts are controls and should show a hit near 0 and no TTFT gain. A `padded` hit of 0 with `cache_reported` true means the endpoint reports the field but does not reuse the prefix: prefix caching is off, unsupported, or reset between requests.
 - **Duration.** A `full` run against a slow endpoint takes over an hour, because each long-context request can take minutes. Use `quick` while developing and plan the time for a full run.
 
-## Correctness gates
+## Correctness
 
-The evaluation cannot show numerical equivalence with a reference implementation, and it is not required. The quality gate asks whether the endpoint can be trusted and whether the model still answers correctly. `conform` must pass its required checks. `thinking` and `needle` are rule-scored, with no judge model. The experiment judges them against a baseline engine of the same model: a candidate passes when no accuracy falls below the best baseline's by more than two standard errors of the difference, and at least one accuracy was scored in full. The leaderboard applies that rule, and a baseline passes on verification alone because it defines the reference. State the rule in the experiment's `goal_quality_gate`. A candidate is not ranked unless it passes. A small sample gives a wide standard error, so a pass shows only that the engine is not badly broken.
+The evaluation cannot show numerical equivalence with a reference implementation, and it is not required. There is no quality gate: every report is recorded and listed, a regression included. Read the quality evidence in the report itself. `conform` checks the endpoint; if a required check failed, the other numbers of that report cannot be trusted, and the leaderboard shows the failed conformance beside them without hiding the report. `thinking` and `needle` are rule-scored, with no judge model, so their accuracy can be compared across experiments that share a platform, a target model, and an evaluation. A small sample gives a wide standard error, so a difference within two standard errors is noise, and a high score shows only that the engine is not badly broken.
 
 ## Verifying the evaluator
 

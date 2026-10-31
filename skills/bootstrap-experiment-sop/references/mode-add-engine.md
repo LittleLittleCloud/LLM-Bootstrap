@@ -1,0 +1,15 @@
+# Mode: Add an engine
+
+Stages 1 to 3 of the [experiment SOP](../SKILL.md) for an experiment with no base: a new platform, target model, or goal, with the engine to measure there. Resolve links relative to this file.
+
+The engine may come from anywhere: an LLM, a person, vibe coding, or a published project. The experiment records its name and commit, and nothing about who wrote it.
+
+1. **Intake.** Collect the goal, the hardware, the target model, the engine to measure, and what the user authorizes. Discover the machine read-only and separate measured capabilities from assumptions. Mark anything missing as unresolved and ask; do not pick hardware, model, or thresholds on the user's behalf.
+2. **Check for a base.** If an existing experiment already has the same target model, stop and use [Improve an experiment](mode-improve.md), or [Evaluate](mode-evaluate.md) if nothing changes. A comparable experiment is a base to derive from, not one to copy.
+3. **Select the evaluation.** Choose a `released` evaluation as described under Evaluations in [the SOP](../SKILL.md): resolve the latest `main` commit of the LLM Bootstrap repository, read the definitions at that commit, and record the commit and the definition hash (see [the evaluation protocol](evaluation-protocol.md)). If none fits or the only candidate is a draft, stop and ask for one to be added to this repository. Never define a workload or scoring inside the experiment.
+4. **Get the engine.** It must exist at a full 40-character commit before the experiment is frozen. Either build it (see [the build reference](build.md)) or set up an existing one at a pinned commit. One experiment measures one engine. When a comparison is the point, each reference engine, chosen from dated primary sources (see [the experiment protocol](experiment-protocol.md)), is its own experiment derived from this one.
+5. **Set the goals first.** Write `goal_thresholds` before any evaluation, as `metric >= value` or `metric <= value` on headline metrics of the evaluation report.
+6. **Write the experiment.** Write `experiments/<experiment-id>/experiment.json` against `Experiment` in [the protocol schema](../assets/schema/experiment-protocol.openapi.json): the platform, the target model, the evaluation pin, `engine_name` and `engine_commit`, `comparison_track`, and `goal_thresholds`. An unresolved field is null while the status is `draft-not-run`; set `status` to `frozen` only when nothing is unresolved. Follow [the planning reference](plan.md).
+7. **Check it.** Run the check command from [the SOP](../SKILL.md). Fix every problem it reports; do not edit the schema or the check to make an experiment pass.
+8. **Preflight.** Run the pinned evaluation once against one engine to confirm that the evaluation, hardware, and measurement path work, so a broken setup is found before the freeze. Keep that report only if it is a measurement the experiment will list.
+9. **Freeze.** Commit `experiment.json` on a codex/ branch and keep the commit for the results pull request. Then go to [the evaluation reference](evaluate.md).

@@ -16,10 +16,7 @@ export const FACETS = [
   { key: 'hardware', label: 'Hardware', read: run => run.hardware },
   { key: 'target_model', label: 'Target model', read: run => run.target_model },
   { key: 'evaluation', label: 'Evaluation', read: run => run.evaluation },
-  { key: 'builder', label: 'Builder LLM', read: run => run.builder ?? 'n/a (baseline)' },
-  { key: 'harness', label: 'Development harness', read: run => run.harness },
   { key: 'comparison_track', label: 'Comparison track', read: run => run.comparison_track },
-  { key: 'role', label: 'Role', read: run => run.role },
   { key: 'engine', label: 'Engine', read: run => run.engine.name },
   { key: 'profile', label: 'Profile', read: run => run.profile },
 ];
@@ -29,12 +26,11 @@ export const GROUPS = {
   engine: 'Engine',
   hardware: 'Hardware',
   target_model: 'Target model',
-  builder: 'Builder LLM',
   none: 'No grouping',
 };
 
 export const defaultState = () => ({
-  metric: 'decode_tok_s', filters: {}, includeNotPassed: false, query: '', from: '', to: '',
+  metric: 'decode_tok_s', filters: {}, query: '', from: '', to: '',
   view: 'best', tab: 'leaderboard', sort: 'rank', groupBy: 'lineage', frontier: true, page: 'home',
 });
 
@@ -47,18 +43,18 @@ export function formatValue(metric, value, withUnit = true) {
 const isBetter = (metric, a, b) => (METRICS[metric].better === 'higher' ? a > b : a < b);
 
 const haystack = run => [run.run_id, run.experiment_id, run.derived_from, run.engine.name, run.engine.revision, run.hardware,
-  run.target_model, run.builder, run.harness, run.evaluation].filter(Boolean).join(' ').toLowerCase();
+  run.target_model, run.evaluation].filter(Boolean).join(' ').toLowerCase();
 
-// Why an entry is not ranked on a metric, or null when it is. Only entries that passed the quality gate are ranked.
+// Every measured entry is ranked, a regression included. Conformance is shown beside the rank and never filters.
+export const conformance = run => (run.quality.conform_passed == null ? 'unchecked' : run.quality.conform_passed ? 'passed' : 'failed');
+
+// Why an entry is not ranked on a metric, or null when it is.
 export function unrankedReason(run, metric) {
-  if (run.quality_gate === 'failed') return 'Failed the quality gate: a required conformance check failed, or its accuracy is below the baseline';
-  if (run.quality_gate === 'unverified') return 'The quality gate could not be verified: conformance, an accuracy test, or a baseline is missing';
   if (METRICS[metric].read(run) == null) return `No ${METRICS[metric].label} was measured`;
   return null;
 }
 
 function matches(run, state, skipFacet) {
-  if (!state.includeNotPassed && run.quality_gate !== 'passed') return false;
   if (state.from && run.date < state.from) return false;
   if (state.to && run.date > state.to) return false;
   if (state.query && !haystack(run).includes(state.query.trim().toLowerCase())) return false;
@@ -80,23 +76,19 @@ export function facetCounts(runs, state, facetKey) {
   return counts;
 }
 
-// Is `run` the better entry to show for its experiment: a passing run beats a failing one, then the better metric, then the later date.
+// Is `run` the better entry to show for its engine: the better metric, then the later date. A run without the metric never beats one with it.
 function preferred(metric, run, current) {
-  const passed = r => r.quality_gate === 'passed';
-  if (passed(run) !== passed(current)) return passed(run);
-  if (!passed(run)) return run.date > current.date;
   const [a, b] = [METRICS[metric].read(run), METRICS[metric].read(current)];
-  return a === b ? run.date > current.date : isBetter(metric, a, b);
+  if ((a == null) !== (b == null)) return a != null;
+  if (a == null || a === b) return run.date > current.date;
+  return isBetter(metric, a, b);
 }
 
 export function collapse(runs, metric, view) {
   if (view === 'all') return runs;
   const best = new Map();
   for (const run of runs) {
-    // A baseline is measured again in many experiments; show its best measurement once per cohort.
-    const key = run.role === 'baseline'
-      ? ['baseline', run.hardware, run.target_model, run.weights, run.evaluation, run.comparison_track, run.engine.name].join('|')
-      : `${run.experiment_id}|${run.role}|${run.engine.name}`;
+    const key = `${run.experiment_id}|${run.engine.name}`;
     if (!best.has(key) || preferred(metric, run, best.get(key))) best.set(key, run);
   }
   return [...best.values()];
@@ -128,16 +120,15 @@ export function orderRows(runs, ranks, sort) {
 
 export function summarize(runs, metric) {
   const spec = METRICS[metric];
-  const passed = runs.filter(run => unrankedReason(run, metric) == null);
-  const values = passed.map(spec.read).sort((a, b) => a - b);
+  const measured = runs.filter(run => unrankedReason(run, metric) == null);
+  const values = measured.map(spec.read).sort((a, b) => a - b);
   const middle = values.length >> 1;
   const median = !values.length ? null : values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
-  const best = passed.reduce((top, run) => (!top || isBetter(metric, spec.read(run), spec.read(top)) ? run : top), null);
+  const best = measured.reduce((top, run) => (!top || isBetter(metric, spec.read(run), spec.read(top)) ? run : top), null);
   return {
     runs: runs.length,
     experiments: new Set(runs.map(run => run.experiment_id)).size,
-    passRate: runs.length ? runs.filter(run => run.quality_gate === 'passed').length / runs.length : null,
-    notPassed: runs.filter(run => run.quality_gate !== 'passed').length,
+    engines: new Set(runs.map(run => `${run.engine.name}@${run.engine.revision}`)).size,
     best, median,
   };
 }
@@ -180,7 +171,7 @@ export function lineageRoots(runs) {
 }
 
 function groupLabel(run, groupBy, roots) {
-  if (groupBy === 'lineage') return `${roots.get(run.experiment_id) ?? run.experiment_id}${run.role === 'baseline' ? ' (baseline)' : ''}`;
+  if (groupBy === 'lineage') return `${roots.get(run.experiment_id) ?? run.experiment_id}`;
   if (groupBy === 'engine') return run.engine.name;
   if (groupBy === 'none') return 'All runs';
   return FACETS.find(facet => facet.key === groupBy).read(run);
@@ -200,7 +191,7 @@ export function trendSeries(runs, { metric, groupBy, roots, max = 8 }) {
   return { series: all.slice(0, max), hidden: Math.max(0, all.length - max) };
 }
 
-// Running best over time among runs that passed the quality gate.
+// Running best over time among runs that measured the metric.
 export function frontier(runs, metric) {
   const spec = METRICS[metric];
   const points = [];
@@ -212,10 +203,10 @@ export function frontier(runs, metric) {
   return points;
 }
 
-// Best candidate of each derived experiment against the best candidate of its parent. Positive change always means better.
+// Best run of each derived experiment against the best run of its parent. Positive change means better and a negative one is a regression, which is kept.
 export function deriveDeltas(runs, metric) {
   const spec = METRICS[metric];
-  const bestOf = experiment => runs.filter(run => run.experiment_id === experiment && run.role === 'candidate'
+  const bestOf = experiment => runs.filter(run => run.experiment_id === experiment
     && unrankedReason(run, metric) == null)
     .reduce((top, run) => (!top || isBetter(metric, spec.read(run), spec.read(top)) ? run : top), null);
   const derived = new Map(runs.filter(run => run.derived_from).map(run => [run.experiment_id, run.derived_from]));
@@ -230,8 +221,6 @@ export function deriveDeltas(runs, metric) {
   });
 }
 
-const FLAGS = { includeNotPassed: 'notpassed' };
-
 export function stateToHash(state) {
   const defaults = defaultState();
   const params = new URLSearchParams();
@@ -239,7 +228,6 @@ export function stateToHash(state) {
     if (state[key] !== defaults[key]) params.set(key, state[key]);
   }
   if (state.frontier !== defaults.frontier) params.set('frontier', state.frontier ? '1' : '0');
-  for (const [key, name] of Object.entries(FLAGS)) if (state[key]) params.set(name, '1');
   for (const facet of FACETS) for (const value of state.filters[facet.key] ?? []) params.append(`f.${facet.key}`, value);
   return params.toString();
 }
@@ -259,7 +247,6 @@ export function hashToState(hash) {
   date('to');
   state.query = params.get('query') ?? '';
   if (params.has('frontier')) state.frontier = params.get('frontier') === '1';
-  for (const [key, name] of Object.entries(FLAGS)) state[key] = params.get(name) === '1';
   for (const facet of FACETS) {
     const values = params.getAll(`f.${facet.key}`);
     if (values.length) state.filters[facet.key] = values;

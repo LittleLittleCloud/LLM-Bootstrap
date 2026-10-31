@@ -14,9 +14,9 @@ const STEPS = [
     ['Codex', null, 'codex plugin marketplace add LittleLittleCloud/LLM-Bootstrap'],
   ]],
   ['Choose', 'Start in your own project workspace.', [
-    ['New engine', 'A new hardware, target model, or goal.', 'Use bootstrap-experiment-sop to start a new experiment'],
-    ['Improve an engine', 'Same target model, something else changes.', 'Use bootstrap-experiment-sop to derive an experiment from <experiment-id>'],
-    ['Evaluate an engine', 'Measure an existing engine in your browser and export the report.', 'page:evaluate'],
+    ['Add an engine', 'A new hardware, target model, or goal. The LLM builds the engine, or you bring one.', 'Use bootstrap-experiment-sop to add an engine'],
+    ['Evaluate an engine', 'Measure an engine under an existing experiment in your browser and export the report.', 'page:evaluate'],
+    ['Improve an experiment', 'Same target model, something else changes.', 'Use bootstrap-experiment-sop to improve experiment <experiment-id>'],
   ]],
   ['Submit', 'Every run goes in, failures included.', [
     ['Pull request', null, 'Use bootstrap-submit-results to submit my results'],
@@ -35,13 +35,13 @@ export function Home({ runs, patch }) {
   const kpis = [
     ['Experiments', all.experiments],
     ['Runs', all.runs],
-    ['Passed gate', all.passRate == null ? '—' : `${Math.round(all.passRate * 100)}%`],
+    ['Engines', all.engines],
   ];
   return (
     <>
       <header className="band intro">
         <h1>Can an LLM build its own inference engine?</h1>
-        <p>Experiments on one fixed platform each: hardware, target model, harness, and workload.</p>
+        <p>Experiments on one fixed platform each: hardware, target model, and workload.</p>
         <div className="actions">
           <button type="button" className="primary" onClick={() => patch({ page: 'leaderboard' })}>Leaderboard</button>
           <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>

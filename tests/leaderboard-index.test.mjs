@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { IndexError, buildIndex, evaluationStamp, loadRecordFiles, qualityGate, serializeIndex } from '../tools/leaderboard/build-index.mjs';
+import { IndexError, buildIndex, evaluationStamp, loadRecordFiles, serializeIndex } from '../tools/leaderboard/build-index.mjs';
 import { headlineMetrics, qualityScores } from '../evaluations/endpoint-bench/src/report.js';
 import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 import { commit, frozenExperiment, syntheticReport, when } from './helpers/fixtures.mjs';
@@ -17,7 +17,7 @@ const validators = await loadValidators();
 const digest = text => createHash('sha256').update(text).digest('hex');
 const serialize = document => `${JSON.stringify(document, null, 2)}\n`;
 const at = hour => `2026-10-28T${hour}:00:00Z`;
-const BASELINE = 'synthetic-baseline';
+const ENGINE = 'synthetic-engine';
 
 const millis = { ttft_ms_p50: 100, ttft_ms_p90: 120 };
 const retrieval = (correct, attempted) => ({
@@ -81,12 +81,12 @@ function addExperiments(files) {
   const baseText = put(files, 'experiments/exp-base/experiment.json', base);
   put(files, 'experiments/exp-derived/experiment.json', {
     experiment_id: 'exp-derived', status: 'frozen', description: 'Synthetic derived fixture.', contract_frozen_at: when,
-    extends_path: '../exp-base/experiment.json', extends_revision: commit('5'), extends_sha256: digest(baseText), builder_model: 'other-builder',
+    extends_path: '../exp-base/experiment.json', extends_revision: commit('5'), extends_sha256: digest(baseText), engine_commit: commit('6'),
   });
 }
 
-function addReport(files, experiment, subject, document) {
-  const path = `experiments/${experiment}/evaluation/${subject}/${evaluationStamp(document.started_at)}.json`;
+function addReport(files, experiment, document) {
+  const path = `experiments/${experiment}/evaluation/${evaluationStamp(document.started_at)}.json`;
   put(files, path, document);
   return path;
 }
@@ -94,47 +94,54 @@ function addReport(files, experiment, subject, document) {
 function tree() {
   const files = new Map();
   addExperiments(files);
-  addReport(files, 'exp-base', 'candidate', report({ started: at('08') }));
-  addReport(files, 'exp-base', BASELINE, report({ started: at('07'), decode: 80 }));
-  addReport(files, 'exp-derived', 'candidate', report({ started: at('09') }));
+  addReport(files, 'exp-base', report({ started: at('08') }));
+  addReport(files, 'exp-base', report({ started: at('07'), decode: 80 }));
+  addReport(files, 'exp-derived', report({ started: at('09') }));
   return files;
 }
 
-test('reports project into one entry each, with the experiment supplying engine, hardware, and model', () => {
+test('reports project into one entry each, with the experiment supplying engine revision, hardware, and model', () => {
   const index = buildIndex(tree(), { validators });
   assert.deepEqual(index.counts, { runs: 3, experiments: 2, entries: 3 });
   assert.equal(index.synthetic, false);
   const byId = Object.fromEntries(index.entries.map(entry => [entry.entry_id, entry]));
-  const candidate = byId['exp-base/candidate/20261028-080000'];
-  assert.equal(candidate.run_id, 'exp-base/20261028-080000');
-  assert.equal(candidate.role, 'candidate');
-  assert.equal(candidate.derived_from, null);
-  assert.deepEqual(candidate.engine, { name: 'exp-base', revision: null });
-  assert.equal(candidate.builder, 'synthetic-builder');
-  assert.equal(candidate.hardware, 'Apple M5 Pro');
-  assert.equal(candidate.target_model, 'mlx-community/Qwen3.6-35B-A3B-8bit');
-  assert.equal(candidate.harness, 'Pi 1.4.0');
-  assert.equal(candidate.evaluation, 'synthetic-evaluation');
-  assert.equal(candidate.comparison_track, 'matched-configuration');
-  assert.equal(candidate.profile, 'full');
-  assert.equal(candidate.endpoint_class, 'loopback');
-  assert.deepEqual(candidate.metrics, {
+  const first = byId['exp-base/20261028-080000'];
+  assert.equal(first.run_id, 'exp-base/20261028-080000');
+  assert.equal(first.derived_from, null);
+  assert.deepEqual(first.engine, { name: ENGINE, revision: commit('2') });
+  assert.equal(first.hardware, 'Apple M5 Pro');
+  assert.equal(first.target_model, 'mlx-community/Qwen3.6-35B-A3B-8bit');
+  assert.equal(first.evaluation, 'synthetic-evaluation');
+  assert.equal(first.comparison_track, 'matched-configuration');
+  assert.equal(first.profile, 'full');
+  assert.equal(first.endpoint_class, 'loopback');
+  assert.deepEqual(first.metrics, {
     decode_tok_s: 90, prefill_tok_s: 900, speed_tok_s: 95, ttft_ms: 80, cache_hit_pct: 97.5, needle_accuracy: 1, thinking_accuracy: 1, preliminary: false,
   });
-  assert.equal(candidate.quality_gate, 'passed');
-  assert.deepEqual(candidate.quality.benchmarks.map(item => item.benchmark_id), ['thinking', 'needle']);
-  assert.equal(candidate.quality.conform_passed, true);
-  assert.deepEqual(candidate.source, { experiment: 'experiments/exp-base/experiment.json', evaluation: 'experiments/exp-base/evaluation/candidate/20261028-080000.json' });
-  const baseline = byId[`exp-base/${BASELINE}/20261028-070000`];
-  assert.equal(baseline.role, 'baseline');
-  assert.equal(baseline.builder, null, 'a baseline was not built by the builder');
-  assert.deepEqual(baseline.engine, { name: BASELINE, revision: commit('2') });
-  assert.equal(baseline.metrics.decode_tok_s, 80);
-  const derived = byId['exp-derived/candidate/20261028-090000'];
+  for (const key of ['role', 'builder', 'harness', 'quality_gate']) assert.equal(key in first, false, `an entry has no ${key}`);
+  assert.deepEqual(first.quality.benchmarks.map(item => item.benchmark_id), ['thinking', 'needle']);
+  assert.equal(first.quality.conform_passed, true);
+  assert.deepEqual(first.source, { experiment: 'experiments/exp-base/experiment.json', evaluation: 'experiments/exp-base/evaluation/20261028-080000.json' });
+  const earlier = byId['exp-base/20261028-070000'];
+  assert.deepEqual(earlier.engine, first.engine, 'the one engine of the experiment');
+  assert.equal(earlier.metrics.decode_tok_s, 80);
+  const derived = byId['exp-derived/20261028-090000'];
   assert.equal(derived.derived_from, 'exp-base');
-  assert.equal(derived.builder, 'other-builder', 'the override applies to the effective experiment');
-  assert.equal(derived.target_model, candidate.target_model);
+  assert.deepEqual(derived.engine, { name: ENGINE, revision: commit('6') }, 'the override applies to the effective experiment');
+  assert.equal(derived.target_model, first.target_model);
   assert.doesNotMatch(JSON.stringify(index), /autonomy|peak_memory|human_interventions/);
+});
+
+test('a regression and a failed conformance check are recorded like any other report', () => {
+  const files = new Map();
+  addExperiments(files);
+  addReport(files, 'exp-base', report({ started: at('08'), decode: 90 }));
+  addReport(files, 'exp-base', report({ started: at('09'), decode: 40, thinkingScore: [4, 20], conform: false }));
+  const entries = buildIndex(files, { validators }).entries;
+  assert.equal(entries.length, 2);
+  const worse = entries.find(entry => entry.metrics.decode_tok_s === 40);
+  assert.equal(worse.quality.conform_passed, false);
+  assert.equal(worse.metrics.thinking_accuracy, 0.2);
 });
 
 test('headline metrics and quality scores are read from the nested report', () => {
@@ -159,42 +166,19 @@ test('headline metrics and quality scores are read from the nested report', () =
   assert.deepEqual(qualityScores(incomplete).map(item => item.benchmark_id), ['thinking'], 'an incomplete test is not scored');
 });
 
-test('the quality gate needs conformance, compares a candidate with the best baseline within two standard errors, and lets a baseline define the reference', () => {
-  const scored = (subject, options) => ({ ...report(options), subject });
-  const baselines = [scored('baseline', { thinkingScore: [18, 20], needleScore: [20, 20] })];
-  assert.equal(qualityGate(scored('candidate', { thinkingScore: [18, 20] }), baselines), 'passed');
-  assert.equal(qualityGate(scored('candidate', { thinkingScore: [17, 20] }), baselines), 'passed', 'a difference within noise passes');
-  assert.equal(qualityGate(scored('candidate', { thinkingScore: [4, 20] }), baselines), 'failed');
-  assert.equal(qualityGate(scored('candidate', { needleScore: [2, 20] }), baselines), 'failed');
-  assert.equal(qualityGate(scored('candidate', {}), []), 'unverified', 'a candidate without a baseline cannot be judged');
-  assert.equal(qualityGate(scored('baseline', { thinkingScore: [1, 20] }), []), 'passed', 'a verified baseline defines the reference');
-  assert.equal(qualityGate(scored('candidate', { conform: false }), baselines), 'failed', 'a required conformance check failed');
-  const unconformed = scored('candidate', {});
-  delete unconformed.tests.conform;
-  assert.equal(qualityGate(unconformed, baselines), 'unverified');
-  const noScores = scored('candidate', {});
-  delete noScores.tests.thinking;
-  delete noScores.tests.needle;
-  assert.equal(qualityGate(noScores, baselines), 'unverified');
-  const partial = scored('candidate', {});
-  partial.tests.conform.status = 'partial';
-  assert.equal(qualityGate(partial, baselines), 'unverified');
-});
-
 test('tests that were not selected leave their metrics null, and a reduced profile or an incomplete report is preliminary', () => {
   const files = new Map();
   addExperiments(files);
   const quick = report({ started: at('10'), patch: { profile: 'quick' } });
-  addReport(files, 'exp-base', 'candidate', quick);
+  addReport(files, 'exp-base', quick);
   const speedOnly = { ...syntheticReport(at('11')), selected_tests: ['speed'], tests: { speed: report().tests.speed } };
-  addReport(files, 'exp-base', 'candidate', speedOnly);
+  addReport(files, 'exp-base', speedOnly);
   const entries = Object.fromEntries(buildIndex(files, { validators }).entries.map(entry => [entry.date + entry.entry_id.slice(-6), entry]));
   const [reduced, partial] = Object.values(entries).sort((a, b) => a.entry_id.localeCompare(b.entry_id));
   assert.equal(reduced.metrics.preliminary, true);
   assert.equal(reduced.profile, 'quick');
   assert.equal(partial.metrics.speed_tok_s, 95);
   assert.deepEqual([partial.metrics.decode_tok_s, partial.metrics.prefill_tok_s, partial.metrics.cache_hit_pct, partial.metrics.needle_accuracy, partial.metrics.thinking_accuracy], [null, null, null, null, null]);
-  assert.equal(partial.quality_gate, 'unverified');
   assert.equal(partial.quality.conform_passed, null);
   assert.deepEqual(partial.quality.benchmarks, []);
 });
@@ -207,8 +191,8 @@ test('an experiment that pins a retired evaluation is named, not listed, and doe
   const retired = buildIndex(files, { validators, evaluationIds: new Set(['another-evaluation']) });
   assert.equal(retired.counts.entries, 0);
   assert.deepEqual(retired.retired_runs, [
-    'experiments/exp-base/evaluation/candidate/20261028-080000.json', `experiments/exp-base/evaluation/${BASELINE}/20261028-070000.json`,
-    'experiments/exp-derived/evaluation/candidate/20261028-090000.json',
+    'experiments/exp-base/evaluation/20261028-070000.json', 'experiments/exp-base/evaluation/20261028-080000.json',
+    'experiments/exp-derived/evaluation/20261028-090000.json',
   ]);
   assert.equal('retired_runs' in buildIndex(files, { validators }), false, 'without a filter every report is listed');
 });
@@ -225,7 +209,7 @@ test('a mismatched, misnamed, or invalid document stops the build with a reason'
     change(files);
     assert.throws(() => buildIndex(files, { validators }), error => error instanceof IndexError && pattern.test(error.message), String(pattern));
   };
-  const candidate = 'experiments/exp-base/evaluation/candidate/20261028-080000.json';
+  const candidate = 'experiments/exp-base/evaluation/20261028-080000.json';
   failsWith(files => files.set(candidate, `${files.get(candidate)}{`), /is not valid JSON/);
   failsWith(files => {
     const document = JSON.parse(files.get(candidate));
@@ -234,17 +218,16 @@ test('a mismatched, misnamed, or invalid document stops the build with a reason'
   }, /not a valid EvaluationReport/);
   failsWith(files => files.set(candidate, serialize({ ...JSON.parse(files.get(candidate)), experiment_id: 'exp-base' })), /not a valid EvaluationReport/);
   failsWith(files => {
-    files.set('experiments/exp-base/evaluation/candidate/20261028-123456.json', files.get(candidate));
+    files.set('experiments/exp-base/evaluation/20261028-123456.json', files.get(candidate));
     files.delete(candidate);
   }, /is not named after its started_at/);
-  failsWith(files => files.set('experiments/exp-base/evaluation/candidate/latest.json', files.get(candidate)), /is not named <subject>\/<YYYYMMDD-HHMMSS>\.json/);
-  failsWith(files => files.set('experiments/exp-base/evaluation/20261028-080000.json', files.get(candidate)), /is not named <subject>\/<YYYYMMDD-HHMMSS>\.json/);
-  failsWith(files => files.set('experiments/exp-base/evaluation/unknown-engine/20261028-080000.json', files.get(candidate)), /neither candidate nor a baseline engine/);
+  failsWith(files => files.set('experiments/exp-base/evaluation/latest.json', files.get(candidate)), /is not named <YYYYMMDD-HHMMSS>\.json/);
+  failsWith(files => files.set(`experiments/exp-base/evaluation/${ENGINE}/20261028-080000.json`, files.get(candidate)), /is not named <YYYYMMDD-HHMMSS>\.json/);
   failsWith(files => files.set(candidate, serialize({ ...JSON.parse(files.get(candidate)), evaluation_revision: commit('9') })), /cites a different evaluation/);
   failsWith(files => files.set('experiments/exp-base/experiment.json', serialize({ ...frozenExperiment(), experiment_id: 'exp-base', status: 'draft-not-run' })), /is not frozen/);
   failsWith(files => {
     put(files, 'experiments/exp-other/experiment.json', { ...frozenExperiment(), experiment_id: 'exp-mismatch' });
-    files.set(`experiments/exp-other/evaluation/${BASELINE}/20261028-080000.json`, files.get(candidate));
+    files.set('experiments/exp-other/evaluation/20261028-080000.json', files.get(candidate));
   }, /not its directory name/);
 });
 

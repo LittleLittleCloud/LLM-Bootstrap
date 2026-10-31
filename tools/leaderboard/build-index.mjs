@@ -3,17 +3,14 @@
 // Usage: node tools/leaderboard/build-index.mjs <repo-root> --out <file> [--synthetic] [--require-validation]
 //
 // Reads experiments/<id>/experiment.json (an Experiment, or a DerivedExperiment that is resolved against its pinned base) and
-// every experiments/<id>/evaluation/<subject>/<YYYYMMDD-HHMMSS>.json (an EvaluationReport) under <repo-root>. A report names no engine,
-// role, or machine: the subject directory says what was measured (candidate, or the name of a baseline engine of the experiment),
-// and the experiment says everything else. A report's name is its started_at in UTC. One entry is written for each report.
+// every experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json (an EvaluationReport) under <repo-root>. A report names no engine or
+// machine: the experiment gives the one engine, its commit, and everything else. A report's name is its started_at in UTC.
+// One entry is written for each report.
 //
 // The index is a projection for display. It is not a record: the documents under experiments/ stay authoritative.
 // Rules that are leaderboard policy, not schema facts:
-//   - quality_gate says whether the endpoint can be trusted and the model still answers correctly. It is "failed" when a required
-//     conformance check fails, or when a candidate's accuracy (thinking, needle) is lower than a baseline's by more than two standard
-//     errors of the difference. It is "passed" when conformance holds, at least one accuracy was scored in full, and no candidate
-//     accuracy falls short. A baseline defines the reference, so it passes on verification alone. It is "unverified" otherwise.
-//     Only "passed" entries are ranked.
+//   - Every report is listed, a regression included. The conformance result and the accuracy scores are carried as data; nothing
+//     is filtered or ranked out by them.
 //   - A report of a reduced profile, or one with an incomplete test, is preliminary.
 //   - Missing values stay null. They are never replaced by zero or inferred.
 //   - An experiment that pins an evaluation which no longer exists in evaluations/ is history, not a failure: it stays in the
@@ -29,7 +26,7 @@ import { errorsOf, loadValidators } from '../../skills/bootstrap-experiment-sop/
 export const INDEX_VERSION = '1.0.0';
 const EXPERIMENT_PATH = /^experiments\/([^/]+)\/experiment\.json$/;
 const EVALUATION_DIR = /^experiments\/([^/]+)\/evaluation\//;
-const EVALUATION_PATH = /^experiments\/([^/]+)\/evaluation\/([^/]+)\/(\d{8}-\d{6})\.json$/;
+const EVALUATION_PATH = /^experiments\/([^/]+)\/evaluation\/(\d{8}-\d{6})\.json$/;
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 // Display precision only; the reports keep the exact values.
 const numberOrNull = value => (typeof value === 'number' ? Math.round(value * 1e4) / 1e4 : null);
@@ -43,24 +40,6 @@ export class IndexError extends Error {
     super(`${problems.length} problem(s) building the index:\n- ${problems.join('\n- ')}`);
     this.problems = problems;
   }
-}
-
-// 'failed' when a required conformance check failed, 'unverified' without conformance or any scored accuracy.
-export function qualityGate(report, baselines = []) {
-  const conform = report.tests?.conform;
-  if (conform?.status !== 'complete') return 'unverified';
-  if (!conform.required_passed) return 'failed';
-  const own = qualityScores(report);
-  if (!own.length) return 'unverified';
-  if (report.subject === 'baseline') return 'passed';
-  for (const score of own) {
-    const references = baselines.flatMap(baseline => qualityScores(baseline).filter(item => item.benchmark_id === score.benchmark_id));
-    if (!references.length) return 'unverified';
-    const best = references.reduce((a, b) => (b.score > a.score ? b : a));
-    const tolerance = Math.max(2 * Math.hypot(score.stderr, best.stderr), 1 / Math.min(score.num_samples, best.num_samples));
-    if (score.score < best.score - tolerance) return 'failed';
-  }
-  return 'passed';
 }
 
 // files: Map of repository-relative POSIX path -> file text. evaluationIds: ids of the evaluations that exist now, or null to list every report.
@@ -112,7 +91,7 @@ export function buildIndex(files, { synthetic = false, validators = null, evalua
   for (const experimentPath of [...files.keys()].filter(path => EXPERIMENT_PATH.test(path)).sort()) {
     const id = EXPERIMENT_PATH.exec(experimentPath)[1];
     const recordPaths = [...files.keys()].filter(path => EVALUATION_DIR.test(path) && path.startsWith(`experiments/${id}/`)).sort();
-    for (const path of recordPaths) if (!EVALUATION_PATH.test(path)) fail(`${path} is not named <subject>/<YYYYMMDD-HHMMSS>.json`);
+    for (const path of recordPaths) if (!EVALUATION_PATH.test(path)) fail(`${path} is not named <YYYYMMDD-HHMMSS>.json`);
     // An experiment without reports has nothing to list.
     if (!recordPaths.length) continue;
     const loaded = loadExperiment(experimentPath, files.get(experimentPath), 0);
@@ -122,44 +101,34 @@ export function buildIndex(files, { synthetic = false, validators = null, evalua
     if (experiment.status !== 'frozen') { fail(`${experimentPath} is not frozen, so its reports cannot be listed`); continue; }
     if (evaluationIds && !evaluationIds.has(experiment.evaluation_id)) { retired.push(...recordPaths); continue; }
 
-    const baselineEngines = new Map(experiment.baseline_engines.map(item => item.split('=')));
     const reports = [];
     for (const path of recordPaths.filter(item => EVALUATION_PATH.test(item))) {
-      const [, , subject, stamp] = EVALUATION_PATH.exec(path);
+      const [, , stamp] = EVALUATION_PATH.exec(path);
       const report = parse(files.get(path), path);
       if (!report || !validate('evaluation', 'EvaluationReport', report, path)) continue;
-      if (subject !== 'candidate' && !baselineEngines.has(subject)) {
-        fail(`${path}: the subject ${subject} is neither candidate nor a baseline engine of ${experimentPath}`);
-        continue;
-      }
       if (evaluationStamp(report.started_at) !== stamp) { fail(`${path} is not named after its started_at (${evaluationStamp(report.started_at)})`); continue; }
       if (['evaluation_id', 'evaluation_revision', 'evaluation_sha256'].some(key => report[key] !== experiment[key])) {
         fail(`${path} cites a different evaluation than ${experimentPath}`);
         continue;
       }
-      reports.push({ path, report: { ...report, subject: subject === 'candidate' ? 'candidate' : 'baseline' }, subject, stamp });
+      reports.push({ path, report, stamp });
     }
-    const baselines = reports.filter(item => item.report.subject === 'baseline').map(item => item.report);
 
-    for (const { path, report, subject, stamp } of reports) {
+    for (const { path, report, stamp } of reports) {
       try {
         const metrics = headlineMetrics(report);
-        const candidate = subject === 'candidate';
         const complete = report.status === 'complete' && report.profile === 'full';
         entries.push({
-          entry_id: `${id}/${subject}/${stamp}`,
+          entry_id: `${id}/${stamp}`,
           run_id: `${id}/${stamp}`,
           experiment_id: id,
           derived_from: parent,
           date: day(report.started_at),
-          role: candidate ? 'candidate' : 'baseline',
-          comparison_track: experiment.baseline_comparison_track,
-          engine: { name: candidate ? id : subject, revision: candidate ? null : baselineEngines.get(subject) },
+          comparison_track: experiment.comparison_track,
+          engine: { name: experiment.engine_name, revision: experiment.engine_commit },
           hardware: experiment.hardware_platform,
           target_model: experiment.target_repository,
           weights: experiment.target_weights,
-          builder: candidate ? experiment.builder_model : null,
-          harness: `${experiment.harness_name} ${experiment.harness_version}`,
           evaluation: report.evaluation_id,
           profile: report.profile,
           endpoint_class: report.endpoint_class,
@@ -174,7 +143,6 @@ export function buildIndex(files, { synthetic = false, validators = null, evalua
             thinking_accuracy: numberOrNull(metrics.thinking_accuracy),
             preliminary: !complete,
           },
-          quality_gate: qualityGate(report, baselines),
           quality: {
             conform_passed: metrics.conform_passed === null ? null : metrics.conform_passed === 1,
             benchmarks: qualityScores(report).map(({ benchmark_id, score, stderr, num_samples }) => ({ benchmark_id, score: numberOrNull(score), stderr: numberOrNull(stderr), num_samples })),
