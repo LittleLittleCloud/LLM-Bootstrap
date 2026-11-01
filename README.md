@@ -147,7 +147,7 @@ Use feature branches and pull requests for project changes. Merge requires expli
 | [skills/bootstrap-submit-results](skills/bootstrap-submit-results/SKILL.md) | Submits finished experiment results as a reviewable pull request, after a private-material scan and the repository's own validation. |
 | [evaluations/](evaluations/endpoint-bench/evaluation.json) | Evaluation definitions and code owned by this repository; the skill takes them from the latest `main` commit. |
 | [docs/plugins.md](docs/plugins.md) | Installation, compatibility, local development, and validation. |
-| `site/` *(not in the plugin package)* | React and Vite site: a leaderboard with filters and a trend view (currently synthetic demo data) and the Evaluate page. |
+| `site/` *(not in the plugin package)* | React and Vite site: a leaderboard with filters and a trend view, built from the submitted experiment records, and the Evaluate page. |
 | `tools/leaderboard/build-index.mjs` *(not in the plugin package)* | Builds the leaderboard index. |
 
 <details>
@@ -166,7 +166,7 @@ Evaluation code and scripts are defined by this repository under `evaluations/`;
 - The site deploys to a Cloudflare Worker with static assets (`site/wrangler.jsonc`). In Workers Builds, set the root directory to `site` and the build command to `npm ci && npm run build`.
 - `tools/leaderboard/build-index.mjs` builds the index from `experiments/<id>/experiment.json` and every `experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json` report, checking every pinned hash and, when Ajv is installed, every schema.
 - Every report is listed and ranked, regressions included. The conformance result is shown beside the metrics and does not filter them.
-- `site/public/data/leaderboard.mock.json` is a static synthetic index; a real `site/public/data/leaderboard.json` takes precedence when present.
+- `site/public/data/leaderboard.json` is the index built from `experiments/`. It is committed, and a test fails when it is stale: rebuild it with `node tools/leaderboard/build-index.mjs . --out site/public/data/leaderboard.json --require-validation`. The site shows no data until a results pull request adds records.
 
 </details>
 

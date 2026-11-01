@@ -103,7 +103,7 @@ function tree() {
 test('reports project into one entry each, with the experiment supplying engine revision, hardware, and model', () => {
   const index = buildIndex(tree(), { validators });
   assert.deepEqual(index.counts, { runs: 3, experiments: 2, entries: 3 });
-  assert.equal(index.synthetic, false);
+  assert.equal('synthetic' in index, false);
   const byId = Object.fromEntries(index.entries.map(entry => [entry.entry_id, entry]));
   const first = byId['exp-base/20261028-080000'];
   assert.equal(first.run_id, 'exp-base/20261028-080000');
@@ -232,7 +232,7 @@ test('a mismatched, misnamed, or invalid document stops the build with a reason'
 });
 
 test('the index serializes with one entry per line and without any time or machine detail', () => {
-  const index = buildIndex(tree(), { validators, synthetic: true });
+  const index = buildIndex(tree(), { validators });
   const text = serializeIndex(index);
   assert.deepEqual(JSON.parse(text), index);
   assert.equal(text.split('\n').filter(line => line.startsWith('{"entry_id"')).length, index.entries.length);
@@ -256,10 +256,9 @@ test('the command reads experiments/ from a repository root and writes the index
     }
     assert.equal(loadRecordFiles(dir).size, files.size);
     const out = join(dir, 'index.json');
-    let run = spawnSync('node', [cli, dir, '--out', out, '--synthetic', '--require-validation'], { encoding: 'utf8' });
+    let run = spawnSync('node', [cli, dir, '--out', out, '--require-validation'], { encoding: 'utf8' });
     assert.equal(run.status, 0, run.stdout + run.stderr);
     const index = JSON.parse(readFileSync(out, 'utf8'));
-    assert.equal(index.synthetic, true);
     assert.equal(index.counts.entries, 3);
 
     const empty = mkdtempSync(join(tmpdir(), 'llm-bootstrap-empty-'));

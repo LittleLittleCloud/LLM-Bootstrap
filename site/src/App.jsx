@@ -24,7 +24,7 @@ export default function App() {
   if (index.status !== 'ready') {
     return <p className="status">{index.status === 'loading' ? 'Loading' : `Could not load the run data: ${index.message}`}</p>;
   }
-  const props = { runs: index.runs, synthetic: index.synthetic, state, patch, setState };
+  const props = { runs: index.runs, state, patch, setState };
   return (
     <>
       <Nav {...props} />

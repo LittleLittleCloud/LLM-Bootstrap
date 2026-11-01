@@ -1,21 +1,19 @@
 import { useEffect, useState } from 'react';
 
-// The index built from real experiment records wins over the synthetic demo index when both exist.
+// The index is built from the experiment records by tools/leaderboard/build-index.mjs.
 async function fetchIndex() {
-  for (const url of ['/data/leaderboard.json', '/data/leaderboard.mock.json']) {
-    const response = await fetch(url);
-    if (!response.ok) continue;
-    const data = await response.json().catch(() => null);
-    if (Array.isArray(data?.entries)) return data;
-  }
-  throw new Error('no leaderboard index was found');
+  const response = await fetch('/data/leaderboard.json');
+  if (!response.ok) throw new Error('no leaderboard index was found');
+  const data = await response.json().catch(() => null);
+  if (!Array.isArray(data?.entries)) throw new Error('the leaderboard index is not valid');
+  return data;
 }
 
 export function useIndex() {
   const [index, setIndex] = useState({ status: 'loading' });
   useEffect(() => {
     fetchIndex().then(
-      data => setIndex({ status: 'ready', runs: data.entries, synthetic: data.synthetic === true }),
+      data => setIndex({ status: 'ready', runs: data.entries }),
       error => setIndex({ status: 'error', message: error.message }),
     );
   }, []);

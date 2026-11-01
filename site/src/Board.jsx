@@ -31,6 +31,7 @@ export function Board({ runs, state, patch, setState }) {
     patch({ filters });
     setShown(PAGE);
   };
+  if (!runs.length) return <main className="band board"><p className="empty">No results have been submitted yet.</p></main>;
   const dirty = Boolean(state.query || state.from || state.to || Object.keys(state.filters).length);
 
   return (
