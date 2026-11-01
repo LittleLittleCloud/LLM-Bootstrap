@@ -1,0 +1,22 @@
+{
+  "experiment_id": "2026-10-31-qwen36-fp8-prefix-cache-001",
+  "status": "frozen",
+  "description": "Evaluate the merged Qwen3.6-35B-A3B official FP8 .NET and Metal engine with bounded hybrid prefix caching on Apple M5 Pro.",
+  "contract_frozen_at": "2026-11-01T01:49:36.077275Z",
+  "hardware_platform": "Apple M5 Pro",
+  "hardware_gpu_cores": 20,
+  "hardware_memory_gib": 48,
+  "target_repository": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "target_revision": "95a723d08a9490559dae23d0cff1d9466213d989",
+  "target_weights": "Official FP8 E4M3 with 128x128 BF16 block scales; checkpoint BF16 tensors preserved",
+  "evaluation_id": "endpoint-bench",
+  "evaluation_revision": "9c1005a60c3e7f38257427743cc566a11eb61634",
+  "evaluation_sha256": "b7205b5316ea7767b17bfeeda70223bb9c489290f506679c2c215d0e5aba089a",
+  "engine_name": "qwen36-fp8-dotnet-metal",
+  "engine_commit": "59fee31223165024a5bb975cb4deeda9c6f5310d",
+  "comparison_track": "matched-configuration",
+  "goal_thresholds": [
+    "prefill_tokens_per_second_p50 >= 500",
+    "decode_tokens_per_second_p50 >= 50"
+  ]
+}
