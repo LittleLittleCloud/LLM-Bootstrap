@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -7,10 +7,11 @@ import {
   collapse, defaultState, deriveDeltas, facetCounts, filterRuns, frontier, hashToState, largestCohort, lineageRoots,
   conformance, mixedConditions, orderRows, rankRuns, stateToHash, summarize, trendSeries, unrankedReason,
 } from '../site/src/lib/model.js';
+import { buildIndex, loadEvaluationIds, loadRecordFiles, serializeIndex } from '../tools/leaderboard/build-index.mjs';
+import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const site = join(root, 'site');
-const mock = JSON.parse(readFileSync(join(site, 'public', 'data', 'leaderboard.mock.json'), 'utf8'));
 
 let counter = 0;
 const entry = (overrides = {}) => {
@@ -27,47 +28,16 @@ const entry = (overrides = {}) => {
 };
 const decode = (value, extra = {}) => entry({ metrics: { ...entry().metrics, decode_tok_s: value, ttft_ms: 20000 / value }, ...extra });
 
-test('the synthetic demo index is flagged, internally consistent, and covers the awkward cases', () => {
-  assert.equal(mock.synthetic, true);
-  assert.equal(mock.schema_version, '1.0.0');
-  assert.equal(mock.counts.entries, mock.entries.length);
-  assert.equal(new Set(mock.entries.map(e => e.entry_id)).size, mock.entries.length);
-  assert.equal(new Set(mock.entries.map(e => e.run_id)).size, mock.counts.runs);
-  for (const e of mock.entries) {
-    const stamp = e.entry_id.split('/').at(-1);
-    assert.equal(e.entry_id, `${e.experiment_id}/${stamp}`, 'an entry id is <experiment>/<YYYYMMDD-HHMMSS>');
-    assert.match(stamp, /^\d{8}-\d{6}$/);
-    assert.equal(e.run_id, e.entry_id, 'one report is one run');
-    assert.deepEqual(e.source, { experiment: `experiments/${e.experiment_id}/experiment.json`, evaluation: `experiments/${e.experiment_id}/evaluation/${stamp}.json` });
-    assert.ok(stamp.startsWith(e.date.replaceAll('-', '')), `${e.entry_id} is not named after its date`);
-  }
-  const experiments = new Set(mock.entries.map(e => e.experiment_id));
-  assert.equal(experiments.size, mock.counts.experiments);
-  const models = new Map(mock.entries.map(e => [e.experiment_id, e.target_model]));
-  const engineOf = new Map();
-  for (const e of mock.entries) {
-    const key = `${e.engine.name}@${e.engine.revision}`;
-    assert.equal(engineOf.get(e.experiment_id) ?? key, key, `${e.experiment_id} measures more than one engine`);
-    engineOf.set(e.experiment_id, key);
-  }
-  for (const e of mock.entries) {
-    assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/);
-    for (const key of ['role', 'builder', 'harness', 'quality_gate']) assert.equal(key in e, false, `${e.entry_id} still has ${key}`);
-    assert.match(e.engine.revision, /^[0-9a-f]{40}$/, `${e.entry_id} has no engine revision`);
-    assert.ok(['full', 'quick'].includes(e.profile));
-    assert.equal(e.evaluation, 'endpoint-bench');
-    assert.ok(['loopback', 'private-network', 'remote'].includes(e.endpoint_class));
-    assert.ok(e.context_window.tokens > 0);
-    if (e.derived_from) {
-      assert.ok(experiments.has(e.derived_from), `${e.entry_id} derives from an unknown experiment`);
-      // The protocol forbids changing the target model in a derived experiment.
-      assert.equal(models.get(e.derived_from), e.target_model, `${e.experiment_id} changes the target model`);
-    }
-  }
-  assert.ok(mock.entries.some(e => e.quality.conform_passed === null), 'an unchecked conformance stays null');
-  assert.ok(mock.entries.some(e => e.metrics.decode_tok_s === null), 'a missing measurement stays null');
-  assert.ok(mock.entries.some(e => e.profile === 'quick'));
-  assert.doesNotMatch(JSON.stringify(mock), /autonomy|human_interventions|peak_memory|\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+test('the committed leaderboard index is built from the experiment records and holds no synthetic data', async () => {
+  const path = join(site, 'public', 'data', 'leaderboard.json');
+  const text = readFileSync(path, 'utf8');
+  const index = JSON.parse(text);
+  assert.equal(index.schema_version, '1.0.0');
+  assert.equal('synthetic' in index, false);
+  assert.equal(existsSync(join(site, 'public', 'data', 'leaderboard.mock.json')), false, 'no demo index is shipped');
+  const validators = await loadValidators();
+  const rebuilt = buildIndex(loadRecordFiles(root), { validators, evaluationIds: loadEvaluationIds(root) });
+  assert.equal(serializeIndex(rebuilt), text, 'rebuild it with: node tools/leaderboard/build-index.mjs . --out site/public/data/leaderboard.json --require-validation');
 });
 
 test('the page loads nothing from outside the site and never injects markup', () => {

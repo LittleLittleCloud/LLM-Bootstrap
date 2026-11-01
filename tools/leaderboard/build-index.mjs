@@ -1,6 +1,6 @@
 // Builds the leaderboard index from experiment records.
 //
-// Usage: node tools/leaderboard/build-index.mjs <repo-root> --out <file> [--synthetic] [--require-validation]
+// Usage: node tools/leaderboard/build-index.mjs <repo-root> --out <file> [--require-validation]
 //
 // Reads experiments/<id>/experiment.json (an Experiment, or a DerivedExperiment that is resolved against its pinned base) and
 // every experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json (an EvaluationReport) under <repo-root>. A report names no engine or
@@ -43,7 +43,7 @@ export class IndexError extends Error {
 }
 
 // files: Map of repository-relative POSIX path -> file text. evaluationIds: ids of the evaluations that exist now, or null to list every report.
-export function buildIndex(files, { synthetic = false, validators = null, evaluationIds = null } = {}) {
+export function buildIndex(files, { validators = null, evaluationIds = null } = {}) {
   const problems = [];
   const retired = [];
   const fail = message => { problems.push(message); };
@@ -160,7 +160,6 @@ export function buildIndex(files, { synthetic = false, validators = null, evalua
   entries.sort((a, b) => a.date.localeCompare(b.date) || a.entry_id.localeCompare(b.entry_id));
   return {
     schema_version: INDEX_VERSION,
-    synthetic,
     ...(evaluationIds ? { retired_runs: retired } : {}),
     counts: {
       runs: new Set(entries.map(entry => entry.run_id)).size,
@@ -207,7 +206,7 @@ function main(argv) {
   const root = argv[0];
   const out = argv[argv.indexOf('--out') + 1];
   if (!root || argv.indexOf('--out') < 0 || !out) {
-    console.error('usage: node build-index.mjs <repo-root> --out <file> [--synthetic] [--require-validation]');
+    console.error('usage: node build-index.mjs <repo-root> --out <file> [--require-validation]');
     return 2;
   }
   return loadValidators().then(validators => {
@@ -216,7 +215,7 @@ function main(argv) {
       console.error('warning: ajv is not installed, so documents are not validated against the schemas');
     }
     try {
-      const index = buildIndex(loadRecordFiles(root), { synthetic: argv.includes('--synthetic'), validators, evaluationIds: loadEvaluationIds(root) });
+      const index = buildIndex(loadRecordFiles(root), { validators, evaluationIds: loadEvaluationIds(root) });
       writeFileSync(out, serializeIndex(index));
       console.log(`wrote ${index.counts.entries} entries from ${index.counts.runs} evaluation reports to ${out}`);
       return 0;
