@@ -1,9 +1,0 @@
-{
-  "experiment_id": "2026-11-01-splash-qwen36-8bit-no-thinking-001",
-  "status": "frozen",
-  "description": "Hypothesis: disabling Splash default thinking allows final access-code answers within endpoint-bench needle's unchanged 64-token budget, addressing the base run's ten empty answers. Run the full-profile conform and needle tests with --default-reasoning-effort none and the base observed context limit explicitly held at 73721 tokens. Keep the target weights, engine commit, evaluation pin, INT8 KV, FP32 states, DFlash2 speculation and automatic memory policy unchanged. This diagnostic does not measure other tests or claim an engine speedup.",
-  "contract_frozen_at": "2026-11-01T21:42:17.590576+00:00",
-  "extends_path": "../2026-11-01-splash-qwen36-8bit-001/experiment.json",
-  "extends_revision": "b91923202595ad4615e1c5e95640a46e706d961e",
-  "extends_sha256": "ea12949193b3fa839db3f58887f813a7236050af260115753f1898d27ab5a405"
-}
