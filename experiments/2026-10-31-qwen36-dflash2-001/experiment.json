@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-10-31-qwen36-dflash2-001",
+  "status": "frozen",
+  "description": "Hypothesis: BF16 DFlash2 drafting with small-block FP32 target verification and accepted-prefix hybrid-state restoration improves decode throughput over the base serial engine. The official FP8 target is unchanged. This complete-system comparison adds speculation, draft context caching, and small-batch projection kernels; gains cannot be attributed to one kernel alone.",
+  "contract_frozen_at": "2026-11-01T03:59:50.640085Z",
+  "extends_path": "../2026-10-31-qwen36-fp8-prefix-cache-001/experiment.json",
+  "extends_revision": "368e3c64dd38b9cfa8979d9f6d73a53752472fd3",
+  "extends_sha256": "00db8e12d7cf1ea168c08462454884eba5eb9a6b76e15a258ae611949ea19fed",
+  "engine_commit": "8d6689ffec725a18e38708981af0ec714c9e827e",
+  "comparison_track": "best-permitted-configuration"
+}
