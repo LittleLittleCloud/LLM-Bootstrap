@@ -1,0 +1,316 @@
+{
+  "report_version": 1,
+  "evaluation_id": "endpoint-bench",
+  "evaluation_revision": "9012efb97d13959c17a3e5466a40cce46f706de1",
+  "evaluation_sha256": "b7205b5316ea7767b17bfeeda70223bb9c489290f506679c2c215d0e5aba089a",
+  "started_at": "2026-11-01T21:42:44.450Z",
+  "finished_at": "2026-11-01T21:49:37.794Z",
+  "endpoint_class": "loopback",
+  "model": "mlx-community/Qwen3.6-35B-A3B-8bit",
+  "profile": "full",
+  "seed": "acd039c3",
+  "context_window": {
+    "tokens": 73721,
+    "source": "models-metadata"
+  },
+  "chars_per_token": 3.72,
+  "compat": {},
+  "selected_tests": [
+    "conform",
+    "needle"
+  ],
+  "status": "complete",
+  "failures": [],
+  "tests": {
+    "conform": {
+      "status": "complete",
+      "required_passed": true,
+      "checks": [
+        {
+          "id": "models-list",
+          "title": "Lists models at /models",
+          "required": true,
+          "status": "pass",
+          "detail": "1 models"
+        },
+        {
+          "id": "chat-completion",
+          "title": "Answers a chat completion with usage",
+          "required": true,
+          "status": "pass",
+          "detail": "ok"
+        },
+        {
+          "id": "chat-stream",
+          "title": "Streams server-sent events",
+          "required": true,
+          "status": "pass",
+          "detail": "ok"
+        },
+        {
+          "id": "stream-usage",
+          "title": "Reports token usage in the stream",
+          "required": true,
+          "status": "pass",
+          "detail": "19 prompt, 2 completion tokens"
+        },
+        {
+          "id": "cached-tokens",
+          "title": "Reports cached prompt tokens",
+          "required": false,
+          "status": "pass",
+          "detail": "0 cached"
+        },
+        {
+          "id": "max-tokens",
+          "title": "Honors the output token limit",
+          "required": true,
+          "status": "pass",
+          "detail": "ok"
+        },
+        {
+          "id": "system-message",
+          "title": "Accepts a system message",
+          "required": true,
+          "status": "pass",
+          "detail": "ok"
+        },
+        {
+          "id": "stop-sequence",
+          "title": "Honors a stop sequence",
+          "required": false,
+          "status": "pass",
+          "detail": "ok"
+        },
+        {
+          "id": "deterministic",
+          "title": "Repeats itself at temperature 0",
+          "required": false,
+          "status": "pass",
+          "detail": "ok"
+        },
+        {
+          "id": "error-shape",
+          "title": "Rejects an unknown model with an error object",
+          "required": false,
+          "status": "pass",
+          "detail": "HTTP 404"
+        }
+      ]
+    },
+    "needle": {
+      "status": "complete",
+      "config": {
+        "fill_percent": 90,
+        "input_tokens": 66348,
+        "runs": 2,
+        "positions": [
+          5,
+          25,
+          50,
+          75,
+          90
+        ]
+      },
+      "positions": [
+        {
+          "percent": 5,
+          "runs": [
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "TFFE-DHX2-RSWL",
+              "prompt_tokens": 69969,
+              "ttft_ms": 40008.9,
+              "e2e_ms": 40203.7,
+              "input_tokens_per_second": 1748.8
+            },
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "TJZM-3UX5-BHJV",
+              "prompt_tokens": 70081,
+              "ttft_ms": 41100,
+              "e2e_ms": 41338.3,
+              "input_tokens_per_second": 1705.1
+            }
+          ],
+          "summary": {
+            "attempted": 2,
+            "correct": 2,
+            "failed": 0,
+            "accuracy": 1,
+            "stderr": 0,
+            "format_compliance": 1,
+            "prompt_tokens_p50": 69969,
+            "ttft_ms_p50": 40008.9,
+            "ttft_ms_p90": 41100,
+            "input_tokens_per_second_p50": 1705.1
+          }
+        },
+        {
+          "percent": 25,
+          "runs": [
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "TQ4M-XRC9-XZC7",
+              "prompt_tokens": 69973,
+              "ttft_ms": 40717.3,
+              "e2e_ms": 40952.6,
+              "input_tokens_per_second": 1718.5
+            },
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "7WL3-2GFL-9Y75",
+              "prompt_tokens": 70003,
+              "ttft_ms": 40891.3,
+              "e2e_ms": 41126.1,
+              "input_tokens_per_second": 1711.9
+            }
+          ],
+          "summary": {
+            "attempted": 2,
+            "correct": 2,
+            "failed": 0,
+            "accuracy": 1,
+            "stderr": 0,
+            "format_compliance": 1,
+            "prompt_tokens_p50": 69973,
+            "ttft_ms_p50": 40717.3,
+            "ttft_ms_p90": 40891.3,
+            "input_tokens_per_second_p50": 1711.9
+          }
+        },
+        {
+          "percent": 50,
+          "runs": [
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "ZRV5-EQBF-XXHS",
+              "prompt_tokens": 70164,
+              "ttft_ms": 40825.2,
+              "e2e_ms": 41056.5,
+              "input_tokens_per_second": 1718.6
+            },
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "RPFP-B6RJ-58Z9",
+              "prompt_tokens": 70167,
+              "ttft_ms": 41020.2,
+              "e2e_ms": 41249.6,
+              "input_tokens_per_second": 1710.5
+            }
+          ],
+          "summary": {
+            "attempted": 2,
+            "correct": 2,
+            "failed": 0,
+            "accuracy": 1,
+            "stderr": 0,
+            "format_compliance": 1,
+            "prompt_tokens_p50": 70164,
+            "ttft_ms_p50": 40825.2,
+            "ttft_ms_p90": 41020.2,
+            "input_tokens_per_second_p50": 1710.5
+          }
+        },
+        {
+          "percent": 75,
+          "runs": [
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "D5HX-DTNT-L566",
+              "prompt_tokens": 69923,
+              "ttft_ms": 40635.9,
+              "e2e_ms": 40866.5,
+              "input_tokens_per_second": 1720.7
+            },
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "NLPA-X2Z6-ZYEE",
+              "prompt_tokens": 70027,
+              "ttft_ms": 40854.9,
+              "e2e_ms": 41082.2,
+              "input_tokens_per_second": 1714
+            }
+          ],
+          "summary": {
+            "attempted": 2,
+            "correct": 2,
+            "failed": 0,
+            "accuracy": 1,
+            "stderr": 0,
+            "format_compliance": 1,
+            "prompt_tokens_p50": 69923,
+            "ttft_ms_p50": 40635.9,
+            "ttft_ms_p90": 40854.9,
+            "input_tokens_per_second_p50": 1714
+          }
+        },
+        {
+          "percent": 90,
+          "runs": [
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "PESS-BJLF-7LHN",
+              "prompt_tokens": 70011,
+              "ttft_ms": 40633.8,
+              "e2e_ms": 40870.7,
+              "input_tokens_per_second": 1723
+            },
+            {
+              "ok": true,
+              "compliant": true,
+              "correct": true,
+              "answer": "CQLB-9WR7-DT8T",
+              "prompt_tokens": 70039,
+              "ttft_ms": 40856.3,
+              "e2e_ms": 41088.5,
+              "input_tokens_per_second": 1714.3
+            }
+          ],
+          "summary": {
+            "attempted": 2,
+            "correct": 2,
+            "failed": 0,
+            "accuracy": 1,
+            "stderr": 0,
+            "format_compliance": 1,
+            "prompt_tokens_p50": 70011,
+            "ttft_ms_p50": 40633.8,
+            "ttft_ms_p90": 40856.3,
+            "input_tokens_per_second_p50": 1714.3
+          }
+        }
+      ],
+      "summary": {
+        "attempted": 10,
+        "correct": 10,
+        "failed": 0,
+        "accuracy": 1,
+        "stderr": 0,
+        "format_compliance": 1,
+        "prompt_tokens_p50": 70011,
+        "ttft_ms_p50": 40825.2,
+        "ttft_ms_p90": 41020.2,
+        "input_tokens_per_second_p50": 1714.3
+      }
+    }
+  }
+}
