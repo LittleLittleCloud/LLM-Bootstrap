@@ -1,12 +1,12 @@
 // Thinking Test: a medium reasoning task, answered with reasoning left on and with it switched off.
 // Each question is a fresh table; the model must name the row with the highest score in one exact line.
-import { streamChat } from './client.js';
+import { NO_THINKING, streamChat } from './client.js';
 import { splitTokens } from './measure.js';
 import { p50, p95, round, seeded, stderrOf } from './util.js';
 
 const VARIANTS = {
   default: {},
-  'no-thinking': { chat_template_kwargs: { enable_thinking: false } },
+  'no-thinking': NO_THINKING,
 };
 
 export function buildQuestion({ seed, rows }) {

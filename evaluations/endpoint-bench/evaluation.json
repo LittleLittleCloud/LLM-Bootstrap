@@ -106,7 +106,7 @@
     {
       "role": "driver",
       "path": "src/client.js",
-      "sha256": "23a9362cc9410dd213ba6e465b88badaf9ff84476519a218d760ee82a415c345"
+      "sha256": "f98bdc35f6fd930507b4c1ac1dda79fae6473a6a3ed47259a6ef5292bfd0aec5"
     },
     {
       "role": "driver",
@@ -141,7 +141,7 @@
     {
       "role": "driver",
       "path": "src/needle.js",
-      "sha256": "ed14c73c3360457f720c0c6f616898ad19382767d05ee4b258e8ed702701a364"
+      "sha256": "b078e3e5402e1fba4367cc2defa7849f638c0d119b70e63746f9d3d872aa2d3c"
     },
     {
       "role": "driver",
@@ -156,7 +156,7 @@
     {
       "role": "driver",
       "path": "src/retrieval.js",
-      "sha256": "a79c4e1d5a384c44415b260d898eb7af515184a0b7d7b455e57d307d56394ded"
+      "sha256": "91142aca01189f1abd666f4eb90abf3904217b1fff84f0ec87b404fbd9314e08"
     },
     {
       "role": "driver",
@@ -171,7 +171,7 @@
     {
       "role": "driver",
       "path": "src/thinking.js",
-      "sha256": "fd7e45b825a7260cde715a79a7a2ad949e36d72390e173a138900231dde01ffe"
+      "sha256": "080ee3dbad6cad53640972a76028ca2e2cb4516914ca3f9528d4cc762a0db2cc"
     },
     {
       "role": "driver",
@@ -181,7 +181,7 @@
     {
       "role": "assertion-evaluator",
       "path": "reference/engine.js",
-      "sha256": "882fceb3010640550c6faa76ea28548c7f9f5b2d2f92324eb6c26f26ead9c071"
+      "sha256": "dfbe00523082638c5eb72176ff95a2a2d1d230146262eaa024f89057dbf32fd7"
     }
   ]
 }

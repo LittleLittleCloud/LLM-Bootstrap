@@ -303,7 +303,7 @@
         "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "lengths"] } }]
       },
       "RetrievalRun": {
-        "description": "input_tokens_per_second is the prompt tokens the endpoint reported over the time to the first token, so it includes network and queueing.",
+        "description": "input_tokens_per_second is the prompt tokens the endpoint reported over the time to the first token, so it includes network and queueing. completion_tokens, reasoning_tokens, visible_tokens, and finish_reason are absent from reports of earlier evaluation revisions; they tell an empty or truncated answer from a wrong one.",
         "anyOf": [
           { "type": "object", "required": ["ok", "error", "correct", "compliant"], "properties": { "ok": { "const": false }, "error": { "$ref": "#/components/schemas/Text" }, "correct": { "const": false }, "compliant": { "const": false } } },
           {
@@ -311,7 +311,9 @@
             "properties": {
               "ok": { "const": true }, "correct": { "type": "boolean" }, "compliant": { "type": "boolean" }, "answer": { "type": "string", "maxLength": 40 },
               "prompt_tokens": { "type": ["integer", "null"], "minimum": 0 }, "ttft_ms": { "$ref": "#/components/schemas/Millis" },
-              "e2e_ms": { "$ref": "#/components/schemas/Millis" }, "input_tokens_per_second": { "$ref": "#/components/schemas/Rate" }
+              "e2e_ms": { "$ref": "#/components/schemas/Millis" }, "input_tokens_per_second": { "$ref": "#/components/schemas/Rate" },
+              "completion_tokens": { "type": ["integer", "null"], "minimum": 0 }, "reasoning_tokens": { "type": ["integer", "null"], "minimum": 0 },
+              "visible_tokens": { "type": ["integer", "null"], "minimum": 0 }, "finish_reason": { "type": ["string", "null"] }
             }
           }
         ]
@@ -323,7 +325,11 @@
           "attempted": { "type": "integer", "minimum": 0 }, "correct": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 },
           "accuracy": { "$ref": "#/components/schemas/Ratio" }, "stderr": { "type": ["number", "null"], "minimum": 0 }, "format_compliance": { "$ref": "#/components/schemas/Ratio" },
           "prompt_tokens_p50": { "type": ["number", "null"], "minimum": 0 }, "ttft_ms_p50": { "$ref": "#/components/schemas/Millis" },
-          "ttft_ms_p90": { "$ref": "#/components/schemas/Millis" }, "input_tokens_per_second_p50": { "$ref": "#/components/schemas/Rate" }
+          "ttft_ms_p90": { "$ref": "#/components/schemas/Millis" }, "input_tokens_per_second_p50": { "$ref": "#/components/schemas/Rate" },
+          "empty_runs": { "description": "Requests that completed with an empty visible answer. Absent from reports of earlier evaluation revisions.", "type": "integer", "minimum": 0 },
+          "truncated_runs": { "description": "Requests that stopped at the output limit.", "type": "integer", "minimum": 0 },
+          "reasoning_runs": { "description": "Requests that spent output tokens on reasoning. For needle, where thinking is disabled, a count above zero means the endpoint did not honor the request.", "type": "integer", "minimum": 0 },
+          "reasoning_tokens_p50": { "type": ["number", "null"], "minimum": 0 }
         }
       },
       "PrefillResult": {

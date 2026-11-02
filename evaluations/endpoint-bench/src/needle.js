@@ -1,4 +1,5 @@
 // Needle Test: a document that fills most of the context window hides one access code at several depths ("lost in the middle").
+import { NO_THINKING } from './client.js';
 import { askNeedle, summarizeRetrieval } from './retrieval.js';
 import { MIN_DOCUMENT_TOKENS } from './context.js';
 
@@ -15,7 +16,7 @@ export async function runNeedle(env, plan, { window, charsPerToken, seed, signal
       if (signal?.aborted) { status = 'cancelled'; break; }
       onProgress({ message: `needle at ${percent}%, run ${index + 1} of ${plan.runs}`, done: step, total: steps });
       step += 1;
-      const run = await askNeedle(env, { seed: `${seed}:needle:${percent}:${index}`, targetTokens: inputTokens, positionPercent: percent, charsPerToken, timeoutMs: plan.timeout_seconds * 1000, signal });
+      const run = await askNeedle(env, { seed: `${seed}:needle:${percent}:${index}`, targetTokens: inputTokens, positionPercent: percent, charsPerToken, timeoutMs: plan.timeout_seconds * 1000, signal, fields: NO_THINKING });
       if (run.aborted) { status = 'cancelled'; break; }
       runs.push(run);
     }
@@ -25,5 +26,7 @@ export async function runNeedle(env, plan, { window, charsPerToken, seed, signal
   const all = positions.flatMap(position => position.runs);
   const summary = summarizeRetrieval(all);
   if (status === 'complete' && summary.failed > 0) status = summary.failed === summary.attempted ? 'error' : 'partial';
-  return { status, config: { fill_percent: plan.fill_percent, input_tokens: inputTokens, runs: plan.runs, positions: plan.positions }, positions, summary };
+  // `thinking: 'disabled'` is the request policy. summary.reasoning_runs counts the requests that reasoned anyway, so an endpoint that
+  // cannot honor it shows up in the report instead of looking like a retrieval failure.
+  return { status, config: { fill_percent: plan.fill_percent, input_tokens: inputTokens, runs: plan.runs, positions: plan.positions, thinking: 'disabled' }, positions, summary };
 }

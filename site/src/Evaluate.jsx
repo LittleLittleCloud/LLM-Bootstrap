@@ -79,7 +79,9 @@ const SUMMARIES = {
   ),
   needle: test => (
     <>
-      <p>{pct(test.summary.accuracy)} recall ({test.summary.correct}/{test.summary.attempted}) in a {fmt(test.config.input_tokens, 0)}-token document.</p>
+      <p>{pct(test.summary.accuracy)} recall ({test.summary.correct}/{test.summary.attempted}) in a {fmt(test.config.input_tokens, 0)}-token document, thinking requested off.</p>
+      {test.summary.reasoning_runs > 0 && <p className="muted">{test.summary.reasoning_runs} of {test.summary.attempted} requests still reasoned, so the endpoint did not honor the no-thinking request.</p>}
+      {test.summary.empty_runs > 0 && <p className="muted">{test.summary.empty_runs} answers were empty ({test.summary.truncated_runs} stopped at the output limit): a budget failure, not a wrong retrieval.</p>}
       <Table
         head={['Depth', 'Recall', 'TTFT p50', 'Input tok/s p50']}
         rows={test.positions.map(item => [`${item.percent}%`, pct(item.summary.accuracy), ms(item.summary.ttft_ms_p50), fmt(item.summary.input_tokens_per_second_p50, 0)])}

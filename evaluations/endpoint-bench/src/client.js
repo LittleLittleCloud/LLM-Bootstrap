@@ -60,6 +60,9 @@ const learn = (env, errorText) => {
   return false;
 };
 
+// The request control that switches reasoning off, as the thinking test's no-thinking variant sends it.
+export const NO_THINKING = { chat_template_kwargs: { enable_thinking: false } };
+
 export const newCompat = () => ({ tokenParam: 'max_tokens', noTemperature: false, noStreamOptions: false, noForcedLength: false });
 
 function buildBody(env, { messages, maxTokens, fields, stream, forceLength }) {
