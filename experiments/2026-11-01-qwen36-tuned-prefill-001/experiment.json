@@ -1,0 +1,16 @@
+{
+  "experiment_id": "2026-11-01-qwen36-tuned-prefill-001",
+  "status": "frozen",
+  "description": "Hypothesis: 2048-token model batches, 64-row grouped expert tiles, predecoded dense projections and device FP16 TensorOps attention improve prefill over the fast-prefill base. Run --tuned-prefill with the same DFlash2 draft and prefix caching. FP32 accumulation, softmax, KV and recurrent state are retained; small speculative verification uses FP32 attention. Several kernels and batching change together, so improvements cannot be attributed to one change. The latest evaluator also disables thinking for needle; historical results are not a matched evaluation-revision comparison. The prefill goal reflects the requested further 5x over the prior formal 622.6 tok/s result.",
+  "contract_frozen_at": "2026-11-02T07:25:52.468296+00:00",
+  "extends_path": "../2026-11-01-qwen36-fast-prefill-001/experiment.json",
+  "extends_revision": "dec8c2f400aff7775d9312993549c5392afc47bc",
+  "extends_sha256": "ac46700719aef86aaa60367264a585dfabfee9e2d9237d2ca3fd237ed2b3f018",
+  "engine_commit": "a64c09ace6eee62b5b63b1f22f2bd0df8908008e",
+  "evaluation_revision": "e5e5269b40d39e934fe36ada22375082f2c2bb4d",
+  "evaluation_sha256": "3674dbf83377a484ff739f44926d4bcac77ade37a609a85919db09f12c68a141",
+  "goal_thresholds": [
+    "prefill_tokens_per_second_p50 >= 3113",
+    "decode_tokens_per_second_p50 >= 50"
+  ]
+}
