@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-01-qwen36-fast-prefill-001",
+  "status": "frozen",
+  "description": "Hypothesis: FP16 TensorOps projections, tiled FP16 attention with FP32 accumulation, and 512-token model batches with bounded attention query slices improve prefill throughput over the DFlash2 base. Run with --fast-prefill and the same DFlash2 draft and prefix caching. This complete-system comparison changes multiple kernels and batching; gains cannot be attributed to one change. Official packed FP8 weights, FP32 KV and recurrent state remain unchanged.",
+  "contract_frozen_at": "2026-11-02T04:07:30.848313+00:00",
+  "extends_path": "../2026-10-31-qwen36-dflash2-001/experiment.json",
+  "extends_revision": "ecf173efe61e700ebdb834a7ee4ce0d85689c34a",
+  "extends_sha256": "12b705b24549825cede7da7f19d538034005660e3cd5922740b2f9126d2095dd",
+  "engine_commit": "2932ebbdeb10666a2683f5b41957d11fc516d1b1",
+  "comparison_track": "best-permitted-configuration"
+}
