@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-02-qwen36-online-prefill-001",
+  "status": "frozen",
+  "description": "Hypothesis: gathered expert inputs with adaptive tiles and fused online GQA attention improve the FP16-KV base prefill result (1245.3 tok/s) while preserving endpoint conformance, retrieval and cache correctness. Measure the merged implementation with --tuned-prefill, the same DFlash2 draft, FP16 target/draft KV, prefix caching and 32K context. Several kernels change together; no single-kernel attribution is claimed. Online attention rounds block-local exponentials to FP16 with FP32 accumulators, softmax statistics and recurrent state; generated tokens and speculative acceptance may change. Run all seven tests with the full profile and inherit the existing goal thresholds. Pin the latest evaluator repository revision; its definition and driver hashes are unchanged from the base.",
+  "contract_frozen_at": "2026-11-02T19:25:36.904544+00:00",
+  "extends_path": "../2026-11-02-qwen36-fp16-kv-001/experiment.json",
+  "extends_revision": "1e308e570d56786fcb65433332a5697a50785d79",
+  "extends_sha256": "3cce8c519b72ad217018b3a3ac59cddf8e079f1ffd4b08a43c8533474a1a0bfa",
+  "engine_commit": "9a4a3da20e6f0076f21e3326a1a2ccf884069970",
+  "evaluation_revision": "1e308e570d56786fcb65433332a5697a50785d79"
+}
