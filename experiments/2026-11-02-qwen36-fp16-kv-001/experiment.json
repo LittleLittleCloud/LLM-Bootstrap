@@ -1,0 +1,10 @@
+{
+  "experiment_id": "2026-11-02-qwen36-fp16-kv-001",
+  "status": "frozen",
+  "description": "Hypothesis: storing target and DFlash KV in FP16 and consuming half KV directly in device attention avoids the 32K Metal memory failure seen in the tuned-prefill base. Use --tuned-prefill with the same draft, prefix caching, batch sizes, projection kernels and FP32 accumulation/softmax/recurrent state. The evaluator revision and inherited performance thresholds are unchanged. Measure all seven tests with the full profile; FP16 rounding may change generated tokens and speculative acceptance.",
+  "contract_frozen_at": "2026-11-02T08:01:41.269211+00:00",
+  "extends_path": "../2026-11-01-qwen36-tuned-prefill-001/experiment.json",
+  "extends_revision": "e08ed9f8555cbe13c965a499b1431441e13659aa",
+  "extends_sha256": "aa876c2a57b24970105d99daffe6162baf44ca020fca6fd5944eb648b4d0993f",
+  "engine_commit": "4187694abe2015e4774db2d328fbafff24c06d3c"
+}
