@@ -392,3 +392,62 @@ test('the quick profile runs a smaller plan and says so', { timeout: 120000 }, a
   assert.equal(report.tests.speed.runs.length, 2);
   assert.deepEqual(report.tests.decode.lengths.map(item => item.output_tokens), [50]);
 });
+
+const recording = engine => {
+  const bodies = [];
+  const fetch = async (url, init = {}) => {
+    if (init.body) bodies.push(JSON.parse(init.body));
+    return engine(url, init);
+  };
+  return { fetch, bodies };
+};
+// The 1500-token calibration probe is not a test request, so only documents of at least 2000 tokens count.
+const retrievalRequests = bodies => bodies.filter(body => /access code for the \w+ sector/.test(JSON.stringify(body.messages)) && JSON.stringify(body.messages).length > 7000);
+
+test('needle asks for no thinking, prefill keeps the endpoint default, and recall is graded without the budget going to reasoning', { timeout: 120000 }, async () => {
+  const needle = recording(fast({ reasoning: 200 }));
+  const { report } = await run(needle.fetch, {}, { tests: ['needle'] });
+  accepts(report);
+  const requests = retrievalRequests(needle.bodies);
+  assert.equal(requests.length, 2);
+  for (const body of requests) {
+    assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
+    assert.equal(body.max_tokens, 64, 'the output budget and the workload are unchanged');
+  }
+  const result = report.tests.needle;
+  assert.equal(result.config.thinking, 'disabled');
+  assert.equal(result.summary.accuracy, 1);
+  assert.deepEqual([result.summary.empty_runs, result.summary.truncated_runs, result.summary.reasoning_runs], [0, 0, 0]);
+  for (const item of result.positions.flatMap(position => position.runs)) {
+    assert.equal(item.finish_reason, 'stop');
+    assert.equal(item.reasoning_tokens, 0);
+    assert.ok(item.visible_tokens > 0 && item.completion_tokens >= item.visible_tokens);
+  }
+
+  const prefill = recording(fast({ reasoning: 20 }));
+  const other = await run(prefill.fetch, {}, { tests: ['prefill'] });
+  accepts(other.report);
+  const sent = retrievalRequests(prefill.bodies);
+  assert.ok(sent.length > 0);
+  assert.ok(sent.every(body => !('chat_template_kwargs' in body)), 'the policy is scoped to needle');
+});
+
+test('an endpoint that cannot honor no-thinking is reported, and an empty answer is told from a wrong one', { timeout: 120000 }, async () => {
+  const { report } = await run(fast({ reasoning: 200, honorsNoThinking: false }), {}, { tests: ['needle'] });
+  accepts(report);
+  const { summary } = report.tests.needle;
+  assert.equal(summary.accuracy, 0);
+  assert.equal(summary.reasoning_runs, summary.attempted, 'every request reasoned although thinking was off');
+  assert.equal(summary.empty_runs, summary.attempted);
+  assert.equal(summary.truncated_runs, summary.attempted);
+  for (const item of report.tests.needle.positions.flatMap(position => position.runs)) {
+    assert.equal(item.answer, '');
+    assert.equal(item.finish_reason, 'length');
+    assert.equal(item.reasoning_tokens, 64, 'the whole 64-token budget went to reasoning');
+    assert.equal(item.visible_tokens, 0);
+  }
+  const wrong = (await run(fast({ knowsNeedle: false }), {}, { tests: ['needle'] })).report.tests.needle.summary;
+  assert.equal(wrong.accuracy, 0);
+  assert.equal(wrong.empty_runs, 0, 'a wrong answer is not an empty one');
+  assert.equal(wrong.reasoning_runs, 0);
+});

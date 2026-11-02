@@ -35,7 +35,7 @@ function answerFor(body, { knowsNeedle, answersThinking }) {
 // reasoning: emit thinking deltas first. cache: honor prefixes. faults: 'no-usage', 'wrong-answers', 'early-stop', 'http-error'.
 export function createReferenceEngine({
   prefillTps = 20000, decodeTps = 400, window = 32768, reasoning = 0, cache = true, fault = null, knowsNeedle = true, answersThinking = true, models = null,
-  reportCached = true, requireCompletionTokens = false, rejectTemperature = false,
+  reportCached = true, requireCompletionTokens = false, rejectTemperature = false, honorsNoThinking = true,
 } = {}) {
   const history = [];
   let count = 0;
@@ -51,6 +51,9 @@ export function createReferenceEngine({
     const prompt = textOf(body.messages);
     const promptTokens = tokensOf(prompt) + 8;
     const limit = body.max_tokens ?? body.max_completion_tokens ?? 256;
+    // Thinking on by default; chat_template_kwargs.enable_thinking: false switches it off when the engine honors it.
+    const thinkingTokens = honorsNoThinking && body.chat_template_kwargs?.enable_thinking === false ? 0 : reasoning;
+    const budgetSpent = thinkingTokens >= limit;
     let cached = 0;
     if (cache) {
       for (const earlier of history) {
@@ -69,7 +72,7 @@ export function createReferenceEngine({
     const forced = body.min_tokens && body.ignore_eos;
     const total = Math.min(limit, forced ? limit : Math.max(1, words.length));
     const wantsUsage = body.stream_options?.include_usage;
-    const usage = { prompt_tokens: promptTokens, completion_tokens: total + reasoning, ...(reportCached ? { prompt_tokens_details: { cached_tokens: cached } } : {}) };
+    const usage = { prompt_tokens: promptTokens, completion_tokens: total + thinkingTokens, ...(reportCached ? { prompt_tokens_details: { cached_tokens: cached } } : {}) };
     if (!body.stream) {
       return json(200, {
         choices: [{ index: 0, message: { role: 'assistant', content: words.slice(0, total).join(' ') }, finish_reason: stop && total >= words.length ? 'stop' : total >= limit ? 'length' : 'stop' }],
@@ -79,11 +82,12 @@ export function createReferenceEngine({
     const delta = delta => ({ choices: [{ index: 0, delta, finish_reason: null }] });
     return stream(async send => {
       await sleep((Math.max(1, promptTokens - cached) / prefillTps) * 1000);
-      for (let index = 0; index < reasoning; index += 10) {
-        send(delta({ reasoning_content: 'think '.repeat(Math.min(10, reasoning - index)) }));
-        await sleep((Math.min(10, reasoning - index) / decodeTps) * 1000);
+      const thought = budgetSpent ? limit : thinkingTokens;
+      for (let index = 0; index < thought; index += 10) {
+        send(delta({ reasoning_content: 'think '.repeat(Math.min(10, thought - index)) }));
+        await sleep((Math.min(10, thought - index) / decodeTps) * 1000);
       }
-      const visible = Math.min(total, fault === 'early-stop' ? Math.max(1, Math.floor(limit / 2)) : total);
+      const visible = budgetSpent ? 0 : Math.min(total, fault === 'early-stop' ? Math.max(1, Math.floor(limit / 2)) : total);
       const pieces = forced ? Array(visible).fill('word') : words.slice(0, visible);
       const batch = Math.max(1, Math.round(decodeTps * 0.02));
       for (let sent = 0; sent < pieces.length; sent += batch) {
@@ -91,8 +95,8 @@ export function createReferenceEngine({
         send(delta({ content: (sent ? ' ' : '') + part.join(' ') }));
         await sleep((part.length / decodeTps) * 1000);
       }
-      send({ choices: [{ index: 0, delta: {}, finish_reason: visible >= limit ? 'length' : 'stop' }] });
-      if (wantsUsage && fault !== 'no-usage') send({ choices: [], usage: { ...usage, completion_tokens: visible + reasoning, ...(reasoning ? { completion_tokens_details: { reasoning_tokens: reasoning } } : {}) } });
+      send({ choices: [{ index: 0, delta: {}, finish_reason: budgetSpent || visible >= limit ? 'length' : 'stop' }] });
+      if (wantsUsage && fault !== 'no-usage') send({ choices: [], usage: { ...usage, completion_tokens: visible + thought, ...(thought ? { completion_tokens_details: { reasoning_tokens: thought } } : {}) } });
       send('[DONE]');
     });
   };
