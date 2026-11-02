@@ -10,3 +10,4 @@ node_modules/
 site/dist/
 .wrangler/
 .venv-evalscope/
+site/public/data/leaderboard.json

@@ -3,11 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "index": "node scripts/build-index.mjs",
+    "predev": "npm run index",
     "dev": "vite",
+    "prebuild": "npm run index",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "vite build && wrangler deploy",
-    "versions:upload": "vite build && wrangler versions upload"
+    "deploy": "npm run build && wrangler deploy",
+    "versions:upload": "npm run build && wrangler versions upload"
   },
   "engines": {
     "node": ">=22"

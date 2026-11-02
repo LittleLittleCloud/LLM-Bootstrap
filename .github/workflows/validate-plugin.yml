@@ -16,9 +16,17 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
       - name: Install locked repository-check dependencies
         run: npm ci
       - name: Check plugin formats, bundled resources, and protocol schemas
         run: npm test
+      - name: Build the site with its generated leaderboard
+        working-directory: site
+        run: |
+          npm ci
+          npm run build
       - name: Check whitespace
         run: git diff --check
