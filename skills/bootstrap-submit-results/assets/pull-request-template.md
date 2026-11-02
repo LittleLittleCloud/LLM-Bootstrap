@@ -36,7 +36,7 @@ Reviewed text only. Refer to private artifacts by hash and access limitation; do
 
 ## Validation
 - `npm ci && npm test`: <result>
-- `node tools/leaderboard/build-index.mjs . --out <file> --require-validation`: <entries written, quality-gate states>
+- `node tools/leaderboard/build-index.mjs . --out <file> --require-validation`: <entries written>
 - Evaluation pin: `<revision>` is in the history of `main`; the definition hash matches
 - Private-material scan: <what was searched and what was found>
 
