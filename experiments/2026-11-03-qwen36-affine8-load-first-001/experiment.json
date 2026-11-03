@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-03-qwen36-affine8-load-first-001",
+  "status": "frozen",
+  "description": "Hypothesis: loading all eight uchar4 payload vectors of each affine expert K32 tile before decoding/storing them improves prefill over the 2171.1 tok/s base. This changes only expert load/decode scheduling; affine-8 group-64 cache v2, BF16 scale/bias, FP16 operands/KV, FP32 accumulation/state, dynamic live-row tensor extents, fused gate/up, single-stage synchronization, 2048-token chunks, staged8 DeltaNet, DFlash2 and 32768-token context are unchanged. The evaluator is pinned to current main; its definition and all 17 script hashes are identical to the base. Run all seven Full-profile tests. Prior diagnostic throughput gains were 7.18% at 10K and 6.26% at 30K versus a later original-shader control; these are development evidence, not the expected official score.",
+  "contract_frozen_at": "2026-11-03T20:06:31.822583+00:00",
+  "extends_path": "../2026-11-03-qwen36-affine8-001/experiment.json",
+  "extends_revision": "f9c4dae5776f480181beec278e6f0f5f54c26e2a",
+  "extends_sha256": "d23416112a97f2fa96f23857a49b747f95f947b247e00822f7e310b1754804f4",
+  "engine_commit": "528afb24fc4c7dc1c1a494650dbb19e61077930f",
+  "evaluation_revision": "f9c4dae5776f480181beec278e6f0f5f54c26e2a"
+}
