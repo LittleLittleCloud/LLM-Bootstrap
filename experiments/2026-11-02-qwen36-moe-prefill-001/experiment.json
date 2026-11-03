@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-02-qwen36-moe-prefill-001",
+  "status": "frozen",
+  "description": "Hypothesis: 32-row staged FP8 expert matrices, fused FP32 gate/up/SiLU with direct FP16 activation output, and cooperative route grouping improve the online-attention base prefill result (1596.1 tok/s), while preserving conformance, retrieval and cache behavior. The preceding local profile ranked expert matrices at 37.9%/33.1% of sampled encoder interval sums at 10K/30K; those shares are not exclusive wall time. Keep the same FP8 target, DFlash2 draft, FP16 KV, FP32 accumulation/state, prefix caching, 2048-token chunks and explicit 32K context. Run all seven tests with the full profile and inherit the existing thresholds. Several kernels change together; use separate local ablations for attribution. Software prefetch and K=64/128 were rejected in development. The latest evaluator revision has the same definition and script hashes as the base.",
+  "contract_frozen_at": "2026-11-02T22:39:36.398535+00:00",
+  "extends_path": "../2026-11-02-qwen36-online-prefill-001/experiment.json",
+  "extends_revision": "867482429d1886351aee08de00ebfa168f49ff27",
+  "extends_sha256": "d5a59d806dec7cfc8681583ef2b15b7fd078be2d556e4ebf3cb7f7a89413bf6d",
+  "engine_commit": "59209d213c645130c6555a8a299f7db4ebd8c8dd",
+  "evaluation_revision": "867482429d1886351aee08de00ebfa168f49ff27"
+}

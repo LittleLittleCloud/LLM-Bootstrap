@@ -1,0 +1,10 @@
+{
+  "experiment_id": "2026-11-02-qwen36-delta-prefill-001",
+  "status": "frozen",
+  "description": "Hypothesis: opt-in staged8 Delta recurrence reduces prefill time relative to the staged MoE base (1729.4 tok/s), while retaining conformance, retrieval and cache behavior. Enable --tuned-prefill --delta-mode staged8 with the same FP8 target, DFlash2 draft, FP16 KV, FP32 recurrent state and accumulation, 2048-token chunks and explicit 32768-token context. Staging Q/K/V and gates in eight-token blocks changes reduction order; whole-model logits are not bitwise equivalent. Benchmark-only repacked weights and dense tile variants are not enabled. Run all seven tests with the full profile and inherit the existing goals.",
+  "contract_frozen_at": "2026-11-02T23:40:54.169008+00:00",
+  "extends_path": "../2026-11-02-qwen36-moe-prefill-001/experiment.json",
+  "extends_revision": "3bf0a86ca1ea8be6ddbcf1a4a923f7606a79d238",
+  "extends_sha256": "2b3a2e00f233493b679440b3757a690a2f5ba5b16a12cccb192671e00b8b769c",
+  "engine_commit": "96e6d774e3f7633ca381a665c368827ca94cf054"
+}
