@@ -1,0 +1,22 @@
+{
+  "experiment_id": "2026-11-03-qwen36-affine8-001",
+  "status": "frozen",
+  "description": "Hypothesis: affine-8 group-64 staging improves prefill over the packed-FP8 reference (1952.9 tok/s). This is a new base because target_weights changes. Source FP8 matrices are decoded and requantized; the BF16 embedding and LM head are quantized too. The text cache omits unused vision weights and is mapped without load-time CPU repacking. Use --affine-cache with --tuned-prefill --delta-mode staged8, 2048-token blocks, fused experts, FP16 KV/operands, FP32 accumulation/state, DFlash2 with shared affine vocabulary matrices, and explicit 32768-token context. Run all seven Full-profile tests. Quantization, vocabulary storage and backing-file handling change together; this is a complete-system comparison, not decoder-only attribution. Cache manifest SHA-256: 7106f2aaaa4ada10f4f3a8512d1b5ecef83f8e271b542ad6549d56ff582b4974.",
+  "contract_frozen_at": "2026-11-03T06:31:03.279489+00:00",
+  "hardware_platform": "Apple M5 Pro",
+  "hardware_gpu_cores": 20,
+  "hardware_memory_gib": 48,
+  "target_repository": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "target_revision": "95a723d08a9490559dae23d0cff1d9466213d989",
+  "target_weights": "Derived unsigned affine 8-bit, group size 64, BF16 scale/bias pairs (bootstrap-affine8-g64-v2); official FP8 matrices requantized and BF16 embedding/LM head quantized; other text BF16/FP32 tensors preserved; not the MLX checkpoint",
+  "evaluation_id": "endpoint-bench",
+  "evaluation_revision": "f9e458258a64b304b007f294307f31d50caced58",
+  "evaluation_sha256": "3674dbf83377a484ff739f44926d4bcac77ade37a609a85919db09f12c68a141",
+  "engine_name": "qwen36-affine8-dotnet-metal",
+  "engine_commit": "7fa0eb9d78d630d1f409ef6d1e38df7d6dfc9ecc",
+  "comparison_track": "best-permitted-configuration",
+  "goal_thresholds": [
+    "prefill_tokens_per_second_p50 >= 3113",
+    "decode_tokens_per_second_p50 >= 50"
+  ]
+}
