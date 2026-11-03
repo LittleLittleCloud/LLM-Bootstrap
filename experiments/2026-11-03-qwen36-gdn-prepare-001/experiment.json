@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-03-qwen36-gdn-prepare-001",
+  "status": "frozen",
+  "description": "Hypothesis: parallelizing causal convolution across tokens and fusing FP32 convolution/SiLU, Q/K normalization and gates reduces DeltaNet prefill preparation cost. A separate carry update preserves incoming history; tiny blocks and verification retain the original path. Same affine-8 group-64 v2 target weights, BF16 scale/bias and draft weights, FP16 KV/operands, FP32 intermediates/state/accumulation, staged8 recurrence, DFlash2, prefix checkpoints, 2048-token chunks and 32768-token context. Development comparisons against freshly merged main show 1.90% / 1.41% higher 10K / 30K throughput versus a later baseline, with bitwise fixture and model-smoke checks; these are not official scores. Run all seven Full-profile tests. Evaluation revision advances to merged main with the same definition and all driver hashes.",
+  "contract_frozen_at": "2026-11-03T22:17:26.310121+00:00",
+  "extends_path": "../2026-11-03-qwen36-prefill-reuse-001/experiment.json",
+  "extends_revision": "1aefceba118deee318fcf161a52e5c9c558d90e2",
+  "extends_sha256": "3cc2ba4791fad44c6413e704a9a6f3e7ca6f90380421182ad5fdbb09f7f82dbb",
+  "engine_commit": "4d0968401440c57dc757255c8711712f2395fcba",
+  "evaluation_revision": "1aefceba118deee318fcf161a52e5c9c558d90e2"
+}
