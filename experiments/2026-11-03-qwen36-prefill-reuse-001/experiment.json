@@ -1,0 +1,10 @@
+{
+  "experiment_id": "2026-11-03-qwen36-prefill-reuse-001",
+  "status": "frozen",
+  "description": "Hypothesis: skipping unchanged attention rescaling and fully-visible masks, reusing dense input conversions, using cooperative FP32 affine down stores, and prefetching FP32 DeltaNet inputs improve the 2261.1 tok/s load-first base. Four components change together; isolated controls and whole-model profiles are separate evidence. Same affine-8 group-64 v2 weights/cache, BF16 scale/bias, FP16 KV/operands, FP32 state/accumulation/outputs, K32 experts, 32x256 attention tiles, staged8 recurrence, DFlash2, 2048-token chunks and 32768-token context. Development improvement versus a later control was 3.84% at 10K and 5.58% at 30K; these are not official scores. Run all seven Full-profile tests.",
+  "contract_frozen_at": "2026-11-03T20:54:35.984566+00:00",
+  "extends_path": "../2026-11-03-qwen36-affine8-load-first-001/experiment.json",
+  "extends_revision": "c60e106727ddfff9e97d4c7d37ae432e8e88cefa",
+  "extends_sha256": "3a551b173abf2ac5019804c6391d832b12be02c82c290ad34b38f54f72795f85",
+  "engine_commit": "8232b60362e7a9570a593e8bfb225ce55c232b77"
+}
