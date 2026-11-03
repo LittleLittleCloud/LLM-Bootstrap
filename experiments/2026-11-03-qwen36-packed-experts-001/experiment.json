@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-03-qwen36-packed-experts-001",
+  "status": "frozen",
+  "description": "Hypothesis: byte-preserving packed FP8 expert weights improve prefill versus the staged8 DeltaNet base (1885.2 tok/s) by coalescing four-byte weight loads. Enable --packed-experts --tuned-prefill --delta-mode staged8 with the same official FP8 target, DFlash2, FP16 KV, FP32 gate scratch/down output/accumulation/state, 2048-token chunks and explicit 32768-token context. Reorder weights once in private mapped memory at load time, retain original BF16 scales and checkpoint files, and reuse scales over each 128-wide K block. Predecoded FP16 weights, FP16 epilogues, tiny-row fallback and indirect dispatch were measured but are not enabled. Run all seven official Full-profile tests and inherit existing goals.",
+  "contract_frozen_at": "2026-11-03T01:08:47.918687+00:00",
+  "extends_path": "../2026-11-02-qwen36-delta-prefill-001/experiment.json",
+  "extends_revision": "c83c91a8e50d56c312cd19b78a17908567f5fbee",
+  "extends_sha256": "5717c6151868e01a9d91bd2ae9808935d0e3864556f17a86b86df4612a2d495e",
+  "engine_commit": "2caf5890c3977b18a5aa137b6f3821a6966a8097",
+  "evaluation_revision": "c83c91a8e50d56c312cd19b78a17908567f5fbee"
+}
