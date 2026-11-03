@@ -1,0 +1,10 @@
+{
+  "experiment_id": "2026-11-03-qwen36-dense-prefill-001",
+  "status": "frozen",
+  "description": "Hypothesis: replace the legacy draft context FC and N=32/N=1 target prefill projections with FP16-operand TensorOps paths with packed-input reuse to reduce wall time. Draft FC newly rounds activations to FP16; weights remain the same BF16 checkpoint, with FP32 accumulation and output. Small projections retain FP16 operands; compute the scalar gate before shared-expert down to reuse Norm input. The SIMD scalar prototype was rejected after a real-model logit comparison. Preserve affine-8 group-64 v2 target weights, FP16 KV, FP32 recurrent state, GDN preparation, DFlash2, complete draft context capture, prefix checkpoints, 2048-token chunks and 32768-token context. Run all seven Full-profile tests.",
+  "contract_frozen_at": "2026-11-03T23:10:00.915979+00:00",
+  "extends_path": "../2026-11-03-qwen36-gdn-prepare-001/experiment.json",
+  "extends_revision": "69dc2d425ab40693df7964fae4cafcc7d8b014f5",
+  "extends_sha256": "f277090ec71915cf52a600275c6eef57ecc3cdfb910f86fea291c3e855e615c1",
+  "engine_commit": "c4a117333853685ae715682d7fc439b7f1a51d3c"
+}
