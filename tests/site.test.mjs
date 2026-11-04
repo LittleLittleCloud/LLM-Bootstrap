@@ -37,6 +37,7 @@ test('the leaderboard index is a build artifact: ignored by Git, and generated b
   assert.match(scripts.deploy, /^npm run build\b/, 'a deploy builds through the script that generates the index');
   assert.match(scripts['versions:upload'], /^npm run build\b/);
   assert.match(readFileSync(join(root, '.gitignore'), 'utf8'), /^site\/public\/data\/leaderboard\.json$/m);
+  assert.match(readFileSync(join(root, '.gitignore'), 'utf8'), /^site\/public\/data\/drawings\/$/m, 'copied drawings are build output too');
   assert.match(readFileSync(join(root, '.github', 'workflows', 'validate-plugin.yml'), 'utf8'), /npm run build/, 'CI builds the site, which generates the index');
   try {
     const tracked = execFileSync('git', ['ls-files', '--', 'site/public/data'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -63,7 +64,7 @@ test('the site script generates the same valid index as the library, determinist
     const expected = buildIndex(loadRecordFiles(root), { validators, evaluationIds: loadEvaluationIds(root) });
     assert.equal(first, serializeIndex(expected));
     const index = JSON.parse(first);
-    assert.equal(index.schema_version, '1.0.0');
+    assert.equal(index.schema_version, '1.1.0');
     assert.equal('synthetic' in index, false);
     assert.equal(index.counts.entries, expected.entries.length);
   } finally {

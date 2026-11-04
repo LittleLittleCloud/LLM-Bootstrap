@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { IndexError, buildIndex, evaluationStamp, loadRecordFiles, serializeIndex } from '../tools/leaderboard/build-index.mjs';
+import { DRAWING_MAX_BYTES, drawingProblems } from '../tools/leaderboard/drawing.mjs';
 import { headlineMetrics, qualityScores } from '../evaluations/endpoint-bench/src/report.js';
 import { loadValidators } from '../skills/bootstrap-experiment-sop/scripts/validators.mjs';
 import { commit, frozenExperiment, syntheticReport, when } from './helpers/fixtures.mjs';
@@ -229,6 +230,111 @@ test('a mismatched, misnamed, or invalid document stops the build with a reason'
     put(files, 'experiments/exp-other/experiment.json', { ...frozenExperiment(), experiment_id: 'exp-mismatch' });
     files.set('experiments/exp-other/evaluation/20261028-080000.json', files.get(candidate));
   }, /not its directory name/);
+});
+
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/><path d="M0 0L10 10"/></svg>';
+const withDrawing = (svg = SVG, patch = {}) => report({
+  started: at('12'),
+  patch: {
+    selected_tests: ['pelican'],
+    tests: {
+      pelican: {
+        status: 'complete', config: { max_tokens: 8192, thinking: 'disabled' },
+        run: {
+          ok: true, svg: true, svg_bytes: Buffer.byteLength(svg), elements: 3, sha256: digest(svg), ttft_ms: 50, e2e_ms: 900,
+          completion_tokens: 100, reasoning_tokens: 0, visible_tokens: 100, finish_reason: 'stop', ...patch,
+        },
+      },
+    },
+  },
+});
+const drawingPath = 'experiments/exp-base/evaluation/20261028-120000.pelican.svg';
+const drawingTree = (svg = SVG, patch = {}) => {
+  const files = tree();
+  addReport(files, 'exp-base', withDrawing(svg, patch));
+  return files;
+};
+
+test('a published pelican drawing is verified against its report, listed with the entry, and a report without one says so', () => {
+  const files = drawingTree();
+  files.set(drawingPath, SVG);
+  const entries = Object.fromEntries(buildIndex(files, { validators }).entries.map(entry => [entry.entry_id, entry]));
+  assert.deepEqual(entries['exp-base/20261028-120000'].drawing, {
+    available: true, svg: true, bytes: Buffer.byteLength(SVG), elements: 3, sha256: digest(SVG), finish_reason: 'stop', path: drawingPath,
+  });
+  assert.equal(entries['exp-base/20261028-080000'].drawing, null, 'a report that ran no pelican test has no drawing state');
+
+  const unpublished = Object.fromEntries(buildIndex(drawingTree(), { validators }).entries.map(entry => [entry.entry_id, entry]));
+  assert.equal(unpublished['exp-base/20261028-120000'].drawing.available, false, 'the report records a drawing whose file was not submitted');
+  assert.equal(unpublished['exp-base/20261028-120000'].drawing.path, null);
+  assert.equal(unpublished['exp-base/20261028-120000'].drawing.sha256, digest(SVG));
+
+  const none = drawingTree('<svg/>', { svg: false, svg_bytes: null, elements: null, sha256: null });
+  const absent = buildIndex(none, { validators }).entries.find(entry => entry.entry_id === 'exp-base/20261028-120000');
+  assert.deepEqual([absent.drawing.available, absent.drawing.svg], [false, false]);
+});
+
+test('a drawing that does not match its report, has no report, or could act on its own stops the build', () => {
+  const failsWith = (change, pattern, svg = SVG, patch = {}) => {
+    const files = drawingTree(svg, patch);
+    change(files);
+    assert.throws(() => buildIndex(files, { validators }), error => error instanceof IndexError && pattern.test(error.message), String(pattern));
+  };
+  failsWith(files => files.set(drawingPath, SVG.replace('r="4"', 'r="3"')), /does not match the sha256/);
+  failsWith(files => files.set(drawingPath, `${SVG}\n`), /does not match the sha256/);
+  failsWith(files => files.set(drawingPath, SVG), /does not match the byte count/, SVG, { svg_bytes: 1 });
+  failsWith(files => files.set(drawingPath, SVG), /records no pelican drawing/, SVG, { svg: false, svg_bytes: null, elements: null, sha256: null });
+  failsWith(files => files.set('experiments/exp-base/evaluation/20261028-130000.pelican.svg', SVG), /has no report with the same name/);
+  failsWith(files => files.set('experiments/exp-base/evaluation/latest.pelican.svg', SVG), /is not named/);
+  failsWith(files => files.set('experiments/exp-base/evaluation/20261028-120000.svg', SVG), /is not named/);
+  for (const [unsafe, pattern] of [
+    ['<svg><script>alert(1)</script></svg>', /script/],
+    ['<svg onload="alert(1)"><rect/></svg>', /event handler/],
+    ['<svg><foreignObject><div/></foreignObject></svg>', /embedded document/],
+    ['<svg><image href="https://example.com/a.png"/></svg>', /outside the file/],
+    ['<svg><a xlink:href="javascript:alert(1)"><rect/></a></svg>', /javascript/],
+    ['<svg><rect style="fill:url(https://example.com/x)"/></svg>', /outside the file/],
+  ]) {
+    failsWith(files => files.set(drawingPath, unsafe), pattern, unsafe);
+  }
+});
+
+test('drawing rules accept an ordinary drawing, local references, and animation, and reject the rest', () => {
+  assert.deepEqual(drawingProblems(SVG), []);
+  assert.deepEqual(drawingProblems('<svg><defs><linearGradient id="g"/></defs><use href="#a"/><rect fill="url(#g)"/><animateTransform attributeName="transform"/></svg>\n'), []);
+  assert.deepEqual(drawingProblems('<svg>\n<style>.a{fill:red}</style><rect class="a"/></svg>'), []);
+  assert.match(drawingProblems('not svg').join(), /single <svg> element/);
+  assert.match(drawingProblems(`<svg>${'x'.repeat(DRAWING_MAX_BYTES)}</svg>`).join(), /byte limit/);
+  assert.match(drawingProblems('<svg><style>@import url(x.css);</style></svg>').join(), /imports a stylesheet/);
+  assert.match(drawingProblems('<!DOCTYPE svg [<!ENTITY a "b">]><svg/>').join(), /DOCTYPE|single <svg>/);
+});
+
+test('the command copies each published drawing to the address the site derives from the entry id', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'llm-bootstrap-drawings-'));
+  try {
+    const files = drawingTree();
+    files.set(drawingPath, SVG);
+    for (const [path, text] of files) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
+    assert.equal(loadRecordFiles(dir).size, files.size, 'drawings are loaded with the records');
+    const out = join(dir, 'out', 'index.json');
+    mkdirSync(dirname(out), { recursive: true });
+    const copies = join(dir, 'out', 'drawings');
+    mkdirSync(join(copies, 'stale'), { recursive: true });
+    writeFileSync(join(copies, 'stale', 'old.svg'), SVG);
+    const run = spawnSync('node', [cli, dir, '--out', out, '--drawings', copies, '--require-validation'], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    assert.match(run.stdout, /copied 1 pelican drawings/);
+    assert.equal(readFileSync(join(copies, 'exp-base', '20261028-120000.svg'), 'utf8'), SVG);
+    assert.equal(existsSync(join(copies, 'stale', 'old.svg')), false, 'an earlier build does not linger');
+    const entry = JSON.parse(readFileSync(out, 'utf8')).entries.find(item => item.entry_id === 'exp-base/20261028-120000');
+    assert.equal(entry.drawing.available, true);
+    assert.equal(spawnSync('node', [cli, dir, '--out', out, '--drawings'], { encoding: 'utf8' }).status, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the index serializes with one entry per line and without any time or machine detail', () => {

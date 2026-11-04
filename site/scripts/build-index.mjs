@@ -22,4 +22,4 @@ function run(command, args, cwd) {
 if (!existsSync(resolve(root, 'node_modules', 'ajv'))) run('npm', ['ci'], root);
 
 mkdirSync(dirname(out), { recursive: true });
-run('node', [resolve(root, 'tools/leaderboard/build-index.mjs'), root, '--out', out, '--require-validation'], root);
+run('node', [resolve(root, 'tools/leaderboard/build-index.mjs'), root, '--out', out, '--drawings', resolve(dirname(out), 'drawings'), '--require-validation'], root);
