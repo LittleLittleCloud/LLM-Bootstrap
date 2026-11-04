@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-03-qwen36-dispatch-main-001",
+  "status": "frozen",
+  "description": "Repeat the complete seven-test evaluation after merging dispatch fusion into main. Hypothesis: the merged main preserves the performance and correctness observed before merge; source code is unchanged relative to the prior evaluated implementation, with only documentation changes. Keep dispatch mask 29, affine-8 group-64 v2 target, BF16 draft, FP16 KV and operands, FP32 state and accumulation, 2048-token chunks, 32768-token context, prefix caching and all serving flags unchanged. Pin the latest repository main for evaluation; evaluator definition and code are byte-identical to the base. This is a post-merge replication, not a new optimization.",
+  "contract_frozen_at": "2026-11-04T02:16:48.600031+00:00",
+  "extends_path": "../2026-11-03-qwen36-dispatch-fusion-001/experiment.json",
+  "extends_revision": "32a9539aa593011db69fe272f5790c64804450c5",
+  "extends_sha256": "12701f0f56e6ad91f1a164a5d5f66c58d5372d3166a1f50d7651ac064b6fa9c9",
+  "engine_commit": "c3de96555f1097f6a21a9172c4ad06b011d2c2a2",
+  "evaluation_revision": "32a9539aa593011db69fe272f5790c64804450c5"
+}
