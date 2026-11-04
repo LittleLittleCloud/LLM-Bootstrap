@@ -1,6 +1,6 @@
 // Builds the leaderboard index from experiment records.
 //
-// Usage: node tools/leaderboard/build-index.mjs <repo-root> --out <file> [--require-validation]
+// Usage: node tools/leaderboard/build-index.mjs <repo-root> --out <file> [--drawings <dir>] [--require-validation]
 //
 // Reads experiments/<id>/experiment.json (an Experiment, or a DerivedExperiment that is resolved against its pinned base) and
 // every experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json (an EvaluationReport) under <repo-root>. A report names no engine or
@@ -15,18 +15,22 @@
 //   - Missing values stay null. They are never replaced by zero or inferred.
 //   - An experiment that pins an evaluation which no longer exists in evaluations/ is history, not a failure: it stays in the
 //     repository, its reports are not listed, and they are named in retired_runs so they are never dropped silently.
+//   - A report may be accompanied by its pelican drawing, evaluation/<YYYYMMDD-HHMMSS>.pelican.svg. The drawing must match the sha256 and
+//     byte count the report records and pass drawingProblems; a report without one stays valid and is listed as drawing unavailable.
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { join, posix } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { headlineMetrics, qualityScores } from '../../evaluations/endpoint-bench/src/report.js';
 import { isDerived, resolveExperiment } from '../../skills/bootstrap-experiment-sop/scripts/resolve-experiment.mjs';
 import { errorsOf, loadValidators } from '../../skills/bootstrap-experiment-sop/scripts/validators.mjs';
+import { drawingProblems } from './drawing.mjs';
 
-export const INDEX_VERSION = '1.0.0';
+export const INDEX_VERSION = '1.1.0';
 const EXPERIMENT_PATH = /^experiments\/([^/]+)\/experiment\.json$/;
 const EVALUATION_DIR = /^experiments\/([^/]+)\/evaluation\//;
 const EVALUATION_PATH = /^experiments\/([^/]+)\/evaluation\/(\d{8}-\d{6})\.json$/;
+const DRAWING_PATH = /^experiments\/([^/]+)\/evaluation\/(\d{8}-\d{6})\.pelican\.svg$/;
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 // Display precision only; the reports keep the exact values.
 const numberOrNull = value => (typeof value === 'number' ? Math.round(value * 1e4) / 1e4 : null);
@@ -91,7 +95,7 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
   for (const experimentPath of [...files.keys()].filter(path => EXPERIMENT_PATH.test(path)).sort()) {
     const id = EXPERIMENT_PATH.exec(experimentPath)[1];
     const recordPaths = [...files.keys()].filter(path => EVALUATION_DIR.test(path) && path.startsWith(`experiments/${id}/`)).sort();
-    for (const path of recordPaths) if (!EVALUATION_PATH.test(path)) fail(`${path} is not named <YYYYMMDD-HHMMSS>.json`);
+    for (const path of recordPaths) if (!EVALUATION_PATH.test(path) && !DRAWING_PATH.test(path)) fail(`${path} is not named <YYYYMMDD-HHMMSS>.json or <YYYYMMDD-HHMMSS>.pelican.svg`);
     // An experiment without reports has nothing to list.
     if (!recordPaths.length) continue;
     const loaded = loadExperiment(experimentPath, files.get(experimentPath), 0);
@@ -99,7 +103,12 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
     const { experiment, parent } = loaded;
     if (experiment.experiment_id !== id) { fail(`${experimentPath} declares experiment_id ${experiment.experiment_id}, not its directory name ${id}`); continue; }
     if (experiment.status !== 'frozen') { fail(`${experimentPath} is not frozen, so its reports cannot be listed`); continue; }
-    if (evaluationIds && !evaluationIds.has(experiment.evaluation_id)) { retired.push(...recordPaths); continue; }
+    if (evaluationIds && !evaluationIds.has(experiment.evaluation_id)) { retired.push(...recordPaths.filter(path => !DRAWING_PATH.test(path))); continue; }
+
+    const reportStamps = new Set(recordPaths.filter(item => EVALUATION_PATH.test(item)).map(item => EVALUATION_PATH.exec(item)[2]));
+    for (const path of recordPaths.filter(item => DRAWING_PATH.test(item))) {
+      if (!reportStamps.has(DRAWING_PATH.exec(path)[2])) fail(`${path} has no report with the same name`);
+    }
 
     const reports = [];
     for (const path of recordPaths.filter(item => EVALUATION_PATH.test(item))) {
@@ -111,13 +120,27 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
         fail(`${path} cites a different evaluation than ${experimentPath}`);
         continue;
       }
-      reports.push({ path, report, stamp });
+      const drawingPath = `experiments/${id}/evaluation/${stamp}.pelican.svg`;
+      const svg = files.get(drawingPath);
+      if (svg != null) {
+        const run = report.tests?.pelican?.run;
+        const problems = [];
+        if (!run?.svg) problems.push('its report records no pelican drawing');
+        else {
+          if (sha256(svg) !== run.sha256) problems.push('does not match the sha256 its report records');
+          if (Buffer.byteLength(svg) !== run.svg_bytes) problems.push('does not match the byte count its report records');
+        }
+        problems.push(...drawingProblems(svg));
+        if (problems.length) { fail(`${drawingPath} ${problems.join('; ')}`); continue; }
+      }
+      reports.push({ path, report, stamp, drawingPath: svg == null ? null : drawingPath });
     }
 
-    for (const { path, report, stamp } of reports) {
+    for (const { path, report, stamp, drawingPath } of reports) {
       try {
         const metrics = headlineMetrics(report);
         const complete = report.status === 'complete' && report.profile === 'full';
+        const run = report.tests?.pelican?.run;
         entries.push({
           entry_id: `${id}/${stamp}`,
           run_id: `${id}/${stamp}`,
@@ -148,6 +171,11 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
             benchmarks: qualityScores(report).map(({ benchmark_id, score, stderr, num_samples }) => ({ benchmark_id, score: numberOrNull(score), stderr: numberOrNull(stderr), num_samples })),
           },
           failures: report.failures,
+          // null when the report ran no pelican test. available is false when the report has no drawing file to show.
+          drawing: run ? {
+            available: drawingPath != null, svg: run.svg, bytes: run.svg_bytes, elements: run.elements, sha256: run.sha256,
+            finish_reason: run.finish_reason, path: drawingPath,
+          } : null,
           source: { experiment: experimentPath, evaluation: path },
         });
       } catch (error) {
@@ -188,25 +216,39 @@ export function loadEvaluationIds(root) {
   return ids;
 }
 
-// Loads every JSON file under <root>/experiments into a Map keyed by repository-relative POSIX path.
+// Loads every JSON file and pelican drawing under <root>/experiments into a Map keyed by repository-relative POSIX path.
 export function loadRecordFiles(root) {
   const files = new Map();
   const walk = relative => {
     for (const name of readdirSync(join(root, relative))) {
       const next = posix.join(relative, name);
       if (statSync(join(root, next)).isDirectory()) walk(next);
-      else if (name.endsWith('.json')) files.set(next, readFileSync(join(root, next), 'utf8'));
+      else if (name.endsWith('.json') || name.endsWith('.pelican.svg')) files.set(next, readFileSync(join(root, next), 'utf8'));
     }
   };
   if (existsSync(join(root, 'experiments'))) walk('experiments');
   return files;
 }
 
+// Copies each published drawing to <dir>/<experiment-id>/<YYYYMMDD-HHMMSS>.svg, the address the site derives from an entry id, and removes
+// what an earlier build left there.
+export function copyDrawings(root, index, dir) {
+  rmSync(dir, { recursive: true, force: true });
+  for (const entry of index.entries) {
+    if (!entry.drawing?.available) continue;
+    const target = join(dir, `${entry.entry_id}.svg`);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(join(root, entry.drawing.path), target);
+  }
+  return index.entries.filter(entry => entry.drawing?.available).length;
+}
+
 function main(argv) {
   const root = argv[0];
   const out = argv[argv.indexOf('--out') + 1];
-  if (!root || argv.indexOf('--out') < 0 || !out) {
-    console.error('usage: node build-index.mjs <repo-root> --out <file> [--require-validation]');
+  const drawings = argv.includes('--drawings') ? argv[argv.indexOf('--drawings') + 1] : null;
+  if (!root || argv.indexOf('--out') < 0 || !out || (argv.includes('--drawings') && !drawings)) {
+    console.error('usage: node build-index.mjs <repo-root> --out <file> [--drawings <dir>] [--require-validation]');
     return 2;
   }
   return loadValidators().then(validators => {
@@ -218,6 +260,7 @@ function main(argv) {
       const index = buildIndex(loadRecordFiles(root), { validators, evaluationIds: loadEvaluationIds(root) });
       writeFileSync(out, serializeIndex(index));
       console.log(`wrote ${index.counts.entries} entries from ${index.counts.runs} evaluation reports to ${out}`);
+      if (drawings) console.log(`copied ${copyDrawings(root, index, drawings)} pelican drawings to ${drawings}`);
       return 0;
     } catch (error) {
       console.error(error instanceof IndexError ? error.message : `error: ${error.message}`);

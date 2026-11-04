@@ -87,7 +87,7 @@ A frozen `experiment.json` looks like this (hashes shortened):
 }
 ```
 
-Reports sit beside it at `experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json`. Everything else about the machine and the engine (toolchain, power mode, precision, memory and swap observed, how the endpoint was started) goes in the results pull request description, where a reviewer can challenge it.
+Reports sit beside it at `experiments/<id>/evaluation/<YYYYMMDD-HHMMSS>.json`, and the drawing of a `pelican` test, if published, at `<YYYYMMDD-HHMMSS>.pelican.svg` with the same name. Everything else about the machine and the engine (toolchain, power mode, precision, memory and swap observed, how the endpoint was started) goes in the results pull request description, where a reviewer can challenge it.
 
 ## Quick start
 

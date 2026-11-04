@@ -9,7 +9,7 @@ Results for experiment `<experiment-id>`: <one sentence on the question and the 
 
 ## Included
 - `experiments/<experiment-id>/experiment.json`: the frozen experiment (revision `<commit>` in the project repository, frozen <timestamp>)
-- `experiments/<experiment-id>/evaluation/`: <n> evaluation reports (<complete, failed, and interrupted counts>), each named after its UTC start time
+- `experiments/<experiment-id>/evaluation/`: <n> evaluation reports (<complete, failed, and interrupted counts>), each named after its UTC start time, and <n> pelican drawings (`<name>.pelican.svg`, if any)
 - Endpoint: <how the engine, at the commit the experiment records, was started (command, runtime and artifact hashes), on which hardware, and any deviation from the experiment; the reports record neither>
 - Conditions: <operating system and toolchain, power mode, memory limit, KV and state precision, memory and swap observed, and any deviation from matched conditions>
 

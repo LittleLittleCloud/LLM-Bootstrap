@@ -1,0 +1,3 @@
+/data/drawings/*
+  Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
+  X-Content-Type-Options: nosniff

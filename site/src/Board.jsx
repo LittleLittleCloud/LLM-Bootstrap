@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DrawingDialog, DrawingLink } from './Drawing.jsx';
 import { Trends } from './Trends.jsx';
 import {
   FACETS, METRICS, collapse, defaultState, filterRuns, formatValue, largestCohort, mixedConditions, rankRuns, orderRows, unrankedReason, conformance,
@@ -82,6 +83,7 @@ export function Board({ runs, state, patch, setState }) {
 }
 
 function Table({ rows, state, shown, onMore }) {
+  const [drawing, setDrawing] = useState(null);
   const spec = METRICS[state.metric];
   const ranks = rankRuns(rows, state.metric);
   const ordered = orderRows(rows, ranks, state.sort);
@@ -113,6 +115,7 @@ function Table({ rows, state, shown, onMore }) {
                   {run.comparison_track !== 'matched-configuration' && <em>best permitted</em>}
                   {run.metrics.preliminary && <em title="A reduced profile or an incomplete test">preliminary</em>}
                 </small>
+                <DrawingLink run={run} onOpen={setDrawing} />
               </span>
               <span className="setup">{run.hardware}<small>{run.target_model} · {run.weights}</small></span>
               <span className="metric">
@@ -126,6 +129,7 @@ function Table({ rows, state, shown, onMore }) {
         })}
       </ol>
       {ordered.length > shown && <button type="button" className="more" onClick={onMore}>{ordered.length - shown} more</button>}
+      <DrawingDialog run={drawing} onClose={() => setDrawing(null)} />
     </>
   );
 }

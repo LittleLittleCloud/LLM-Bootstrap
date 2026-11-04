@@ -254,6 +254,7 @@ export default function Evaluate() {
             <button type="button" className="ghost" onClick={() => navigator.clipboard.writeText(text)}>Copy report</button>
           </div>
           <p className="muted">Commit it as experiments/&lt;experiment-id&gt;/evaluation/{result.fileName}.</p>
+          {result.artifacts.pelican && <p className="muted">To publish the drawing, commit the downloaded SVG unchanged beside it as {result.fileName.replace(/\.json$/, '.pelican.svg')}.</p>}
           <details><summary>Report JSON</summary><pre>{text}</pre></details>
         </section>
       )}
