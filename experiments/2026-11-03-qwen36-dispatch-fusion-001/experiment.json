@@ -1,0 +1,10 @@
+{
+  "experiment_id": "2026-11-03-qwen36-dispatch-fusion-001",
+  "status": "frozen",
+  "description": "Hypothesis: reduce prefill dispatches and intermediate memory traffic using resident FP16 operands for small projections, grouped Q/K/V and GDN a/b and shared gate/up projections, shared-expert activation plus FP16 packing, and fused attention preparation. Independently test affine decode inside dense matmul; retain this regressing prototype only as an opt-in diagnostic. Selected dispatch mask 29 preserves existing FP16 operands/KV, FP32 state/accumulation and reduction order. Grow dense scratch by 4 MiB, retain approximately 7.6 MiB of small weights and reuse dead expert activation storage. Target affine-8 group-64 v2, BF16 draft, staged8, 2048-token chunks, 32768-token context, prefix semantics and evaluator remain unchanged. Run all seven Full-profile tests. Launch-count reductions do not imply proportional wall-time gains.",
+  "contract_frozen_at": "2026-11-04T01:35:20.593768+00:00",
+  "extends_path": "../2026-11-03-qwen36-projection-prepare-001/experiment.json",
+  "extends_revision": "898bc150d50d602b75634c8af71b2c197f98e8e2",
+  "extends_sha256": "d1233c9b4521e24d4689ad00ae4b5df4fe94e438cd41c63e89674784d85a41df",
+  "engine_commit": "172097c19a953b7d12e6b73c12dcd679a6d08896"
+}
