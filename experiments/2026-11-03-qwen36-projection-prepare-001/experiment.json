@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-03-qwen36-projection-prepare-001",
+  "status": "frozen",
+  "description": "Hypothesis: fuse target RMSNorm, optional residual addition and existing FP16 projection-input packing to reduce prefill memory traffic and dispatches. The 128-wide gated norm omits four all-zero SIMD groups while preserving active reduction and expression order. Reuse existing scratch; no precision, weight, KV, recurrence, attention, expert matrix, draft FC, context capture, prefix checkpoint, chunk-size or context-limit change. A vectorized expert-combine prototype was measured and rejected. Preserve affine-8 group-64 v2 target cache, BF16 draft checkpoint, FP16 KV, FP32 state/accumulation, staged8, 2048-token chunks and 32768-token context. Run all seven Full-profile tests. The latest main evaluation pin advances only repository records; definition and evaluator scripts match the base.",
+  "contract_frozen_at": "2026-11-03T23:57:40.086793+00:00",
+  "extends_path": "../2026-11-03-qwen36-dense-prefill-001/experiment.json",
+  "extends_revision": "5426ca47ff73e107ba2d5c8dd6222228e1932f13",
+  "extends_sha256": "839638f7762513bc05963aa91bfbca669dffe1f07571b6a0c58fd40816ce4e90",
+  "engine_commit": "652ed2ad4c2040f6de104969a72029070310574c",
+  "evaluation_revision": "5426ca47ff73e107ba2d5c8dd6222228e1932f13"
+}
