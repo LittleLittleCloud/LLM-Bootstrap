@@ -153,7 +153,7 @@ Use feature branches and pull requests for project changes. Merge requires expli
 <details>
 <summary><strong>Evaluation: <code>endpoint-bench</code></strong></summary>
 
-`endpoint-bench` is released and modeled on ZebraBench. Give it an endpoint URL and an optional token, and the site's Evaluate page runs **conform, speed, thinking, decode, prefill, needle, and cache** in the browser and exports one report.
+`endpoint-bench` is released and modeled on ZebraBench. Give it an endpoint URL and an optional token, and the site's Evaluate page runs **conform, speed, thinking, decode, prefill, needle, cache, and pelican** in the browser and exports one report.
 
 Evaluation code and scripts are defined by this repository under `evaluations/`; experiments and whoever writes an engine do not write or change them.
 

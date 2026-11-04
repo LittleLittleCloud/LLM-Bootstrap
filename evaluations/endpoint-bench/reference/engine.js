@@ -5,6 +5,8 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const tokensOf = text => Math.ceil(text.length / 4);
 const CACHE_BLOCK = 16;
 const CACHE_MIN = 1024;
+// A drawing in a markdown fence with a sentence after it, as models often reply.
+const PELICAN = '```svg\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="30" cy="70" r="15"/><circle cx="70" cy="70" r="15"/><path d="M30 70 L50 40 L70 70"/><ellipse cx="50" cy="30" rx="12" ry="8"/></svg>\n```\nHope you like it.';
 
 const event = value => encoder.encode(`data: ${typeof value === 'string' ? value : JSON.stringify(value)}\n\n`);
 const stream = start => new Response(new ReadableStream({
@@ -21,6 +23,7 @@ const textOf = messages => messages.map(message => message.content).join('\n');
 function answerFor(body, { knowsNeedle, answersThinking }) {
   const prompt = lastUser(body.messages);
   if (/capital of France/.test(prompt)) return 'Paris';
+  if (/pelican riding a bicycle/.test(prompt)) return PELICAN;
   if (/<id>\|<name>/.test(prompt)) {
     if (!answersThinking) return '0|none';
     const rows = [...prompt.matchAll(/^\| (\d+) \| (user-\d+) \| (\d+) \|$/gm)].map(([, id, name, score]) => ({ id, name, score: Number(score) }));

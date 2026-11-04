@@ -7,6 +7,7 @@ import { runConform } from './conform.js';
 import { runDecode } from './decode.js';
 import { loadModels, resolveContextWindow } from './models.js';
 import { runNeedle } from './needle.js';
+import { runPelican } from './pelican.js';
 import { runPrefill } from './prefill.js';
 import { runSpeed } from './speed.js';
 import { runThinking } from './thinking.js';
@@ -56,6 +57,8 @@ export async function runEvaluation({ config, definition, pin, overrides = {}, o
   }
   const cpt = charsPerToken ?? DEFAULT_CHARS_PER_TOKEN;
 
+  // Things a person looks at but the report never holds, such as the pelican drawing.
+  const artifacts = {};
   const context = { signal, seed, window, charsPerToken: cpt };
   const runners = {
     conform: hooks => runConform(env, plan.conform, { models, signal, ...hooks }),
@@ -65,6 +68,7 @@ export async function runEvaluation({ config, definition, pin, overrides = {}, o
     prefill: hooks => runPrefill(env, plan.prefill, { ...context, ...hooks }),
     needle: hooks => runNeedle(env, plan.needle, { ...context, ...hooks }),
     cache: hooks => runCache(env, plan.cache, { ...context, ...hooks }),
+    pelican: hooks => runPelican(env, plan.pelican, { signal, keep: svg => { artifacts.pelican = svg; }, ...hooks }),
   };
 
   const tests = {};
@@ -95,5 +99,5 @@ export async function runEvaluation({ config, definition, pin, overrides = {}, o
     compat: Object.fromEntries(Object.entries(env.compat).filter(([key, value]) => value !== newCompat()[key])),
     selected_tests: selected, status, failures, tests,
   };
-  return { report, fileName: `${stamp(startedAt)}.json`, models: models.models };
+  return { report, fileName: `${stamp(startedAt)}.json`, models: models.models, artifacts };
 }

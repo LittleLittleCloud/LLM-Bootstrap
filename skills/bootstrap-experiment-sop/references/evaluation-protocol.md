@@ -32,7 +32,7 @@ Evaluations in the repository at the time of writing (the commit you resolved is
 
 | Evaluation | Status | Report | Purpose |
 | --- | --- | --- | --- |
-| `endpoint-bench` | released | `EvaluationReport` | A quick benchmark of an OpenAI-compatible chat endpoint from a web page: conform, speed, thinking, decode, prefill, needle, and cache. |
+| `endpoint-bench` | released | `EvaluationReport` | A quick benchmark of an OpenAI-compatible chat endpoint from a web page: conform, speed, thinking, decode, prefill, needle, cache, and pelican. |
 
 Earlier measurements with external drivers (the Infer.NET records) are prior evidence only: they used different workloads and timing boundaries, and their correctness check did not meet this protocol.
 
@@ -46,7 +46,7 @@ Earlier measurements with external drivers (the Infer.NET records) are prior evi
 - **One model per report.** Evaluate each model, engine, or configuration separately, serially, on the same device, and keep every report.
 - **Rejected fields.** If the endpoint rejects `max_tokens`, `temperature`, `stream_options`, or `min_tokens` and `ignore_eos`, the evaluator retries once without or with the replacement the endpoint names (`max_completion_tokens`) and records the change as `compat`. A change that remains in force applies to all later requests.
 
-### The seven tests
+### The eight tests
 
 | Test | What it asks | Headline |
 | --- | --- | --- |
@@ -57,6 +57,7 @@ Earlier measurements with external drivers (the Infer.NET records) are prior evi
 | `prefill` | How fast long prompts are digested, from 10k to 1M input tokens that fit the context window | Effective input tokens per second by size |
 | `needle` | One access code hidden at 5, 25, 50, 75, and 90 percent of a document that fills 90 percent of the context window | Recall by depth |
 | `cache` | One question asked as a short prompt, a padded prompt, and a padded prompt with a nonce, each cold once and then repeated | Cache hit percent, TTFT reduction |
+| `pelican` | One request for an SVG of a pelican riding a bicycle, with thinking switched off | None: a picture to look at |
 
 A report names the tests it selected, and each selected test has a status: `complete`, `partial` (some requests failed), `error`, `cancelled` (the person stopped the run, and finished measurements are kept), or `skipped` (`prefill` only, when no size fits the window).
 
@@ -101,13 +102,17 @@ The **context window** is taken from the model list when the endpoint reports on
 
 The question is `What is the capital of France? Answer with the city name only.` The `short` prompt is the bare question, below the minimum most providers cache. The `padded` prompt surrounds it with filler up to the planned size (at most half the context window), byte for byte identical on every request, so a cache can serve it. The `busted` prompt prepends a fresh nonce to the padded prompt on every request, so nothing can be reused. Each variant sends one cold request and then the planned repeats. The cache hit percent is cached tokens over prompt tokens of the repeats, as the endpoint reports them; an endpoint that reports none is recorded as `cache_reported: false` and the hit percent is `null`, not zero. The TTFT reduction is the cold TTFT against the repeats' p50. Nothing about pricing is measured.
 
+#### pelican
+
+One streamed request asks for `Generate an SVG of a pelican riding a bicycle.` as bare SVG code, with `chat_template_kwargs: { enable_thinking: false }` so the output budget (8192 tokens) goes to the drawing. It is a visual signal for a person, not a benchmark: nothing grades the picture, there is no repetition, and no leaderboard metric reads it. The evaluator takes the text from the first `<svg` to the last `</svg>` (a markdown fence or a sentence around it is dropped) and shows it in the page, drawn through an image element so it cannot run script. The report records only whether an SVG came back (`svg`), its bytes, its element count, the sha256 of the drawing, timings, token counts, and `finish_reason`; the drawing is never in the report. A reply without an SVG is a measurement (`svg: false`); only a failed request is an error. A `finish_reason` of `length` means the drawing may be cut off.
+
 ### Profiles
 
 `full` runs the plan. `quick` runs the smaller plan of the definition, for a first look. A report of any other profile is preliminary evidence, and the leaderboard says so.
 
 ## The report
 
-One report is the measurement of one run: one model of one endpoint. It is stored at `experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json`, where the name is `started_at` in UTC. The report pins the evaluation (id, repository commit, definition hash) and must cite the evaluation of its experiment. It holds the seed, the context window, the profile, the status and failures, and for each selected test its plan settings, every measured request (timings and token counts, with a short answer where one is graded), and a summary. It holds no prompt, no model output beyond a graded answer of at most 80 characters, no token, and no address: the endpoint is recorded only as `loopback`, `private-network`, or `remote`.
+One report is the measurement of one run: one model of one endpoint. It is stored at `experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json`, where the name is `started_at` in UTC. The report pins the evaluation (id, repository commit, definition hash) and must cite the evaluation of its experiment. It holds the seed, the context window, the profile, the status and failures, and for each selected test its plan settings, every measured request (timings and token counts, with a short answer where one is graded), and a summary. It holds no prompt, no model output beyond a graded answer of at most 80 characters (and never the `pelican` drawing, which the page shows but does not export), no token, and no address: the endpoint is recorded only as `loopback`, `private-network`, or `remote`.
 
 What a report does not say matters as much. It does not say which engine, hardware, or weights served the endpoint, because the evaluator cannot see them. The experiment states those, and the person who submits the report states in the pull request how the endpoint was started and why it is the engine and commit the experiment records. Every repeated, failed, or interrupted run is its own report. A correction is a new report, never an edit.
 

@@ -203,6 +203,8 @@ small em { margin-left: 8px; padding: 0 6px; border: 1px solid var(--line); bord
 .result h3 span { margin-left: 4px; color: var(--muted); font-size: 0.78rem; font-weight: 400; }
 .result .stats { grid-template-columns: repeat(3, 1fr); }
 .result p { margin: 0 0 8px; font-size: 0.9rem; }
+.drawing { display: grid; justify-items: start; gap: 10px; margin: 8px 0 0; }
+.drawing img { width: min(100%, 360px); aspect-ratio: 1; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
 .report details pre { max-height: 420px; overflow: auto; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font: 0.76rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
 .report summary { cursor: pointer; color: var(--muted); }
 @media (max-width: 860px) { .connect { grid-template-columns: 1fr; } .result .stats { grid-template-columns: 1fr; } .live .stats { grid-template-columns: repeat(2, 1fr); } }
