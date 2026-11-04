@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-04-qwen36-pelican-full-001",
+  "status": "frozen",
+  "description": "Evaluate the existing merged dispatch-fusion engine with all eight Full endpoint-bench tests, including the new unscored pelican-riding-a-bicycle SVG request. The preceding seven-test reports do not cover visual SVG output. Hypothesis: the unchanged engine completes the expanded endpoint workflow and produces an SVG that the evaluator can render. Change only the evaluation revision and definition hash; preserve engine commit, target affine-8 group-64 v2 cache, BF16 draft, FP16 KV/operands, FP32 state/accumulation, dispatch mask 29, 2048-token chunks, 32768-token context and serving configuration. Retain every result and inspect the drawing separately; SVG extraction is not a visual-quality score.",
+  "contract_frozen_at": "2026-11-04T17:28:18.383767+00:00",
+  "extends_path": "../2026-11-03-qwen36-dispatch-main-001/experiment.json",
+  "extends_revision": "f04545c576776c1055289b9fdc08d2e26918ea32",
+  "extends_sha256": "e8c3918cfc5201af891b1e8689f192fd37fc0237a745d44a9040d57fd231c714",
+  "evaluation_revision": "c730daa3d663743b3d4951370d85c0141600f4eb",
+  "evaluation_sha256": "62869f9a19c0816110cb41125436e702c88b4cae74484435e0ae30af857840a0"
+}
