@@ -1,6 +1,6 @@
 // The inputs of a run, and the plan the evaluation definition fixes for them.
 
-export const TESTS = ['conform', 'speed', 'thinking', 'decode', 'prefill', 'needle', 'cache'];
+export const TESTS = ['conform', 'speed', 'thinking', 'decode', 'prefill', 'needle', 'cache', 'pelican'];
 export const PROFILES = ['full', 'quick'];
 
 export const defaultConfig = () => ({ endpoint: '', apiKey: '', model: '', tests: [...TESTS], profile: 'full' });

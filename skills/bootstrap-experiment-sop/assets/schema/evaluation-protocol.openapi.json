@@ -44,7 +44,7 @@
         "description": "What each test of the evaluation does. The evaluator builds every request from it, so an experiment cannot change a test.",
         "type": "object",
         "additionalProperties": false,
-        "required": ["conform", "speed", "thinking", "decode", "prefill", "needle", "cache"],
+        "required": ["conform", "speed", "thinking", "decode", "prefill", "needle", "cache", "pelican"],
         "properties": {
           "conform": {
             "type": "object", "additionalProperties": false, "required": ["timeout_seconds"],
@@ -101,6 +101,14 @@
             "properties": {
               "padded_tokens": { "$ref": "#/components/schemas/Positive" }, "repeats": { "$ref": "#/components/schemas/Positive" },
               "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" }
+            }
+          },
+          "pelican": {
+            "description": "One request for an SVG drawing of a pelican riding a bicycle, with thinking switched off. A picture for a person to look at, not a score.",
+            "type": "object", "additionalProperties": false, "required": ["max_tokens", "timeout_seconds", "prompt"],
+            "properties": {
+              "max_tokens": { "$ref": "#/components/schemas/Positive" }, "timeout_seconds": { "$ref": "#/components/schemas/TimeoutSeconds" },
+              "prompt": { "$ref": "#/components/schemas/Text" }
             }
           }
         }
@@ -415,6 +423,28 @@
         },
         "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "variants"] } }]
       },
+      "PelicanRun": {
+        "description": "svg is whether the reply held an SVG element. The drawing is never part of the report: svg_bytes, elements, and sha256 describe it, and sha256 lets a copy of the drawing be matched to the report. They are null when there is no SVG.",
+        "type": "object", "additionalProperties": false,
+        "required": ["ok", "svg", "svg_bytes", "elements", "sha256", "ttft_ms", "e2e_ms", "completion_tokens", "reasoning_tokens", "visible_tokens", "finish_reason"],
+        "properties": {
+          "ok": { "const": true }, "svg": { "type": "boolean" }, "svg_bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "elements": { "type": ["integer", "null"], "minimum": 0 }, "sha256": { "oneOf": [{ "$ref": "#/components/schemas/Sha256" }, { "type": "null" }] },
+          "ttft_ms": { "$ref": "#/components/schemas/Millis" }, "e2e_ms": { "$ref": "#/components/schemas/Millis" },
+          "completion_tokens": { "type": ["integer", "null"], "minimum": 0 }, "reasoning_tokens": { "type": "integer", "minimum": 0 },
+          "visible_tokens": { "type": "integer", "minimum": 0 }, "finish_reason": { "type": ["string", "null"] }
+        }
+      },
+      "PelicanResult": {
+        "description": "One request for a drawing. A reply without an SVG is a measurement, not a failure; only a failed request is an error.",
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TestStatus" }, "error": { "type": "string" }, "config": { "type": "object" },
+          "run": { "$ref": "#/components/schemas/PelicanRun" }
+        },
+        "allOf": [{ "if": { "properties": { "status": { "const": "complete" } }, "required": ["status"] }, "then": { "required": ["config", "run"] } }]
+      },
       "EvaluationReport": {
         "description": "What one run of the evaluation measured for one model of one endpoint. It is exported by the evaluator page and stored at experiments/<experiment-id>/evaluation/<YYYYMMDD-HHMMSS>.json, where the name is started_at in UTC. It pins the evaluation by id, repository commit, and definition hash, and must cite the evaluation of its experiment. Do not edit it by hand. The endpoint is recorded only as a class, never its address, and the token is never recorded. Only the tests that were selected appear under tests.",
         "type": "object",
@@ -445,7 +475,7 @@
             "description": "Request fields the endpoint rejected and the evaluator then changed, such as max_completion_tokens in place of max_tokens.",
             "type": "object"
           },
-          "selected_tests": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["conform", "speed", "thinking", "decode", "prefill", "needle", "cache"] } },
+          "selected_tests": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["conform", "speed", "thinking", "decode", "prefill", "needle", "cache", "pelican"] } },
           "status": { "description": "complete only when every selected test is complete.", "enum": ["complete", "partial", "error", "cancelled"] },
           "failures": { "description": "One line for each selected test that was not complete.", "type": "array", "items": { "$ref": "#/components/schemas/Text" } },
           "tests": {
@@ -455,7 +485,7 @@
               "conform": { "$ref": "#/components/schemas/ConformResult" }, "speed": { "$ref": "#/components/schemas/SpeedResult" },
               "thinking": { "$ref": "#/components/schemas/ThinkingResult" }, "decode": { "$ref": "#/components/schemas/DecodeResult" },
               "prefill": { "$ref": "#/components/schemas/PrefillResult" }, "needle": { "$ref": "#/components/schemas/NeedleResult" },
-              "cache": { "$ref": "#/components/schemas/CacheResult" }
+              "cache": { "$ref": "#/components/schemas/CacheResult" }, "pelican": { "$ref": "#/components/schemas/PelicanResult" }
             }
           }
         },

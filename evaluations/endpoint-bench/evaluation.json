@@ -1,7 +1,7 @@
 {
   "evaluation_id": "endpoint-bench",
   "status": "released",
-  "description": "A quick benchmark of an OpenAI-compatible chat endpoint, run from a web page with only the endpoint URL and an optional token. It runs seven tests against one model: conform checks that the endpoint behaves like the API the other tests rely on; speed measures raw output speed from a short prompt; thinking asks a medium reasoning task with reasoning left on and switched off; decode measures output speed at fixed output lengths; prefill measures how fast long prompts are digested; needle hides one access code at several depths of a document that fills most of the context window; cache asks one question as a short prompt, a padded prompt, and a prompt with a nonce that defeats the cache. Time runs on the browser's monotonic clock and token counts come from the endpoint's reported usage. The report holds every measured request without prompts or model output.",
+  "description": "A quick benchmark of an OpenAI-compatible chat endpoint, run from a web page with only the endpoint URL and an optional token. It runs eight tests against one model: conform checks that the endpoint behaves like the API the other tests rely on; speed measures raw output speed from a short prompt; thinking asks a medium reasoning task with reasoning left on and switched off; decode measures output speed at fixed output lengths; prefill measures how fast long prompts are digested; needle hides one access code at several depths of a document that fills most of the context window; cache asks one question as a short prompt, a padded prompt, and a prompt with a nonce that defeats the cache; pelican asks once for an SVG of a pelican riding a bicycle, a picture to look at rather than a score. Time runs on the browser's monotonic clock and token counts come from the endpoint's reported usage. The report holds every measured request without prompts or model output; the drawing is shown in the page and is not part of the report.",
   "result_schema": "EvaluationReport",
   "plan": {
     "conform": {
@@ -61,6 +61,11 @@
       "padded_tokens": 50000,
       "repeats": 5,
       "timeout_seconds": 300
+    },
+    "pelican": {
+      "max_tokens": 8192,
+      "timeout_seconds": 300,
+      "prompt": "Generate an SVG of a pelican riding a bicycle. Reply with only the SVG code: one <svg> element with a viewBox, no explanation and no markdown."
     }
   },
   "profiles": {
@@ -111,7 +116,7 @@
     {
       "role": "driver",
       "path": "src/config.js",
-      "sha256": "58a760bcb9e2b5a890d976d3dc98c9a532237f5da8672a6ff5e3ceba3fd2d469"
+      "sha256": "897c0bef4483efb6454aedc75c38a9822dcf2f9c80abc5e8ef322f925b562211"
     },
     {
       "role": "driver",
@@ -145,6 +150,11 @@
     },
     {
       "role": "driver",
+      "path": "src/pelican.js",
+      "sha256": "3cab2772593d81ea45f1758bffdf80406d5c69be1d4dc875a6ac47ff1dd5f9f6"
+    },
+    {
+      "role": "driver",
       "path": "src/prefill.js",
       "sha256": "6ee36603ac99ab07f7275043c6f767c7f7ff719a1f9ee56e0ab9c1d2fbcc0f6f"
     },
@@ -161,7 +171,7 @@
     {
       "role": "driver",
       "path": "src/run.js",
-      "sha256": "85882bf769f63537a30b91f65be3f57246caf9c52f50bc2cf6361b686c3179b8"
+      "sha256": "af1426533630f917f47a18a02bed79ac487b3775c89ba5ac3a3d2abc3defc037"
     },
     {
       "role": "driver",
@@ -181,7 +191,7 @@
     {
       "role": "assertion-evaluator",
       "path": "reference/engine.js",
-      "sha256": "dfbe00523082638c5eb72176ff95a2a2d1d230146262eaa024f89057dbf32fd7"
+      "sha256": "ed372a5e331539a6d6e7efc543d4932819425311febd915a3cf89f863075590e"
     }
   ]
 }

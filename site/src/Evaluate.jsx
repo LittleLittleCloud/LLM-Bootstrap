@@ -11,7 +11,7 @@ const definition = JSON.parse(definitionText);
 const STORAGE = 'endpoint-bench-form';
 const HINTS = {
   conform: 'API behavior', speed: 'Output tok/s', thinking: 'Reasoning accuracy', decode: 'Tok/s by length',
-  prefill: 'Long-prompt tok/s', needle: 'Recall by depth', cache: 'Prompt cache',
+  prefill: 'Long-prompt tok/s', needle: 'Recall by depth', cache: 'Prompt cache', pelican: 'SVG to look at',
 };
 const INITIAL = { endpoint: '', model: '', tests: TESTS, profile: 'full' };
 
@@ -20,9 +20,9 @@ const pct = value => (value == null ? '—' : `${(value * 100).toFixed(0)}%`);
 const change = reduction => (reduction == null ? '—' : `${reduction > 0 ? '−' : reduction < 0 ? '+' : ''}${fmt(Math.abs(reduction))}%`);
 const ms = value => (value == null ? '—' : value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${Math.round(value)} ms`);
 
-const download = (name, text) => {
+const download = (name, text, type = 'application/json') => {
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  link.href = URL.createObjectURL(new Blob([text], { type }));
   link.download = name;
   link.click();
   URL.revokeObjectURL(link.href);
@@ -39,6 +39,24 @@ function Table({ head, rows }) {
         <tbody>{rows.map(row => <tr key={row[0]}>{row.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody>
       </table>
     </div>
+  );
+}
+
+// Drawn through <img>, so the model's SVG cannot run script or load anything from elsewhere.
+function Drawing({ svg, name }) {
+  const [url, setUrl] = useState(null);
+  const [broken, setBroken] = useState(false);
+  useEffect(() => {
+    const next = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    setUrl(next);
+    setBroken(false);
+    return () => URL.revokeObjectURL(next);
+  }, [svg]);
+  return (
+    <figure className="drawing">
+      {broken ? <p className="muted">The browser could not draw this SVG.</p> : url && <img src={url} alt="The pelican riding a bicycle the model drew" onError={() => setBroken(true)} />}
+      <button type="button" className="ghost" onClick={() => download(name, svg, 'image/svg+xml')}>Download SVG</button>
+    </figure>
   );
 }
 
@@ -94,14 +112,21 @@ const SUMMARIES = {
       rows={Object.entries(test.variants).map(([name, variant]) => [name, variant.summary.cache_reported ? `${fmt(variant.summary.cache_hit_pct)}%` : 'not reported', ms(variant.summary.cold_ttft_ms), ms(variant.summary.warm_ttft_ms_p50), change(variant.summary.ttft_reduction_pct)])}
     />
   ),
+  pelican: (test, extra) => (
+    <>
+      <p>{test.run.svg ? `The reply held an SVG of ${fmt(test.run.svg_bytes, 0)} bytes with ${fmt(test.run.elements, 0)} elements.` : 'The reply held no SVG.'} Judge the picture yourself: it is not scored and the drawing is not part of the report.</p>
+      {test.run.finish_reason === 'length' && <p className="muted">The reply stopped at the output limit, so the drawing may be cut off.</p>}
+      {extra.pelican && <Drawing svg={extra.pelican} name={extra.pelicanName} />}
+    </>
+  ),
 };
 
-function Result({ name, test }) {
+function Result({ name, test, extra }) {
   const ready = ['complete', 'partial'].includes(test.status) || (name === 'prefill' && test.status === 'skipped');
   return (
     <section className="result">
       <h3><u className={test.status === 'complete' ? 'good' : test.status === 'partial' ? 'warn' : 'bad'} />{name}<span>{test.status}</span></h3>
-      {ready ? SUMMARIES[name](test) : <p className="muted">{test.error ?? 'No measurements.'}</p>}
+      {ready ? SUMMARIES[name](test, extra) : <p className="muted">{test.error ?? 'No measurements.'}</p>}
     </section>
   );
 }
@@ -223,7 +248,7 @@ export default function Evaluate() {
             Report {report.status} · {report.model} · {report.profile} profile · context window {fmt(report.context_window.tokens, 0)} tokens ({report.context_window.source === 'assumed' ? 'assumed, the endpoint did not report it' : 'reported by the endpoint'})
           </p>
           {report.failures.length > 0 && <ul className="problems">{report.failures.map(failure => <li key={failure}>{failure}</li>)}</ul>}
-          {report.selected_tests.map(name => <Result key={name} name={name} test={report.tests[name]} />)}
+          {report.selected_tests.map(name => <Result key={name} name={name} test={report.tests[name]} extra={{ ...result.artifacts, pelicanName: result.fileName.replace(/\.json$/, '.pelican.svg') }} />)}
           <div className="actions">
             <button type="button" className="primary" onClick={() => download(result.fileName, text)}>Download report</button>
             <button type="button" className="ghost" onClick={() => navigator.clipboard.writeText(text)}>Copy report</button>

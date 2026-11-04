@@ -13,6 +13,7 @@ import { speedRun, decodeRun } from '../evaluations/endpoint-bench/src/measure.j
 import { loadModels, resolveContextWindow } from '../evaluations/endpoint-bench/src/models.js';
 import { headlineMetrics } from '../evaluations/endpoint-bench/src/report.js';
 import { runEvaluation } from '../evaluations/endpoint-bench/src/run.js';
+import { extractSvg } from '../evaluations/endpoint-bench/src/pelican.js';
 import { buildPrompt } from '../evaluations/endpoint-bench/src/cache.js';
 import { buildQuestion, gradeAnswer } from '../evaluations/endpoint-bench/src/thinking.js';
 import { percentile } from '../evaluations/endpoint-bench/src/util.js';
@@ -43,14 +44,14 @@ const run = (fetch, patch = {}, config = {}) => runEvaluation({
   config: { ...defaultConfig(), endpoint: 'http://reference.invalid', model: 'reference', ...config }, definition: small, pin, overrides: { fetch, ...patch },
 });
 
-test('the definition is released, pins every evaluator file by hash, and plans the seven tests', () => {
+test('the definition is released, pins every evaluator file by hash, and plans the eight tests', () => {
   assert.ok(validators.EvaluationDefinition(definition), JSON.stringify(validators.EvaluationDefinition.errors));
   assert.equal(definition.evaluation_id, 'endpoint-bench');
   assert.equal(definition.status, 'released');
   const files = ['src', 'reference'].flatMap(folder => readdirSync(join(directory, folder)).map(name => `${folder}/${name}`)).sort();
   assert.deepEqual(definition.scripts.map(script => script.path).sort(), files, 'every evaluator file is a pinned script');
   for (const script of definition.scripts) assert.equal(script.sha256, fileHash(script.path), `${script.path} changed: run tools/evaluation/refresh-hashes.mjs endpoint-bench`);
-  assert.deepEqual(Object.keys(definition.plan), ['conform', 'speed', 'thinking', 'decode', 'prefill', 'needle', 'cache']);
+  assert.deepEqual(Object.keys(definition.plan), ['conform', 'speed', 'thinking', 'decode', 'prefill', 'needle', 'cache', 'pelican']);
   assert.deepEqual(definition.plan.decode.lengths, [100, 1000, 4000]);
   assert.deepEqual(definition.plan.needle.positions, [5, 25, 50, 75, 90]);
   assert.equal(definition.plan.cache.padded_tokens, 50000);
@@ -249,11 +250,11 @@ test('the cache prompts differ only where the test says: padded repeats byte for
   assert.notEqual(buildPrompt({ seed: 'd', targetTokens: 3000, charsPerToken: 4 }), padded, 'a fresh seed rebuilds the padding');
 });
 
-test('all seven tests run against a known engine and the report says what the engine does', { timeout: 120000 }, async () => {
-  const { report, fileName } = await run(fast({ reasoning: 30 }));
+test('all eight tests run against a known engine and the report says what the engine does', { timeout: 120000 }, async () => {
+  const { report, fileName, artifacts } = await run(fast({ reasoning: 30 }));
   accepts(report);
   assert.equal(report.status, 'complete', report.failures.join('; '));
-  assert.deepEqual(report.selected_tests, ['conform', 'speed', 'thinking', 'decode', 'prefill', 'needle', 'cache']);
+  assert.deepEqual(report.selected_tests, ['conform', 'speed', 'thinking', 'decode', 'prefill', 'needle', 'cache', 'pelican']);
   assert.deepEqual(report.context_window, { tokens: 12000, source: 'models-metadata' });
   assert.equal(report.endpoint_class, 'remote');
   assert.equal(report.model, 'reference');
@@ -288,6 +289,14 @@ test('all seven tests run against a known engine and the report says what the en
   assert.ok(cache.padded.summary.ttft_reduction_pct > cache.busted.summary.ttft_reduction_pct);
   assert.equal(report.tests.cache.config.padded_tokens, 3000);
 
+  const pelican = report.tests.pelican;
+  assert.equal(pelican.config.thinking, 'disabled');
+  assert.equal(pelican.run.svg, true);
+  assert.equal(pelican.run.elements, 5);
+  assert.equal(pelican.run.reasoning_tokens, 0, 'thinking is switched off for the drawing');
+  assert.equal(pelican.run.sha256, createHash('sha256').update(artifacts.pelican).digest('hex'));
+  assert.ok(artifacts.pelican.startsWith('<svg') && artifacts.pelican.endsWith('</svg>'), 'the fence and the sentence around the drawing are dropped');
+  assert.doesNotMatch(JSON.stringify(report), /<svg|<circle/, 'the drawing is not part of the report');
   const metrics = headlineMetrics(report);
   assert.equal(metrics.conform_passed, 1);
   assert.ok(Object.values(metrics).every(value => Number.isFinite(value)), JSON.stringify(metrics));
@@ -430,6 +439,33 @@ test('needle asks for no thinking, prefill keeps the endpoint default, and recal
   const sent = retrievalRequests(prefill.bodies);
   assert.ok(sent.length > 0);
   assert.ok(sent.every(body => !('chat_template_kwargs' in body)), 'the policy is scoped to needle');
+});
+
+test('the pelican drawing is pulled out of a reply, asked for without thinking, and a reply with no drawing is a measurement, not a failure', { timeout: 120000 }, async () => {
+  assert.equal(extractSvg('Sure!\n```svg\n<svg viewBox="0 0 1 1"><g/></svg>\n```\nEnjoy'), '<svg viewBox="0 0 1 1"><g/></svg>');
+  assert.equal(extractSvg('<SVG><rect/></SVG>'), '<SVG><rect/></SVG>');
+  assert.equal(extractSvg('<svg><rect/>'), null, 'an unclosed drawing is not a drawing');
+  assert.equal(extractSvg('no picture'), null);
+  assert.equal(extractSvg(''), null);
+
+  const drawing = recording(fast({ reasoning: 200 }));
+  const kept = await run(drawing.fetch, {}, { tests: ['pelican'] });
+  accepts(kept.report);
+  const [body] = drawing.bodies.filter(item => /pelican/.test(JSON.stringify(item.messages)));
+  assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
+  assert.equal(body.max_tokens, definition.plan.pelican.max_tokens);
+  assert.equal(kept.report.tests.pelican.run.svg, true);
+
+  const none = await run(fast({ fault: 'wrong-answers' }), {}, { tests: ['pelican'] });
+  accepts(none.report);
+  assert.equal(none.report.status, 'complete');
+  assert.deepEqual([none.report.tests.pelican.run.svg, none.report.tests.pelican.run.sha256, none.report.tests.pelican.run.elements], [false, null, null]);
+  assert.equal(none.artifacts.pelican, undefined);
+
+  const dead = await run(async () => { throw new TypeError('Failed to fetch'); }, {}, { tests: ['pelican'] });
+  accepts(dead.report);
+  assert.equal(dead.report.tests.pelican.status, 'error');
+  assert.match(dead.report.failures.join(), /Failed to fetch/);
 });
 
 test('an endpoint that cannot honor no-thinking is reported, and an empty answer is told from a wrong one', { timeout: 120000 }, async () => {
