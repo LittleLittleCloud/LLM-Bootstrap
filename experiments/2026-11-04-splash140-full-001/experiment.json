@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-04-splash140-full-001",
+  "status": "frozen",
+  "description": "Rerun unmodified Splash 1.4.0 with all eight Full endpoint-bench tests, including pelican SVG and the current needle no-thinking policy. The base seven-test default-thinking report has 2897.3 prefill tokens/s and 0/10 needle answers; its separate no-thinking follow-up has 10/10 needle recall. Hypothesis: the current evaluator can measure the full endpoint workflow and obtain visible needle answers without a global reasoning override. Preserve the base MLX affine 8-bit checkpoint, DFlash2 draft, INT8 KV, FP32 recurrent state, default automatic verification/memory/context planning, temporary SSD prefix caching, language-only mode and idle release off. Keep default model reasoning except where the evaluator explicitly requests otherwise. Only update the evaluation revision and definition; record all regressions, runtime limits and skipped sizes. No engine speedup or matched comparison with the separate affine-8 .NET engine is claimed.",
+  "contract_frozen_at": "2026-11-05T01:37:20.887492+00:00",
+  "extends_path": "../2026-11-01-splash-qwen36-8bit-001/experiment.json",
+  "extends_revision": "8c0b1172c7772a20bf0eb877e3641ebb20d26c9a",
+  "extends_sha256": "ea12949193b3fa839db3f58887f813a7236050af260115753f1898d27ab5a405",
+  "evaluation_revision": "8c0b1172c7772a20bf0eb877e3641ebb20d26c9a",
+  "evaluation_sha256": "62869f9a19c0816110cb41125436e702c88b4cae74484435e0ae30af857840a0"
+}
