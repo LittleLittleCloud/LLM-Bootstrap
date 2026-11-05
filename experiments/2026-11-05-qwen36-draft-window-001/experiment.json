@@ -1,0 +1,10 @@
+{
+  "experiment_id": "2026-11-05-qwen36-draft-window-001",
+  "status": "frozen",
+  "description": "Skip whole draft prefill chunks outside every required 2048-token draft context window, preserving prefix checkpoints and retained chunk shapes. Matched native 29939-token controls measured 0.94-1.00% median latency reduction with bitwise-equal output and state; this Full endpoint run measures system behavior, not isolated attribution. Inherit INT8 target KV, FP16 draft KV and projection operands, BF16 expert output, staged8 recurrence, fused preparation, dispatch mask 29, 2048-token target chunks, prefix caching and 32768 context. Run all eight unchanged Full tests; compare against the prior INT8 Full report with seed and machine variability noted.",
+  "contract_frozen_at": "2026-11-05T18:11:31.642584+00:00",
+  "extends_path": "../2026-11-04-qwen36-int8-kv-001/experiment.json",
+  "extends_revision": "e0765d68451828982a3028ceedd28e1014db0af8",
+  "extends_sha256": "06bd71d24130a2e48796595816e6ad351df3ec0988458934e0c5ae3c9b5bd750",
+  "engine_commit": "99c2c9310c4f6d2e81e63b90f80f82f9d1a738ab"
+}

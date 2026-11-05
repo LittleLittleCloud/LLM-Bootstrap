@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-05-qwen36-draft-window-fp16-001",
+  "status": "frozen",
+  "description": "Evaluate merged engine main with windowed draft context and FP16 target KV. Skip whole draft chunks outside all required context windows while preserving prefix checkpoints. Keep FP16 draft KV and projection operands, BF16 expert output, staged8 recurrence, fused preparation, dispatch mask 29, 2048-token chunks, prefix caching and context 32768. Run all eight unchanged Full endpoint tests. The companion merged-engine run changes only target KV precision in serving arguments, but UI-generated seeds and machine state can differ; this is a best-permitted system observation, not isolated quantization attribution. Hypothesis: draft windowing retains conformance and retrieval behavior and reduces prefill work. Report every goal, including misses.",
+  "contract_frozen_at": "2026-11-05T19:31:52.678623+00:00",
+  "extends_path": "../2026-11-04-qwen36-bf16-output-001/experiment.json",
+  "extends_revision": "5f975a8fba5949f2fa4e9df1c9c85f29fef6ea83",
+  "extends_sha256": "116fdb6b3ece9170adb1168b9582c1ed4efd7ad70b1f20322ec01620ee2ae245",
+  "engine_commit": "665ce931514d1f408d085d45668e1195c62c6cc7",
+  "evaluation_revision": "dea98212e9c592adf1443146e728de03fd5c1b31"
+}

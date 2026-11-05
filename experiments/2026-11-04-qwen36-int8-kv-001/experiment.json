@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-04-qwen36-int8-kv-001",
+  "status": "frozen",
+  "description": "Evaluate the optimized INT8 target KV implementation, derived from the BF16 expert-output experiment whose full report measured 2706.6 prefill tokens/s. Hypothesis: direct INT8 attention with a K256 tile and reused scales improves long prefill while preserving endpoint conformance and retrieval quality within acceptable numerical tolerance. Native matched 29939-token controls showed about 4% less latency than initial INT8 and 3% less than FP16; this full endpoint run tests the resulting system, not those isolated attribution claims. Keep BF16 expert output, FP16 projection operands and draft KV, BF16 DFlash2 weights, staged8 recurrence, fused preparation, dispatch mask 29, 2048-token chunks, prefix caching and 32768 context. Target KV changes from FP16 to symmetric INT8 with FP32 token/head scales; online attention uses FP16 Q, BF16 scaled probabilities and FP32 accumulation. Run all eight Full tests, with no evaluator changes. Current evaluator definition and drivers are byte-identical to the base pin; timing comparisons across reports remain subject to seeds and machine variability.",
+  "contract_frozen_at": "2026-11-05T05:38:08.574502+00:00",
+  "extends_path": "../2026-11-04-qwen36-bf16-output-001/experiment.json",
+  "extends_revision": "dea98212e9c592adf1443146e728de03fd5c1b31",
+  "extends_sha256": "116fdb6b3ece9170adb1168b9582c1ed4efd7ad70b1f20322ec01620ee2ae245",
+  "engine_commit": "3ce6a76195a92fcf4293b41ae2bdb4da41bb11ab",
+  "evaluation_revision": "dea98212e9c592adf1443146e728de03fd5c1b31"
+}
