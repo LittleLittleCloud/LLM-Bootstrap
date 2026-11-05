@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-04-splash140-bf16-kv-001",
+  "status": "frozen",
+  "description": "Evaluate unmodified Splash 1.4.0 with BF16 target KV instead of the base INT8 KV using all eight Full endpoint-bench tests. The base Full report measured 2889.9 prefill tokens/s at 10K and 1952.2 at 50K with INT8 KV; prior native controls suggest BF16 may reduce prefill throughput. Measure the complete endpoint workflow and retain all quality regressions. Preserve the target MLX affine 8-bit checkpoint, DFlash2 draft, FP32 recurrent state, default reasoning and automatic verification, automatic memory/context planning, temporary SSD prefix caching, language-only mode and idle release off. Pass --kv-format bf16 explicitly. Record any resulting automatic context or expert-memory changes; do not treat this system configuration comparison as an isolated kernel benchmark. Pin the current released evaluator.",
+  "contract_frozen_at": "2026-11-05T04:42:44.029485+00:00",
+  "extends_path": "../2026-11-04-splash140-full-001/experiment.json",
+  "extends_revision": "ade217d98b764fcbe41e44fa51c4fb7473b30a74",
+  "extends_sha256": "ebb9851f9bdcc4395dbcbd741d17bb5a08446c14b3195cd88141d67e470ef6cc",
+  "evaluation_revision": "ade217d98b764fcbe41e44fa51c4fb7473b30a74",
+  "evaluation_sha256": "62869f9a19c0816110cb41125436e702c88b4cae74484435e0ae30af857840a0"
+}
