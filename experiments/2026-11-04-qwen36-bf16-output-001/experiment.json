@@ -1,0 +1,11 @@
+{
+  "experiment_id": "2026-11-04-qwen36-bf16-output-001",
+  "status": "frozen",
+  "description": "Improve the merged affine-8 engine by enabling BF16 routed expert-down output storage for fused prefill, retaining FP32 matmul/combine accumulation, shared/residual outputs and recurrent state. The base full report measures 2547.7 prefill tokens/s against the inherited 3113 goal. Hypothesis: halving routed-output bytes improves prefill throughput while preserving endpoint conformance and task accuracy within acceptable numerical tolerance. Evaluate merged engine PR #20 with --bf16-expert-output, otherwise preserve the base serving configuration, including dispatch mask 29, staged8 recurrence, fused preparation, FP16 KV/operands, BF16 DFlash2 draft, 2048-token chunks and 32768 context. Shared-gate sigmoid and fused affine dense alternatives remain disabled. Run all eight Full tests. Pin current main for the evaluator; its definition and evaluator source files are byte-identical to the base pin. Report all outcomes without attributing cross-report timing variation solely to this change.",
+  "contract_frozen_at": "2026-11-05T01:14:36.720479+00:00",
+  "extends_path": "../2026-11-04-qwen36-pelican-full-001/experiment.json",
+  "extends_revision": "8c0b1172c7772a20bf0eb877e3641ebb20d26c9a",
+  "extends_sha256": "933fb86246dd52fee090330f0d9d995257f142605dd108d259c21ae85e04a5d6",
+  "engine_commit": "41f8e470efc1e4628a467936eddcbdd618be1d3f",
+  "evaluation_revision": "8c0b1172c7772a20bf0eb877e3641ebb20d26c9a"
+}
