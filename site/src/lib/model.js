@@ -12,6 +12,10 @@ export const METRICS = {
   thinking_accuracy: { label: 'Thinking accuracy', unit: '', better: 'higher', digits: 2, read: read(['metrics', 'thinking_accuracy']) },
 };
 
+// A choice in the Metric selector that is not a number: the published pelican drawings, shown unranked and unscored.
+export const GALLERY_METRIC = 'pelican_drawing';
+export const GALLERY_LABEL = 'Pelican drawing';
+
 export const FACETS = [
   { key: 'hardware', label: 'Hardware', read: run => run.hardware },
   { key: 'target_model', label: 'Target model', read: run => run.target_model },
@@ -65,6 +69,10 @@ function matches(run, state, skipFacet) {
 }
 
 export const filterRuns = (runs, state) => runs.filter(run => matches(run, state));
+
+// Entries whose drawing is published, newest first. A drawing has no score, so nothing here is ranked or collapsed to a best run.
+export const galleryRuns = runs => runs.filter(run => run.drawing?.available)
+  .sort((a, b) => b.date.localeCompare(a.date) || b.entry_id.localeCompare(a.entry_id));
 
 // Counts for one facet under every other active filter, so the options stay reachable while narrowing.
 export function facetCounts(runs, state, facetKey) {
@@ -237,7 +245,7 @@ export function hashToState(hash) {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const choose = (key, allowed) => { const value = params.get(key); if (value && allowed.includes(value)) state[key] = value; };
   choose('page', ['home', 'leaderboard', 'evaluate']);
-  choose('metric', Object.keys(METRICS));
+  choose('metric', [...Object.keys(METRICS), GALLERY_METRIC]);
   choose('view', ['best', 'all']);
   choose('tab', ['leaderboard', 'trends']);
   choose('sort', ['rank', 'date-desc', 'date-asc']);
