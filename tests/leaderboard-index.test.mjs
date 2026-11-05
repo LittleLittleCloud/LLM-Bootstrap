@@ -382,3 +382,47 @@ test('the command reads experiments/ from a repository root and writes the index
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+
+test('long acyclic improvement chains retain overrides, shared bases and pinned hashes', () => {
+  const files = tree();
+  let parent = 'exp-derived';
+  for (let i = 0; i < 16; i++) {
+    const id = `exp-step-${i}`;
+    put(files, `experiments/${id}/experiment.json`, {
+      experiment_id: id, status: 'frozen', description: 'Synthetic long chain.', contract_frozen_at: when,
+      extends_path: `../${parent}/experiment.json`, extends_revision: commit('5'),
+      extends_sha256: digest(files.get(`experiments/${parent}/experiment.json`)),
+      ...(i === 7 ? { engine_commit: commit('7') } : {}),
+    });
+    parent = id;
+  }
+  addReport(files, parent, report());
+  const index = buildIndex(files, { validators });
+  assert.equal(index.entries.length, 4);
+  const last = index.entries.find(entry => entry.entry_id.startsWith(`${parent}/`));
+  assert.equal(last.engine.revision, commit('7'));
+  assert.equal(last.derived_from, 'exp-step-14');
+  const base = 'experiments/exp-base/experiment.json';
+  files.set(base, files.get(base) + ' ');
+  assert.throws(() => buildIndex(files, { validators }), /does not match the sha256/);
+});
+
+test('self references and indirect cycles fail without rejecting shared ancestors', () => {
+  for (const indirect of [false, true]) {
+    const files = tree();
+    const cyclic = id => ({
+      experiment_id: id, status: 'frozen', description: 'Synthetic cycle.', contract_frozen_at: when,
+      extends_path: '../exp-loop/experiment.json', extends_revision: commit('5'), extends_sha256: '0'.repeat(64),
+    });
+    const loop = cyclic('exp-loop');
+    if (indirect) {
+      const other = put(files, 'experiments/exp-other/experiment.json', cyclic('exp-other'));
+      loop.extends_path = '../exp-other/experiment.json';
+      loop.extends_sha256 = digest(other);
+    }
+    put(files, 'experiments/exp-loop/experiment.json', loop);
+    addReport(files, 'exp-loop', report());
+    assert.throws(() => buildIndex(files, { validators }), /cyclic extends chain/);
+  }
+});
