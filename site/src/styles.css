@@ -203,11 +203,20 @@ small em { margin-left: 8px; padding: 0 6px; border: 1px solid var(--line); bord
 .result h3 span { margin-left: 4px; color: var(--muted); font-size: 0.78rem; font-weight: 400; }
 .result .stats { grid-template-columns: repeat(3, 1fr); }
 .result p { margin: 0 0 8px; font-size: 0.9rem; }
+.gallery { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin: 0; padding: 0; }
+.gallery button { display: grid; gap: 10px; width: 100%; padding: 10px; text-align: left; background: var(--surface); color: inherit; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; font: inherit; }
+.gallery button:hover { border-color: var(--accent); }
+.gallery button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gallery .thumb { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; border-radius: 8px; }
+.gallery .thumb.missing { display: grid; place-items: center; padding: 12px; color: var(--muted); font-size: 0.8rem; text-align: center; border: 1px dashed var(--line); }
+.gallery .caption { display: grid; min-width: 0; }
+.gallery .caption strong { overflow-wrap: anywhere; font-size: 0.9rem; }
+.drawing-dialog .actions { flex-wrap: wrap; }
 .drawing-link { justify-self: start; height: auto; font-size: 0.8rem; }
 .drawing-dialog { width: min(92vw, 520px); max-height: 92vh; overflow: auto; padding: 20px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 14px; }
 .drawing-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 .drawing-dialog header { display: grid; margin-bottom: 12px; }
-.drawing-dialog img { display: block; width: 100%; max-height: 55vh; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+.drawing-dialog img { display: block; width: 100%; max-height: 45vh; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
 .drawing-dialog p { margin: 12px 0; font-size: 0.85rem; }
 .drawing-dialog .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0 0 16px; font-size: 0.85rem; }
 .drawing-dialog .facts div { display: flex; gap: 6px; }

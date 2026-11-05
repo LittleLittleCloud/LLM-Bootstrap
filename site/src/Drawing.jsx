@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 // Where the site build puts the drawing of an entry (tools/leaderboard/build-index.mjs --drawings).
 export const drawingUrl = run => `/data/drawings/${run.entry_id}.svg`;
+const REPOSITORY = 'https://github.com/LittleLittleCloud/LLM-Bootstrap';
 
 const fmt = value => (value == null ? '—' : Number(value).toLocaleString('en'));
 
@@ -40,6 +41,7 @@ export function DrawingDialog({ run, onClose }) {
           </dl>
           <div className="actions">
             <a className="ghost" href={drawingUrl(run)} download={`${stamp}.pelican.svg`}>Download SVG</a>
+            <a className="ghost" href={`${REPOSITORY}/blob/main/${run.source.evaluation}`} target="_blank" rel="noreferrer">View report</a>
             <button type="button" className="primary" onClick={onClose}>Close</button>
           </div>
         </>

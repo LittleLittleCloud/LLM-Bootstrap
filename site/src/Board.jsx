@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { DrawingDialog, DrawingLink } from './Drawing.jsx';
+import { Gallery } from './Gallery.jsx';
 import { Trends } from './Trends.jsx';
 import {
-  FACETS, METRICS, collapse, defaultState, filterRuns, formatValue, largestCohort, mixedConditions, rankRuns, orderRows, unrankedReason, conformance,
+  FACETS, GALLERY_LABEL, GALLERY_METRIC, METRICS, collapse, defaultState, filterRuns, formatValue, largestCohort, mixedConditions, rankRuns, orderRows, unrankedReason, conformance,
 } from './lib/model.js';
 
 const PAGE = 15;
@@ -24,8 +25,9 @@ function Select({ label, value, onChange, options }) {
 export function Board({ runs, state, patch, setState }) {
   const [shown, setShown] = useState(PAGE);
   const filtered = filterRuns(runs, state);
-  const rows = collapse(filtered, state.metric, state.view);
-  const mixed = mixedConditions(state.tab === 'trends' ? filtered : rows, state.metric);
+  const gallery = state.metric === GALLERY_METRIC;
+  const rows = gallery ? [] : collapse(filtered, state.metric, state.view);
+  const mixed = gallery ? [] : mixedConditions(state.tab === 'trends' ? filtered : rows, state.metric);
   const filterBy = key => value => {
     const filters = { ...state.filters };
     if (value) filters[key] = [value]; else delete filters[key];
@@ -38,17 +40,20 @@ export function Board({ runs, state, patch, setState }) {
   return (
     <main className="band board">
       <div className="controls">
-        <div className="seg" role="tablist" aria-label="View">
-          {['leaderboard', 'trends'].map(tab => (
-            <button key={tab} type="button" role="tab" aria-selected={state.tab === tab} onClick={() => patch({ tab })}>
-              {tab === 'leaderboard' ? 'Leaderboard' : 'Trends'}
-            </button>
-          ))}
-        </div>
+        {!gallery && (
+          <div className="seg" role="tablist" aria-label="View">
+            {['leaderboard', 'trends'].map(tab => (
+              <button key={tab} type="button" role="tab" aria-selected={state.tab === tab} onClick={() => patch({ tab })}>
+                {tab === 'leaderboard' ? 'Leaderboard' : 'Trends'}
+              </button>
+            ))}
+          </div>
+        )}
         <label className="select">
           <span>Metric</span>
           <select value={state.metric} onChange={event => patch({ metric: event.target.value, sort: 'rank' })}>
             {Object.entries(METRICS).map(([key, spec]) => <option key={key} value={key}>{spec.label}</option>)}
+            <option value={GALLERY_METRIC}>{GALLERY_LABEL}</option>
           </select>
         </label>
         {SELECTS.map(key => {
@@ -75,7 +80,9 @@ export function Board({ runs, state, patch, setState }) {
         </p>
       )}
 
-      {state.tab === 'trends'
+      {gallery
+        ? <Gallery runs={filtered} />
+        : state.tab === 'trends'
         ? <Trends runs={runs} filtered={filtered} state={state} patch={patch} />
         : <Table rows={rows} state={state} shown={shown} onMore={() => setShown(shown + PAGE)} />}
     </main>

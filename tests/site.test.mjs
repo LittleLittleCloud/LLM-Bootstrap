@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
-  collapse, defaultState, deriveDeltas, facetCounts, filterRuns, frontier, hashToState, largestCohort, lineageRoots,
+  GALLERY_METRIC, METRICS, collapse, defaultState, deriveDeltas, facetCounts, filterRuns, frontier, galleryRuns, hashToState, largestCohort, lineageRoots,
   conformance, mixedConditions, orderRows, rankRuns, stateToHash, summarize, trendSeries, unrankedReason,
 } from '../site/src/lib/model.js';
 import { buildIndex, loadEvaluationIds, loadRecordFiles, serializeIndex } from '../tools/leaderboard/build-index.mjs';
@@ -188,4 +188,32 @@ test('the URL hash round-trips the view state and ignores unknown or malformed v
   assert.equal(stateToHash(defaultState()), '');
   assert.deepEqual(hashToState('#metric=__proto__&tab=evil&page=admin&from=yesterday&f.nonsense=1'), defaultState());
   assert.equal(hashToState('#page=evaluate').page, 'evaluate');
+});
+
+const drawn = (id, date, available = true, overrides = {}) => entry({
+  entry_id: id, date, drawing: { available, svg: true, bytes: 100, elements: 3, sha256: 'a'.repeat(64), finish_reason: 'stop', path: available ? `experiments/${id}.pelican.svg` : null }, ...overrides,
+});
+
+test('the gallery lists only published drawings, newest first, under the active filters, and never ranks or collapses them', () => {
+  const runs = [
+    drawn('e1/20260701-000000', '2026-07-01'), drawn('e2/20260705-000000', '2026-07-05', true, { hardware: 'hw2' }),
+    drawn('e3/20260703-000000', '2026-07-03', false), entry({ entry_id: 'e4/20260706-000000', date: '2026-07-06' }),
+    drawn('e1/20260705-010000', '2026-07-05', true, { experiment_id: 'e1' }),
+  ];
+  const everything = filterRuns(runs, defaultState());
+  assert.deepEqual(galleryRuns(everything).map(run => run.entry_id), ['e2/20260705-000000', 'e1/20260705-010000', 'e1/20260701-000000'],
+    'unpublished and drawing-less entries never become cards; two drawings of one experiment both show');
+  const onlyHw2 = filterRuns(runs, { ...defaultState(), filters: { hardware: ['hw2'] } });
+  assert.deepEqual(galleryRuns(onlyHw2).map(run => run.hardware), ['hw2']);
+  assert.deepEqual(galleryRuns(filterRuns(runs, { ...defaultState(), query: 'no-such-thing' })), [], 'an empty result is an empty list for the empty state');
+  assert.deepEqual(galleryRuns(filterRuns(runs, { ...defaultState(), from: '2026-07-04' })).map(run => run.date), ['2026-07-05', '2026-07-05']);
+  assert.equal(GALLERY_METRIC in METRICS, false, 'the gallery is not a numeric metric, so nothing ranks, orders, or charts it');
+});
+
+test('the gallery choice round-trips through the URL and a numeric metric restores the leaderboard', () => {
+  const state = { ...defaultState(), page: 'leaderboard', metric: GALLERY_METRIC, filters: { hardware: ['hw1'] }, query: 'qwen' };
+  assert.deepEqual(hashToState(`#${stateToHash(state)}`), state);
+  assert.equal(hashToState('#metric=pelican_drawing').metric, GALLERY_METRIC);
+  assert.equal(hashToState('#metric=decode_tok_s').metric, defaultState().metric);
+  assert.equal(hashToState('#metric=pelican').metric, defaultState().metric, 'an unknown metric falls back to the default');
 });
