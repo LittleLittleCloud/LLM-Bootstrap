@@ -67,8 +67,8 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
   };
 
   // Returns the effective experiment and the id of its base, following extends links.
-  const loadExperiment = (path, text, depth) => {
-    if (depth > 10) { fail(`${path}: the extends chain is too deep or cyclic`); return null; }
+  const loadExperiment = (path, text, ancestors = new Set()) => {
+    const chain = new Set(ancestors).add(path);
     const document = parse(text, path);
     if (!document) return null;
     if (!isDerived(document)) {
@@ -76,10 +76,11 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
     }
     if (!validate('experiment', 'DerivedExperiment', document, path)) return null;
     const basePath = posix.normalize(posix.join(posix.dirname(path), document.extends_path));
+    if (chain.has(basePath)) { fail(`${path}: cyclic extends chain through ${basePath}`); return null; }
     const baseText = read(basePath);
     if (baseText == null) return null;
     if (sha256(baseText) !== document.extends_sha256) { fail(`${basePath} does not match the sha256 pinned in ${path}`); return null; }
-    const base = loadExperiment(basePath, baseText, depth + 1);
+    const base = loadExperiment(basePath, baseText, chain);
     if (!base) return null;
     try {
       const effective = resolveExperiment(document, base.experiment);
@@ -98,7 +99,7 @@ export function buildIndex(files, { validators = null, evaluationIds = null } = 
     for (const path of recordPaths) if (!EVALUATION_PATH.test(path) && !DRAWING_PATH.test(path)) fail(`${path} is not named <YYYYMMDD-HHMMSS>.json or <YYYYMMDD-HHMMSS>.pelican.svg`);
     // An experiment without reports has nothing to list.
     if (!recordPaths.length) continue;
-    const loaded = loadExperiment(experimentPath, files.get(experimentPath), 0);
+    const loaded = loadExperiment(experimentPath, files.get(experimentPath));
     if (!loaded) continue;
     const { experiment, parent } = loaded;
     if (experiment.experiment_id !== id) { fail(`${experimentPath} declares experiment_id ${experiment.experiment_id}, not its directory name ${id}`); continue; }
