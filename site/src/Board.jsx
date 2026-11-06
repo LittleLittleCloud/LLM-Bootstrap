@@ -10,15 +10,32 @@ const PAGE = 15;
 const SELECTS = ['hardware', 'target_model', 'evaluation'];
 const CONFORM = { passed: ['good', 'Conforms'], failed: ['bad', 'Fails conform'], unchecked: ['warn', 'Unchecked'] };
 
-function Select({ label, value, onChange, options }) {
+function MultiSelect({ label, values, onChange, options }) {
+  const text = values.length === 1 ? values[0] : values.length ? `${values.length} selected` : 'All';
   return (
-    <label className="select">
+    <div className="select">
       <span>{label}</span>
-      <select value={value} onChange={event => onChange(event.target.value)}>
-        <option value="">All</option>
-        {options.map(([key, text]) => <option key={key} value={key}>{text ?? key}</option>)}
-      </select>
-    </label>
+      <details className="multi-select"
+        onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary').focus();
+          }
+        }}>
+        <summary aria-label={`${label}: ${text}`} title={values.join(', ') || 'All'}>{text}</summary>
+        <div className="multi-options" role="group" aria-label={label}>
+          <button type="button" className="text" aria-label={`Clear ${label} filter`} onClick={() => onChange([])}>All</button>
+          {options.map(value => (
+            <label key={value}>
+              <input type="checkbox" checked={values.includes(value)}
+                onChange={event => onChange(event.target.checked ? [...values, value] : values.filter(picked => picked !== value))} />
+              <span>{value}</span>
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -28,9 +45,9 @@ export function Board({ runs, state, patch, setState }) {
   const gallery = state.metric === GALLERY_METRIC;
   const rows = gallery ? [] : collapse(filtered, state.metric, state.view);
   const mixed = gallery ? [] : mixedConditions(state.tab === 'trends' ? filtered : rows, state.metric);
-  const filterBy = key => value => {
+  const filterBy = key => values => {
     const filters = { ...state.filters };
-    if (value) filters[key] = [value]; else delete filters[key];
+    if (values.length) filters[key] = values; else delete filters[key];
     patch({ filters });
     setShown(PAGE);
   };
@@ -59,9 +76,9 @@ export function Board({ runs, state, patch, setState }) {
         {SELECTS.map(key => {
           const facet = FACETS.find(item => item.key === key);
           const picked = state.filters[key];
+          const options = [...new Set(runs.map(facet.read))].sort();
           return (
-            <Select key={key} label={facet.label} value={picked?.length === 1 ? picked[0] : ''} onChange={filterBy(key)}
-              options={[...new Set(runs.map(facet.read))].sort().map(value => [value])} />
+            <MultiSelect key={key} label={facet.label} values={picked ?? []} onChange={filterBy(key)} options={options} />
           );
         })}
         <input className="search" type="search" placeholder="Search" value={state.query} aria-label="Search"

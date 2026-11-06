@@ -97,6 +97,12 @@ button, select, input { font: inherit; color: inherit; }
 .select { display: grid; gap: 2px; font-size: 0.75rem; color: var(--muted); }
 select, .search { height: 32px; padding: 0 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; width: 150px; }
 .search { margin-left: auto; width: 160px; }
+.multi-select { position: relative; width: 150px; }
+.multi-select summary { height: 32px; padding: 5px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-options { position: absolute; z-index: 2; min-width: 100%; width: max-content; max-width: 360px; max-height: 280px; overflow: auto; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.12); }
+.multi-options label { display: flex; align-items: baseline; gap: 6px; padding: 4px 0; cursor: pointer; overflow-wrap: anywhere; }
+.multi-options input { flex-shrink: 0; }
+@media (max-width: 640px) { .multi-options { width: 150px; } }
 .toggle { display: flex; align-items: center; gap: 6px; height: 32px; color: var(--muted); font-size: 0.9rem; cursor: pointer; }
 .text { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; height: 32px; }
 .notice { display: flex; gap: 12px; align-items: baseline; margin-bottom: 16px; color: var(--warn); font-size: 0.9rem; }
