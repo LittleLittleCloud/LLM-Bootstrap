@@ -22,6 +22,35 @@ function Select({ label, value, onChange, options }) {
   );
 }
 
+function ModelSelect({ label, values, onChange, options }) {
+  const text = values.length === 1 ? values[0] : values.length ? `${values.length} selected` : 'All';
+  return (
+    <div className="select">
+      <span>{label}</span>
+      <details className="model-select"
+        onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector('summary').focus();
+          }
+        }}>
+        <summary aria-label={`${label}: ${text}`} title={values.join(', ') || 'All'}>{text}</summary>
+        <div className="model-options" role="group" aria-label={label}>
+          <button type="button" className="text" onClick={() => onChange([])}>All models</button>
+          {options.map(value => (
+            <label key={value}>
+              <input type="checkbox" checked={values.includes(value)}
+                onChange={event => onChange(event.target.checked ? [...values, value] : values.filter(picked => picked !== value))} />
+              <span>{value}</span>
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export function Board({ runs, state, patch, setState }) {
   const [shown, setShown] = useState(PAGE);
   const filtered = filterRuns(runs, state);
@@ -30,7 +59,8 @@ export function Board({ runs, state, patch, setState }) {
   const mixed = gallery ? [] : mixedConditions(state.tab === 'trends' ? filtered : rows, state.metric);
   const filterBy = key => value => {
     const filters = { ...state.filters };
-    if (value) filters[key] = [value]; else delete filters[key];
+    const values = Array.isArray(value) ? value : value ? [value] : [];
+    if (values.length) filters[key] = values; else delete filters[key];
     patch({ filters });
     setShown(PAGE);
   };
@@ -59,9 +89,13 @@ export function Board({ runs, state, patch, setState }) {
         {SELECTS.map(key => {
           const facet = FACETS.find(item => item.key === key);
           const picked = state.filters[key];
+          const options = [...new Set(runs.map(facet.read))].sort();
+          if (key === 'target_model') {
+            return <ModelSelect key={key} label={facet.label} values={picked ?? []} onChange={filterBy(key)} options={options} />;
+          }
           return (
             <Select key={key} label={facet.label} value={picked?.length === 1 ? picked[0] : ''} onChange={filterBy(key)}
-              options={[...new Set(runs.map(facet.read))].sort().map(value => [value])} />
+              options={options.map(value => [value])} />
           );
         })}
         <input className="search" type="search" placeholder="Search" value={state.query} aria-label="Search"

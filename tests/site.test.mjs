@@ -122,6 +122,21 @@ test('ranking uses competition ranks and honors direction, keeps a failed confor
   assert.deepEqual(orderRows([c, missing, a], rankRuns([c, missing, a], 'decode_tok_s'), 'rank'), [a, c, missing]);
 });
 
+test('multiple target models match either selection while respecting other filters in both views', () => {
+  const runs = [
+    entry({ target_model: 'm1' }), entry({ target_model: 'm2' }), entry({ target_model: 'm3' }),
+    entry({ target_model: 'm2', hardware: 'hw2' }),
+  ];
+  for (const tab of ['leaderboard', 'trends']) {
+    const state = { ...defaultState(), tab, filters: { target_model: ['m1', 'm2'], hardware: ['hw1'] } };
+    assert.deepEqual(filterRuns(runs, state), runs.slice(0, 2));
+    assert.deepEqual([...facetCounts(runs, state, 'target_model')], [['m1', 1], ['m2', 1], ['m3', 1]]);
+    assert.deepEqual(filterRuns(runs, { ...state, filters: { ...state.filters, target_model: ['m2'] } }), [runs[1]]);
+    assert.deepEqual(filterRuns(runs, { ...state, filters: { hardware: ['hw1'] } }), runs.slice(0, 3), 'All clears only the model filter');
+    assert.deepEqual(filterRuns(runs, { ...state, filters: { ...state.filters, target_model: [] } }), runs.slice(0, 3));
+  }
+});
+
 test('collapsing keeps the best entry per engine in each experiment, whatever its conformance', () => {
   const low = decode(80, { experiment_id: 'x' });
   const high = decode(120, { experiment_id: 'x', date: '2026-07-05' });
@@ -188,6 +203,16 @@ test('the URL hash round-trips the view state and ignores unknown or malformed v
   assert.equal(stateToHash(defaultState()), '');
   assert.deepEqual(hashToState('#metric=__proto__&tab=evil&page=admin&from=yesterday&f.nonsense=1'), defaultState());
   assert.equal(hashToState('#page=evaluate').page, 'evaluate');
+});
+
+test('multiple target models persist through URL sharing and reloads', () => {
+  const models = ['Qwen/Qwen3.6-35B-A3B-FP8', 'mlx-community/Qwen3.6-35B-A3B-8bit'];
+  for (const tab of ['leaderboard', 'trends']) {
+    const state = { ...defaultState(), page: 'leaderboard', tab, filters: { target_model: models, hardware: ['hw1'] } };
+    assert.deepEqual(hashToState(`#${stateToHash(state)}`), state);
+    const single = { ...state, filters: { target_model: [models[0]] } };
+    assert.deepEqual(hashToState(`#${stateToHash(single)}`), single, 'existing single-model links remain valid');
+  }
 });
 
 const drawn = (id, date, available = true, overrides = {}) => entry({
