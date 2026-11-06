@@ -1,0 +1,21 @@
+{
+  "experiment_id": "2026-11-05-splash-qwen38-27b-8bit-001",
+  "status": "frozen",
+  "description": "Measure Splash 1.4.0 with Qwen3.8-27B MLX affine 8-bit weights and DFlash2 speculative decoding on Apple M5 Pro. Run the full endpoint-bench profile with all eight tests, model-default reasoning, INT8 KV, FP32 recurrent states, automatic memory/context planning, and default Neural Engine prefill policy. Characterize conformance, speed, thinking, decode, prefill, needle retrieval, caching, and the pelican drawing without a preset performance threshold.",
+  "contract_frozen_at": "2026-11-05T22:48:25.045172+00:00",
+  "hardware_platform": "Apple M5 Pro",
+  "hardware_gpu_cores": 20,
+  "hardware_memory_gib": 48,
+  "target_repository": "mlx-community/Qwen3.8-27B-8bit",
+  "target_revision": "815b83c0df8ffd1d1b5244cf75fd6ef14fca9ef9",
+  "target_weights": "MLX affine 8-bit quantization, group size 64; non-quantized checkpoint tensors preserved",
+  "evaluation_id": "endpoint-bench",
+  "evaluation_revision": "e561176b901451328b64e8958fe40e10a6ff3ecc",
+  "evaluation_sha256": "62869f9a19c0816110cb41125436e702c88b4cae74484435e0ae30af857840a0",
+  "engine_name": "splash",
+  "engine_commit": "1482f6bbc2abf12375332725302019594150b6cb",
+  "comparison_track": "best-permitted-configuration",
+  "goal_thresholds": [
+    "conform_passed >= 1"
+  ]
+}
