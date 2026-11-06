@@ -137,6 +137,28 @@ test('multiple target models match either selection while respecting other filte
   }
 });
 
+test('hardware, model, and evaluation multi-selections combine and clear independently in both views', () => {
+  const runs = [
+    entry(), entry({ hardware: 'hw2', target_model: 'm2', evaluation: 'ev2' }),
+    entry({ hardware: 'hw3' }), entry({ target_model: 'm3' }), entry({ evaluation: 'ev3' }),
+  ];
+  for (const tab of ['leaderboard', 'trends']) {
+    const state = {
+      ...defaultState(), page: 'leaderboard', tab,
+      filters: { hardware: ['hw1', 'hw2'], target_model: ['m1', 'm2'], evaluation: ['ev1', 'ev2'] },
+    };
+    assert.deepEqual(filterRuns(runs, state), runs.slice(0, 2));
+    assert.deepEqual(hashToState(`#${stateToHash(state)}`), state);
+    for (const [key, extra] of [['hardware', runs[2]], ['target_model', runs[3]], ['evaluation', runs[4]]]) {
+      const filters = { ...state.filters };
+      delete filters[key];
+      assert.deepEqual(filterRuns(runs, { ...state, filters }), [...runs.slice(0, 2), extra], `clearing ${key} preserves the other filters`);
+      assert.deepEqual(filterRuns(runs, { ...state, filters: { ...state.filters, [key]: [] } }), [...runs.slice(0, 2), extra]);
+      assert.deepEqual(filterRuns(runs, { ...state, filters: { ...state.filters, [key]: [state.filters[key][1]] } }), [runs[1]]);
+    }
+  }
+});
+
 test('collapsing keeps the best entry per engine in each experiment, whatever its conformance', () => {
   const low = decode(80, { experiment_id: 'x' });
   const high = decode(120, { experiment_id: 'x', date: '2026-07-05' });
