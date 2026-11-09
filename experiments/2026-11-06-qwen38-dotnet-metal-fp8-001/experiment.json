@@ -1,0 +1,22 @@
+{
+  "experiment_id": "2026-11-06-qwen38-dotnet-metal-fp8-001",
+  "status": "frozen",
+  "description": "Build and measure a .NET text inference server with original Metal kernels for the official Qwen3.8-27B FP8 checkpoint on Apple M5 Pro. Preserve the checkpoint's E4M3 weights and block scales; decode operands inside kernels without affine requantization. First establish correct model execution, then profile batching, matrix operations, attention and DeltaNet preparation. Qwen3.6 optimization reports and Splash community-checkpoint measurements are prior external evidence only, not controlled measurements or results of this experiment.",
+  "contract_frozen_at": "2026-11-06T23:20:35Z",
+  "hardware_platform": "Apple M5 Pro",
+  "hardware_gpu_cores": 20,
+  "hardware_memory_gib": 48,
+  "target_repository": "Qwen/Qwen3.8-27B-FP8",
+  "target_revision": "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a",
+  "target_weights": "Official fine-grained FP8 E4M3 weights with 128x128 BF16 block scales; non-quantized checkpoint tensors preserved",
+  "evaluation_id": "endpoint-bench",
+  "evaluation_revision": "9544db0ec860ce28df2ee6d4b313a338cd732fa2",
+  "evaluation_sha256": "62869f9a19c0816110cb41125436e702c88b4cae74484435e0ae30af857840a0",
+  "engine_name": "qwen-dotnet-metal",
+  "engine_commit": "14fee44096fcf4e5dad591e1b296d41471e8e178",
+  "comparison_track": "best-permitted-configuration",
+  "goal_thresholds": [
+    "conform_passed >= 1",
+    "prefill_tokens_per_second_p50 >= 1000"
+  ]
+}
