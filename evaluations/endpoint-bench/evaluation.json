@@ -131,12 +131,12 @@
     {
       "role": "driver",
       "path": "src/decode.js",
-      "sha256": "c4a155487be232ba9fec528c5e15c3aead94a7393a425b2f7b03a8535919439b"
+      "sha256": "87ea7c152eee9a6edf367b58c9b674277ccd951fe5fa7f3d8cd99361b7b1a248"
     },
     {
       "role": "driver",
       "path": "src/measure.js",
-      "sha256": "0e62cf03eb2be91e7afdb109e2d7c978ce8a97f638b43fd4419a19acab5e05e4"
+      "sha256": "e728e46b699454e39866bc86a08581e5b7c7e512323b43367a61f2dc84cf5bb6"
     },
     {
       "role": "driver",
