@@ -261,7 +261,7 @@
         "allOf": [{ "if": { "properties": { "status": { "enum": ["complete", "partial"] } }, "required": ["status"] }, "then": { "required": ["config", "variants"] } }]
       },
       "DecodeRun": {
-        "description": "decode_tokens_per_second is visible output tokens minus one over the time from the first to the last visible token; reasoning is excluded.",
+        "description": "decode_tokens_per_second is visible output tokens minus one over the time from the first to the last visible token; reasoning is excluded. New revisions request no thinking and flag no_visible_output; earlier reports lack the flag and are not rescored.",
         "anyOf": [
           { "$ref": "#/components/schemas/RunError" },
           {
@@ -271,6 +271,7 @@
               "ok": { "const": true }, "ttft_ms": { "$ref": "#/components/schemas/Millis" }, "decode_ms": { "$ref": "#/components/schemas/Millis" },
               "total_latency_ms": { "$ref": "#/components/schemas/Millis" }, "decode_tokens_per_second": { "$ref": "#/components/schemas/Rate" },
               "visible_tokens": { "type": "integer", "minimum": 0 }, "reasoning_tokens": { "type": "integer", "minimum": 0 },
+              "no_visible_output": { "description": "No visible content arrived or the visible token count is zero. Such a run has no decode rate. Absent from earlier evaluation revisions.", "type": "boolean" },
               "reasoning_required": { "type": "boolean" }, "fixed_length": { "type": "boolean" }, "finish_reason": { "type": ["string", "null"] }
             }
           }
@@ -284,6 +285,9 @@
         ],
         "properties": {
           "completed_runs": { "type": "integer", "minimum": 0 }, "failed_runs": { "type": "integer", "minimum": 0 },
+          "measured_runs": { "description": "Completed requests with a finite decode rate; completed_runs counts successful requests, not usable measurements. Absent from earlier evaluation revisions.", "type": "integer", "minimum": 0 },
+          "no_visible_output_runs": { "description": "Completed requests flagged no_visible_output. Absent from earlier evaluation revisions.", "type": "integer", "minimum": 0 },
+          "reasoning_runs": { "description": "Completed requests showing reasoning despite the no-thinking policy. Absent from earlier evaluation revisions.", "type": "integer", "minimum": 0 },
           "decode_tokens_per_second_p50": { "$ref": "#/components/schemas/Rate" }, "decode_tokens_per_second_p90": { "$ref": "#/components/schemas/Rate" },
           "ttft_ms_p50": { "$ref": "#/components/schemas/Millis" }, "ttft_ms_p90": { "$ref": "#/components/schemas/Millis" },
           "total_latency_ms_p50": { "$ref": "#/components/schemas/Millis" }, "total_latency_ms_p90": { "$ref": "#/components/schemas/Millis" },

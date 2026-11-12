@@ -84,10 +84,16 @@ const SUMMARIES = {
     />
   ),
   decode: test => (
-    <Table
-      head={['Output tokens', 'Decode tok/s p50', 'p90', 'TTFT p50', 'Latency p50']}
-      rows={test.lengths.map(item => [item.output_tokens, fmt(item.summary.decode_tokens_per_second_p50), fmt(item.summary.decode_tokens_per_second_p90), ms(item.summary.ttft_ms_p50), ms(item.summary.total_latency_ms_p50)])}
-    />
+    <>
+      <p>Thinking requested off. Measured counts usable decode rates, not just completed requests.</p>
+      {test.lengths.some(item => item.summary.reasoning_runs > 0) && <p className="muted">The endpoint still reasoned despite the no-thinking request.</p>}
+      {test.lengths.some(item => item.summary.no_visible_output_runs > 0) && <p className="muted">Requests with no visible output produced no decode measurement.</p>}
+      <Table
+        head={['Output tokens', 'Decode tok/s p50', 'p90', 'TTFT p50', 'Latency p50', 'Measured', 'No visible output', 'Reasoning', 'Forced length']}
+        rows={test.lengths.map(item => [item.output_tokens, fmt(item.summary.decode_tokens_per_second_p50), fmt(item.summary.decode_tokens_per_second_p90), ms(item.summary.ttft_ms_p50), ms(item.summary.total_latency_ms_p50), fmt(item.summary.measured_runs, 0), fmt(item.summary.no_visible_output_runs, 0), fmt(item.summary.reasoning_runs, 0), item.summary.fixed_length_applied ? 'yes' : 'no'])}
+      />
+      <p className="muted">Speculative decode rates depend on forced-length support and stream predictability; forcing past a natural stop can produce repetitive text and higher rates.</p>
+    </>
   ),
   prefill: test => (
     <Table

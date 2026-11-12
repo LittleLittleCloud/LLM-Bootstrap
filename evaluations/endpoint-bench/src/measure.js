@@ -32,12 +32,14 @@ export function speedRun(result) {
 export function decodeRun(result) {
   if (!result.ok) return { ok: false, error: result.error };
   const split = splitTokens(result);
+  const noVisibleOutput = result.firstVisibleAt == null || split.visible === 0;
   const decodeMs = interval(result.firstVisibleAt, result.lastVisibleAt);
   return {
     ok: true, ttft_ms: round(interval(result.startAt, result.firstVisibleAt), 1), decode_ms: round(decodeMs, 1),
     total_latency_ms: round(interval(result.startAt, result.endAt), 1),
-    decode_tokens_per_second: round(rate(split.visible - 1, decodeMs), 2), visible_tokens: split.visible, reasoning_tokens: split.reasoning,
-    reasoning_required: split.reasoning > 0, fixed_length: result.forcedLength, finish_reason: result.finish,
+    decode_tokens_per_second: noVisibleOutput ? null : round(rate(split.visible - 1, decodeMs), 2), visible_tokens: split.visible, reasoning_tokens: split.reasoning,
+    no_visible_output: noVisibleOutput,
+    reasoning_required: split.reasoning > 0 || result.reasoningChars > 0, fixed_length: result.forcedLength, finish_reason: result.finish,
   };
 }
 
@@ -57,6 +59,9 @@ export function summarizeSpeed(runs) {
 export function summarizeDecode(runs) {
   return {
     completed_runs: good(runs).length, failed_runs: runs.length - good(runs).length,
+    measured_runs: good(runs).filter(run => Number.isFinite(run.decode_tokens_per_second)).length,
+    no_visible_output_runs: good(runs).filter(run => run.no_visible_output).length,
+    reasoning_runs: good(runs).filter(run => run.reasoning_required).length,
     decode_tokens_per_second_p50: p50(column(runs, 'decode_tokens_per_second')), decode_tokens_per_second_p90: p90(column(runs, 'decode_tokens_per_second')),
     ttft_ms_p50: p50(column(runs, 'ttft_ms')), ttft_ms_p90: p90(column(runs, 'ttft_ms')),
     total_latency_ms_p50: p50(column(runs, 'total_latency_ms')), total_latency_ms_p90: p90(column(runs, 'total_latency_ms')),

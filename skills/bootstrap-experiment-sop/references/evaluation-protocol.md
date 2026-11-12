@@ -53,7 +53,7 @@ Earlier measurements with external drivers (the Infer.NET records) are prior evi
 | `conform` | Does the endpoint behave like the chat API the other tests rely on? | Every required check passes |
 | `speed` | Raw output speed from a short prompt that asks for endless lowercase words, after one excluded warm-up | `tokens_per_second` p50, TTFT p50 |
 | `thinking` | A medium reasoning task, asked with the endpoint's own thinking and with thinking switched off | Accuracy, format compliance, reasoning and answer tokens |
-| `decode` | Output speed at fixed output lengths (100, 1000, and 4000 tokens), with the length forced | Decode `tokens_per_second` p50 and p90 by length |
+| `decode` | Output speed at fixed output lengths (100, 1000, and 4000 tokens), with thinking requested off and the length forced | Decode `tokens_per_second` p50 and p90 by length |
 | `prefill` | How fast long prompts are digested, from 10k to 1M input tokens that fit the context window | Effective input tokens per second by size |
 | `needle` | One access code hidden at 5, 25, 50, 75, and 90 percent of a document that fills 90 percent of the context window | Recall by depth |
 | `cache` | One question asked as a short prompt, a padded prompt, and a padded prompt with a nonce, each cold once and then repeated | Cache hit percent, TTFT reduction |
@@ -83,8 +83,13 @@ Each check is required or optional. A failed required check means the other resu
 - **TTFT** runs from request dispatch to the first non-empty content or reasoning delta (`speed`), or to the first visible content token (`decode`, where reasoning deltas are ignored).
 - **Speed** divides the completion tokens by the streaming time after the first delta. Reasoning tokens count.
 - **Decode** divides visible output tokens minus one by the time from the first to the last visible token. The first token is not part of the interval. Reasoning tokens are excluded; the endpoint's reasoning count is used when reported, otherwise the share is estimated from streamed characters. A run that shows reasoning is marked `reasoning_required`.
+- **No-thinking policy.** Every `decode` request, including warm-ups and compatibility retries, sends `chat_template_kwargs: { enable_thinking: false }` (the same `NO_THINKING` control as needle and the thinking test's no-thinking variant). Its `config.thinking` is `disabled`, the requested policy, not proof the endpoint honored it. `reasoning_runs` counts completed requests that still show reasoning, including streamed reasoning when the reported reasoning count is zero. An endpoint that rejects this control produces a recorded request error; the evaluator does not silently remove it. Hidden, unreported reasoning cannot be detected. No default-thinking decode variant is run; `speed` retains its existing default-thinking behavior and first-delta rate.
+- **Missing output and measurements.** A completed request with no visible content delta or zero visible tokens has `no_visible_output: true` and a null decode rate. Each length reports `no_visible_output_runs` and `measured_runs` (requests with a finite decode rate), separately from `completed_runs` (successful requests) and `failed_runs` (request errors). A single visible token or a zero-duration visible interval also yields no rate, but is not empty output. Test status describes request completion, not whether a rate was obtained; read `measured_runs` before interpreting a completed test.
 - **Forced length.** `decode` sends `min_tokens` equal to the length and `ignore_eos`, so the model cannot stop early. If the endpoint rejects them, only `max_tokens` is sent, and the summary says `fixed_length_applied: false`.
+- **Speculative decoding.** Rates depend on forced-length support and on the predictability of the generated stream. Forcing generation beyond a natural stop can cause repetitive loops that speculative decoding accepts almost entirely. Compare at the same lengths and forcing settings; the rate is not a workload-independent measure of an engine.
 - Each length has one excluded warm-up and the planned number of measured runs, summarized by p50 and p90.
+
+These decode changes apply prospectively under the new evaluation revision. Historical reports used the endpoint's default thinking, lack `config.thinking`, `no_visible_output`, and the new summary counters, and remain unchanged without rescoring. Their rates are not directly comparable with the no-thinking workload.
 
 #### thinking
 

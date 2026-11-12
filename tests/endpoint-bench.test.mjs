@@ -9,7 +9,7 @@ import { normalizeBase, newCompat, streamChat } from '../evaluations/endpoint-be
 import { defaultConfig, endpointClass, resolvePlan, validateConfig } from '../evaluations/endpoint-bench/src/config.js';
 import { runConform } from '../evaluations/endpoint-bench/src/conform.js';
 import { buildDocument, gradeCode, generateTask } from '../evaluations/endpoint-bench/src/context.js';
-import { speedRun, decodeRun } from '../evaluations/endpoint-bench/src/measure.js';
+import { speedRun, decodeRun, summarizeDecode } from '../evaluations/endpoint-bench/src/measure.js';
 import { loadModels, resolveContextWindow } from '../evaluations/endpoint-bench/src/models.js';
 import { headlineMetrics } from '../evaluations/endpoint-bench/src/report.js';
 import { runEvaluation } from '../evaluations/endpoint-bench/src/run.js';
@@ -271,7 +271,7 @@ test('all eight tests run against a known engine and the report says what the en
   assert.equal(decode.output_tokens, 200);
   assert.ok(Math.abs(decode.summary.decode_tokens_per_second_p50 - 2000) / 2000 < 0.5, `decode ${decode.summary.decode_tokens_per_second_p50}`);
   assert.equal(decode.summary.visible_tokens_p50, 200, 'reasoning does not count as output');
-  assert.equal(decode.summary.reasoning_required, true);
+  assert.equal(decode.summary.reasoning_required, false, 'decode requests no thinking');
   assert.equal(decode.summary.fixed_length_applied, true);
   const thinking = report.tests.thinking.variants;
   assert.equal(thinking.default.summary.accuracy, 1);
@@ -412,6 +412,89 @@ const recording = engine => {
 };
 // The 1500-token calibration probe is not a test request, so only documents of at least 2000 tokens count.
 const retrievalRequests = bodies => bodies.filter(body => /access code for the \w+ sector/.test(JSON.stringify(body.messages)) && JSON.stringify(body.messages).length > 7000);
+
+test('decode requests no thinking at every budget, including warm-ups and forced-length retries', { timeout: 120000 }, async () => {
+  const engine = fast({ reasoning: 5000 });
+  const seen = recording((url, init) => {
+    const body = init.body && JSON.parse(init.body);
+    if (body?.min_tokens) return new Response(JSON.stringify({ error: { message: 'Unsupported min_tokens and ignore_eos' } }), { status: 400 });
+    return engine(url, init);
+  });
+  const fullLengths = structuredClone(small);
+  Object.assign(fullLengths.plan.decode, { lengths: definition.plan.decode.lengths, runs: 1, warmup: 1 });
+  const { report } = await runEvaluation({
+    config: { ...defaultConfig(), endpoint: 'http://reference.invalid', model: 'reference', tests: ['decode'] },
+    definition: fullLengths, pin, overrides: { fetch: seen.fetch },
+  });
+  accepts(report);
+  assert.equal(report.status, 'complete');
+  assert.equal(report.tests.decode.config.thinking, 'disabled');
+  assert.equal(seen.bodies.length, 7, 'six requests plus the forced-length retry');
+  for (const body of seen.bodies) assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
+  for (const length of report.tests.decode.lengths) {
+    assert.ok(length.summary.decode_tokens_per_second_p50 > 0);
+    assert.equal(length.summary.completed_runs, 1, 'warm-ups are excluded');
+    assert.equal(length.summary.measured_runs, 1);
+    assert.equal(length.summary.no_visible_output_runs, 0);
+    assert.equal(length.summary.reasoning_runs, 0);
+    assert.equal(length.summary.fixed_length_applied, false);
+    assert.equal(length.runs[0].no_visible_output, false);
+  }
+});
+
+test('decode reports ignored no-thinking, empty output, and usable measurements separately', { timeout: 120000 }, async () => {
+  const { report } = await run(fast({ reasoning: 5000, honorsNoThinking: false }), {}, { tests: ['decode'] });
+  accepts(report);
+  assert.equal(report.status, 'complete', 'status describes completed requests, not usable rates');
+  for (const { runs, summary } of report.tests.decode.lengths) {
+    assert.equal(summary.completed_runs, 2);
+    assert.equal(summary.failed_runs, 0);
+    assert.equal(summary.measured_runs, 0);
+    assert.equal(summary.no_visible_output_runs, 2);
+    assert.equal(summary.reasoning_runs, 2);
+    assert.equal(summary.decode_tokens_per_second_p50, null);
+    assert.equal(summary.ttft_ms_p50, null);
+    for (const item of runs) {
+      assert.equal(item.no_visible_output, true);
+      assert.equal(item.visible_tokens, 0);
+      assert.equal(item.finish_reason, 'length');
+    }
+  }
+  assert.equal(headlineMetrics(report).decode_tokens_per_second_p50, null);
+
+  const legacy = structuredClone(report);
+  delete legacy.tests.decode.config.thinking;
+  for (const { runs, summary } of legacy.tests.decode.lengths) {
+    for (const item of runs) delete item.no_visible_output;
+    for (const key of ['measured_runs', 'no_visible_output_runs', 'reasoning_runs']) delete summary[key];
+  }
+  accepts(legacy, 'historical reports do not require new fields');
+
+  const rejected = await run(async (url, init) => init.body
+    ? new Response(JSON.stringify({ error: { message: 'Unsupported chat_template_kwargs' } }), { status: 400 })
+    : fast()(url, init), {}, { tests: ['decode'] });
+  accepts(rejected.report);
+  assert.equal(rejected.report.tests.decode.status, 'error');
+  assert.match(rejected.report.failures.join(), /HTTP 400/);
+});
+
+test('decode counts rates independently of successful requests and detects uncounted reasoning deltas', () => {
+  const stream = { ok: true, startAt: 0, firstVisibleAt: 100, lastVisibleAt: 1100, endAt: 1200, completionTokens: 100, reasoningTokens: 0, reasoningChars: 0 };
+  const measured = decodeRun(stream);
+  const empty = decodeRun({ ...stream, firstVisibleAt: null, lastVisibleAt: null, reasoningTokens: 100 });
+  const hidden = decodeRun({ ...stream, firstVisibleAt: null, lastVisibleAt: null });
+  const one = decodeRun({ ...stream, completionTokens: 1 });
+  const batched = decodeRun({ ...stream, lastVisibleAt: 100 });
+  const reasoning = decodeRun({ ...stream, reasoningChars: 20 });
+  assert.equal(hidden.no_visible_output, true, 'usage alone cannot prove visible output arrived');
+  assert.equal(one.no_visible_output, false);
+  assert.equal(batched.no_visible_output, false);
+  assert.equal(reasoning.reasoning_required, true, 'streamed reasoning counts even when usage says zero');
+  const summary = summarizeDecode([measured, empty, hidden, one, batched, reasoning, { ok: false, error: 'timeout' }]);
+  assert.deepEqual([summary.completed_runs, summary.failed_runs, summary.measured_runs, summary.no_visible_output_runs, summary.reasoning_runs], [6, 1, 2, 2, 2]);
+  assert.equal(summary.decode_tokens_per_second_p50, 99);
+  assert.equal(summarizeDecode([]).measured_runs, 0);
+});
 
 test('needle asks for no thinking, prefill keeps the endpoint default, and recall is graded without the budget going to reasoning', { timeout: 120000 }, async () => {
   const needle = recording(fast({ reasoning: 200 }));
