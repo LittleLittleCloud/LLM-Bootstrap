@@ -1,0 +1,12 @@
+{
+  "experiment_id": "2026-11-12-qwen38-dotnet-metal-main-001",
+  "status": "frozen",
+  "description": "Evaluate merged engine main of qwen-dotnet-metal for the official Qwen3.8-27B FP8 checkpoint on Apple M5 Pro. Base report 20261106-235544 ran only conform and prefill: 10,357 prompt tokens took a 221,368 ms TTFT (46.8 input tokens/s against the goal of 1000), larger prefill sizes were skipped, and the optional stop-sequence and cached-tokens checks failed. Since the base commit, main runs prompt matrix products and blocked prompt attention on Metal 4 tensor units, speeds up the DeltaNet recurrence, adds stop sequences and cached-token usage, and decodes with an FP8 matrix-vector kernel plus DFlash2 speculative decoding verified by the target. Serve with the DFlash2 drafter (incoai/Qwen3.8-27B-DFlash2 at 015e795645c74b1a0eeef3b570031fb62e769bc5), context 32768, prefill step 2048, no prefix cache, and run all eight Full endpoint tests. The evaluation pin moves to the latest main, whose only change since the base pin disables thinking in the decode test; conform and prefill code is unchanged, so those comparisons stay matched. Hypothesis: prefill throughput rises above 1000 input tokens/s and conformance holds with the optional stop-sequence and cached-tokens checks passing. Report every goal, including misses.",
+  "contract_frozen_at": "2026-11-12T17:42:52Z",
+  "extends_path": "../2026-11-06-qwen38-dotnet-metal-fp8-001/experiment.json",
+  "extends_revision": "39c9b290a070ab7858c08e4252dc354476b5b348",
+  "extends_sha256": "83dc25bc09320e7fb56a906e12d35655908029dc2620477983b724958f7374d6",
+  "engine_commit": "a719492dac362c0e54e052ed95b8229f12c8931a",
+  "evaluation_revision": "26e52c6bd1afa46ed722344d342d3d34bf49fcdf",
+  "evaluation_sha256": "a84f51ecb21fcac78c5ad9103aa9a6a110fa1b395599f3fadabfb4d626f380e8"
+}
